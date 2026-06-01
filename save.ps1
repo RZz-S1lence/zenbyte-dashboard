@@ -2,7 +2,7 @@
 # Usage:  .\save.ps1 "what I changed"
 param([string]$m = "update")
 
-git add -A
+git add .
 # Only commit if there is something staged.
 git diff --cached --quiet
 if ($LASTEXITCODE -eq 0) {
