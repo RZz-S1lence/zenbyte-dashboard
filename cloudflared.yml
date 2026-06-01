@@ -1,0 +1,7 @@
+tunnel: zenbyte-dashboard
+credentials-file: ./tunnel-credentials.json
+
+ingress:
+  - hostname: zenbyte-dashboard.de
+    service: http://localhost:3000
+  - service: http_status:404
