@@ -1,0 +1,2264 @@
+/* ════════════════════════════════════════
+   Zen's Robotics Dashboard
+   ════════════════════════════════════════ */
+
+// Global state
+const state = {
+  guildId:   null,   // currently selected guild
+  guildData: null,   // { textChannels, categories, roles }
+  guilds:    [],     // all guilds list
+  ticketTypes: [],
+  ticketForm:  [],   // open-form question fields
+  modRoleIds:  [],   // selected ticket moderator role IDs
+  commands:    [],   // cached command list from /api/commands
+  cmdDisabled: new Set(), // disabled command names for the selected guild
+  cmdCategory: 'all',     // commands page category filter
+  security:     null, // current anti-nuke config
+  securityMeta: null, // { protections, punishments }
+  leveling:     null, // current leveling config
+  levelingMeta: null, // { curves, announceModes }
+  activity:     null, // current activity config
+  trust:        null, // current trust config
+  altdetect:    null, // current alt detection config
+  altMeta:      null, // { signals, presets, actions, flags, pending }
+  pollConfig:   null, // current poll settings
+  pollList:     [],   // polls for the selected guild
+  pollOptions:  null, // draft option strings for the create form
+  socialConfig: null, // current social notification config
+  socialProviders: [], // provider metadata
+  autorole:      null, // current autorole config
+  reactionMenus: [],   // reaction-role panels for the selected guild
+  reactionModes: [],   // available reaction-role modes
+  links:         null  // { invite, support } bot-invite and support-server links
+};
+
+// ── Boot ─────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  const auth = await api('GET', '/api/auth').catch(() => ({ authenticated: false }));
+  state.links = auth.links || null;
+  applyLinks(state.links);
+  if (auth.authenticated) await enterDashboard(auth.user);
+  else showLogin(auth);
+});
+
+// Wires the bot-invite and support-server links into every place they appear.
+function applyLinks(links) {
+  if (!links) return;
+  const set = (id, url) => { const el = document.getElementById(id); if (el && url) el.href = url; };
+  set('sidebar-support', links.support);
+  set('addbot-support', links.support);
+  set('addbot-invite', links.invite);
+}
+
+const AUTH_ERRORS = {
+  oauth_not_configured: 'Discord login is not configured on this server yet.',
+  auth_failed: 'Discord login failed or was cancelled. Please try again.'
+};
+
+function showLogin(auth) {
+  show('login-screen');
+  hide('dashboard');
+
+  const params = new URLSearchParams(location.search);
+  const err = params.get('error');
+  if (err) {
+    document.getElementById('auth-err').textContent = AUTH_ERRORS[err] || 'Login failed.';
+    history.replaceState({}, '', location.pathname);
+  }
+  if (auth && auth.configured === false) {
+    const btn = document.getElementById('discord-login-btn');
+    btn.classList.add('disabled');
+    btn.removeAttribute('href');
+    document.getElementById('auth-err').textContent = AUTH_ERRORS.oauth_not_configured;
+  }
+
+  api('GET', '/api/status').then(s => {
+    if (s.avatarUrl) {
+      const img = document.getElementById('login-avatar');
+      img.src = s.avatarUrl;
+      img.classList.remove('hidden');
+    }
+  }).catch(() => {});
+}
+
+async function enterDashboard(user) {
+  hide('login-screen');
+  if (user?.username) document.getElementById('sidebar-user').textContent = `Signed in as ${user.username}`;
+  await loadStatus();
+  await loadGuilds();
+
+  // No servers the user can manage → show the "Add ZenByte" screen instead.
+  if (!state.guilds.length) {
+    hide('dashboard');
+    show('addbot-screen');
+  } else {
+    hide('addbot-screen');
+    show('dashboard');
+  }
+}
+
+async function logout() {
+  await api('POST', '/api/logout').catch(() => {});
+  location.href = '/';
+}
+
+// ── Navigation ────────────────────────────────────
+function goto(page) {
+  clearAllDirty();
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById(`page-${page}`).classList.add('active');
+  document.querySelector(`[data-page="${page}"]`).classList.add('active');
+
+  if (page === 'overview')    loadStatus();
+  if (page === 'settings'    && state.guildId) loadSettings();
+  if (page === 'commands')    loadCommands();
+  if (page === 'logs'        && state.guildId) loadLogConfig();
+  if (page === 'tickets'     && state.guildId) loadTicketConfig();
+  if (page === 'leveling'    && state.guildId) loadLeveling();
+  if (page === 'polls'       && state.guildId) loadPolls();
+  if (page === 'social'      && state.guildId) loadSocial();
+  if (page === 'autorole'    && state.guildId) loadAutorole();
+  if (page === 'reactionroles' && state.guildId) loadReactionRoles();
+  if (page === 'activity'    && state.guildId) loadActivity();
+  if (page === 'trust'       && state.guildId) loadTrust();
+  if (page === 'moderators'  && state.guildId) loadModerators();
+  if (page === 'security'    && state.guildId) loadSecurityConfig();
+  if (page === 'verification' && state.guildId) loadVerification();
+  if (page === 'altdetect'   && state.guildId) loadAltDetect();
+  if (page === 'transcripts' && state.guildId) loadTranscripts();
+  if (page === 'botlogs') loadBotLogs();
+
+  closeSidebar();
+}
+
+function toggleSidebar() { document.getElementById('dashboard').classList.toggle('sidebar-open'); }
+function closeSidebar()  { document.getElementById('dashboard').classList.remove('sidebar-open'); }
+
+// ── Unsaved-changes tracking ──────────────────────
+// Any edit on the active page lights up its sticky save bar. A successful save
+// (setStatus 'ok') or a fresh page/guild load clears it again.
+function markDirty() {
+  const bar = document.querySelector('.page.active .save-bar');
+  if (bar) bar.classList.add('dirty');
+}
+function clearAllDirty() {
+  document.querySelectorAll('.save-bar.dirty').forEach(b => b.classList.remove('dirty'));
+}
+const _main = document.querySelector('.main-content');
+if (_main) { _main.addEventListener('input', markDirty); _main.addEventListener('change', markDirty); }
+
+// ── Overview ──────────────────────────────────────
+async function loadStatus() {
+  try {
+    const s = await api('GET', '/api/status');
+    document.getElementById('stat-status').textContent = s.ready ? '🟢 Online' : '🔴 Offline';
+    document.getElementById('stat-tag').textContent    = s.tag;
+    document.getElementById('stat-guilds').textContent = s.guilds;
+    document.getElementById('stat-uptime').textContent = s.uptime;
+    if (s.avatarUrl) {
+      document.getElementById('sidebar-bot-avatar').src = s.avatarUrl;
+      const ab = document.getElementById('addbot-avatar');
+      if (ab) { ab.src = s.avatarUrl; ab.classList.remove('hidden'); }
+    }
+  } catch {}
+}
+
+// ── Commands ──────────────────────────────────────
+const OPTION_TYPES = {
+  1: 'Subcommand', 2: 'Group', 3: 'Text', 4: 'Integer', 5: 'Boolean',
+  6: 'User', 7: 'Channel', 8: 'Role', 9: 'Mentionable', 10: 'Number', 11: 'Attachment'
+};
+
+async function loadCommands() {
+  const body = document.getElementById('commands-body');
+  if (!state.commands.length) {
+    body.innerHTML = '<p style="color:var(--muted);padding:20px">Loading…</p>';
+    try { state.commands = await api('GET', '/api/commands'); }
+    catch { body.innerHTML = '<p style="color:var(--muted);padding:20px">Failed to load commands.</p>'; return; }
+  }
+  // Per-guild enable/disable state (only when a server is selected).
+  state.cmdDisabled = new Set();
+  if (state.guildId) {
+    try {
+      const { disabled } = await api('GET', `/api/guild/${state.guildId}/command-toggles`);
+      state.cmdDisabled = new Set(disabled);
+    } catch {}
+  }
+  renderCommands();
+}
+
+function setCmdCategory(cat) { state.cmdCategory = cat; renderCommands(); }
+
+async function toggleCommand(name, enable) {
+  if (!state.guildId) return;
+  try {
+    const { disabled } = await api('PUT', `/api/guild/${state.guildId}/command-toggles`, { name, enabled: enable });
+    state.cmdDisabled = new Set(disabled);
+  } catch {
+    if (enable) state.cmdDisabled.delete(name); else state.cmdDisabled.add(name);
+  }
+  renderCommands();
+}
+
+function permBadges(cmd) {
+  const badges = [];
+  if (cmd.ownerOnly) badges.push('<span class="perm-badge perm-owner">Owner Only</span>');
+  if (cmd.adminOnly) badges.push('<span class="perm-badge perm-admin">Admin Only</span>');
+  if (cmd.modPermission) badges.push(`<span class="perm-badge perm-mod">Mod · ${esc(prettyPerm(cmd.modPermission))}</span>`);
+  for (const p of cmd.permissions || []) badges.push(`<span class="perm-badge">${esc(prettyPerm(p))}</span>`);
+  if (!badges.length) badges.push('<span class="perm-badge perm-everyone">Everyone</span>');
+  return badges.join('');
+}
+
+function prettyPerm(p) {
+  return String(p).replace(/([a-z])([A-Z])/g, '$1 $2');
+}
+
+function renderCommands() {
+  const body  = document.getElementById('commands-body');
+  const query = (document.getElementById('cmd-search').value || '').toLowerCase().trim();
+  const active = state.cmdCategory || 'all';
+
+  const categories = [...new Set(state.commands.map(c => c.category || 'General'))].sort();
+  const chips = ['all', ...categories].map(cat =>
+    `<button class="cmd-chip${active === cat ? ' active' : ''}" onclick="setCmdCategory('${esc(cat)}')">${cat === 'all' ? 'All' : esc(cat)}</button>`
+  ).join('');
+
+  const filtered = state.commands.filter(c => {
+    const cat = c.category || 'General';
+    if (active !== 'all' && cat !== active) return false;
+    return !query || c.name.toLowerCase().includes(query) ||
+      (c.description || '').toLowerCase().includes(query) || cat.toLowerCase().includes(query);
+  });
+
+  document.getElementById('cmd-count').textContent =
+    `${filtered.length} command${filtered.length === 1 ? '' : 's'}`;
+
+  const hint = state.guildId
+    ? '<p class="cmd-toggle-hint">Toggle a command to enable or disable it in the selected server.</p>'
+    : '<p class="cmd-toggle-hint">← Select a server to enable/disable commands.</p>';
+
+  const groups = {};
+  for (const c of filtered) (groups[c.category || 'General'] = groups[c.category || 'General'] || []).push(c);
+
+  const list = !filtered.length
+    ? '<p style="color:var(--muted);padding:20px">No commands match your filter.</p>'
+    : Object.keys(groups).sort().map(cat => `
+        <div class="cmd-category">
+          <h3 class="cmd-cat-title">${esc(cat)} <span class="cmd-cat-count">${groups[cat].length}</span></h3>
+          <div class="cmd-grid">${groups[cat].map(renderCommandCard).join('')}</div>
+        </div>`).join('');
+
+  body.innerHTML = `<div class="cmd-chips">${chips}</div>${hint}${list}`;
+}
+
+function renderCommandCard(cmd) {
+  const opts = (cmd.options || []).map(o => `
+    <div class="cmd-opt">
+      <span class="cmd-opt-name">${esc(o.name)}${o.required ? '<span class="cmd-opt-req">*</span>' : ''}</span>
+      <span class="cmd-opt-type">${OPTION_TYPES[o.type] || o.type}</span>
+      ${o.autocomplete ? '<span class="cmd-opt-tag">auto</span>' : ''}
+      ${o.choices?.length ? `<span class="cmd-opt-tag">${o.choices.length} choices</span>` : ''}
+      <span class="cmd-opt-desc">${esc(o.description || '')}</span>
+    </div>`).join('');
+
+  const disabled = state.cmdDisabled?.has(cmd.name);
+  const toggle = state.guildId
+    ? `<label class="cmd-switch" title="${disabled ? 'Disabled' : 'Enabled'}">
+         <input type="checkbox" ${disabled ? '' : 'checked'} onchange="toggleCommand('${esc(cmd.name)}', this.checked)">
+         <span class="cmd-slider"></span>
+       </label>`
+    : '';
+
+  return `
+    <div class="cmd-card${disabled ? ' cmd-disabled' : ''}">
+      <div class="cmd-card-head">
+        <span class="cmd-name">/${esc(cmd.name)}</span>
+        <div class="cmd-head-right">
+          ${cmd.cooldown ? `<span class="cmd-cooldown">⏱ ${cmd.cooldown}s</span>` : ''}
+          ${toggle}
+        </div>
+      </div>
+      <p class="cmd-desc">${esc(cmd.description || '')}</p>
+      <div class="cmd-badges">${permBadges(cmd)}</div>
+      ${opts ? `<div class="cmd-opts">${opts}</div>` : ''}
+    </div>`;
+}
+
+// ── Guild selector ────────────────────────────────
+async function loadGuilds() {
+  state.guilds = await api('GET', '/api/guilds');
+  renderGuildDropdown();
+}
+
+function guildColor(id) {
+  const colors = ['#5865F2','#57F287','#FEE75C','#EB459E','#ED4245','#FF7043','#00BCD4','#9B59B6'];
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0x7FFFFFFF;
+  return colors[h % colors.length];
+}
+
+function guildIconHTML(guild, size, cls) {
+  const style = `width:${size}px;height:${size}px;border-radius:50%;flex-shrink:0;overflow:hidden;` +
+                `display:flex;align-items:center;justify-content:center;font-weight:700;` +
+                `font-size:${Math.floor(size * 0.42)}px;color:#fff;`;
+  if (guild.icon) {
+    return `<div class="${cls}" style="${style}"><img src="${guild.icon}" width="${size}" height="${size}" style="object-fit:cover"></div>`;
+  }
+  const bg = guildColor(guild.id);
+  const initial = guild.name.replace(/\s+/g, '').charAt(0).toUpperCase();
+  return `<div class="${cls}" style="${style}background:${bg}">${initial}</div>`;
+}
+
+function renderGuildDropdown() {
+  const dd = document.getElementById('guild-dropdown');
+  dd.innerHTML = state.guilds.map(g => `
+    <div class="guild-option${g.id === state.guildId ? ' active' : ''}"
+         onclick="selectGuild('${g.id}')">
+      ${guildIconHTML(g, 36, 'guild-icon-circle')}
+      <div class="guild-option-info">
+        <div class="guild-option-name">${esc(g.name)}</div>
+        <div class="guild-option-count">${g.memberCount.toLocaleString()} members</div>
+      </div>
+    </div>`).join('');
+}
+
+function toggleGuildDropdown() {
+  const dd = document.getElementById('guild-dropdown');
+  dd.classList.toggle('hidden');
+}
+
+async function selectGuild(id) {
+  clearAllDirty();
+  state.guildId   = id;
+  state.guildData = null;
+  document.getElementById('guild-dropdown').classList.add('hidden');
+
+  const guild = state.guilds.find(g => g.id === id);
+  if (guild) {
+    const btn = document.getElementById('guild-btn');
+    btn.querySelector('.guild-btn-text span').textContent = guild.name;
+
+    // Replace icon inside button
+    const existing = btn.querySelector('.guild-icon-sm, .guild-icon-circle');
+    if (existing) existing.remove();
+    const iconEl = document.createElement('div');
+    iconEl.innerHTML = guildIconHTML(guild, 28, 'guild-icon-sm');
+    btn.insertBefore(iconEl.firstChild, btn.querySelector('.guild-btn-text'));
+  }
+
+  renderGuildDropdown();
+
+  // Reload current page data
+  const activePage = document.querySelector('.nav-item.active')?.dataset?.page;
+  if (activePage === 'settings')    await loadSettings();
+  if (activePage === 'commands')    await loadCommands();
+  if (activePage === 'logs')        await loadLogConfig();
+  if (activePage === 'tickets')     await loadTicketConfig();
+  if (activePage === 'leveling')    await loadLeveling();
+  if (activePage === 'activity')    await loadActivity();
+  if (activePage === 'trust')       await loadTrust();
+  if (activePage === 'moderators')  await loadModerators();
+  if (activePage === 'security')    await loadSecurityConfig();
+  if (activePage === 'verification') await loadVerification();
+  if (activePage === 'autorole')    await loadAutorole();
+  if (activePage === 'reactionroles') await loadReactionRoles();
+  if (activePage === 'social')      await loadSocial();
+  if (activePage === 'transcripts') await loadTranscripts();
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', e => {
+  const sel = document.getElementById('guild-selector');
+  if (sel && !sel.contains(e.target)) {
+    document.getElementById('guild-dropdown')?.classList.add('hidden');
+  }
+  document.querySelectorAll('.multiselect').forEach(msEl => {
+    if (!msEl.contains(e.target)) msEl.querySelector('.multiselect-menu')?.classList.add('hidden');
+  });
+});
+
+async function ensureGuildData() {
+  if (!state.guildData && state.guildId) {
+    state.guildData = await api('GET', `/api/guild/${state.guildId}`);
+  }
+  return state.guildData;
+}
+
+// ── LOG CHANNELS ──────────────────────────────────
+async function loadLogConfig() {
+  hide('logs-body');
+  const noGuild = document.getElementById('logs-no-guild');
+
+  if (!state.guildId) { show('logs-no-guild'); return; }
+  hide('logs-no-guild');
+
+  const [{ config, logTypes }, guild] = await Promise.all([
+    api('GET', `/api/guild/${state.guildId}/logs`),
+    ensureGuildData()
+  ]);
+
+  // Build channel <option> html (grouped by category)
+  let channelOpts = '<option value="">None</option>';
+  let curCat = null;
+  for (const ch of guild.textChannels) {
+    if (ch.category !== curCat) {
+      if (curCat !== null) channelOpts += '</optgroup>';
+      channelOpts += `<optgroup label="${esc(ch.category || 'No Category')}">`;
+      curCat = ch.category;
+    }
+    channelOpts += `<option value="${ch.id}">#${esc(ch.name)}</option>`;
+  }
+  if (curCat !== null) channelOpts += '</optgroup>';
+
+  // Group log types
+  const groups = {};
+  for (const lt of logTypes) (groups[lt.group] = groups[lt.group] || []).push(lt);
+
+  let html = '';
+  for (const [group, items] of Object.entries(groups)) {
+    html += `<tr class="group-header"><td colspan="3">${group}</td></tr>`;
+    for (const lt of items) {
+      const saved = config[lt.key] || '';
+      const opts  = channelOpts.replace(`value="${saved}"`, `value="${saved}" selected`);
+      html += `<tr>
+        <td><span class="log-key">${lt.key}</span></td>
+        <td><span class="log-desc">${lt.desc}</span></td>
+        <td><select id="log-${lt.key}" data-key="${lt.key}">${opts}</select></td>
+      </tr>`;
+    }
+  }
+
+  document.getElementById('log-rows').innerHTML = html;
+  document.getElementById('log-save-msg').textContent = '';
+  show('logs-body');
+}
+
+async function saveLogConfig() {
+  if (!state.guildId) return;
+  const msg = document.getElementById('log-save-msg');
+  const updates = {};
+  document.querySelectorAll('#log-rows select[data-key]').forEach(s => {
+    updates[s.dataset.key] = s.value || null;
+  });
+  try {
+    await api('PUT', `/api/guild/${state.guildId}/logs`, updates);
+    setStatus(msg, 'ok', '✅ Saved!');
+  } catch {
+    setStatus(msg, 'err', '❌ Failed to save.');
+  }
+}
+
+// ── TICKETS ───────────────────────────────────────
+async function loadTicketConfig() {
+  hide('tickets-body');
+  if (!state.guildId) { show('tickets-no-guild'); return; }
+  hide('tickets-no-guild');
+
+  const [config, guild] = await Promise.all([
+    api('GET', `/api/guild/${state.guildId}/tickets`),
+    ensureGuildData()
+  ]);
+
+  document.getElementById('t-title').value = config.panelTitle || '';
+  document.getElementById('t-desc').value  = config.panelDescription || '';
+  const col = config.panelColor || '#5865F2';
+  document.getElementById('t-color-picker').value = col;
+  document.getElementById('t-color-hex').value    = col;
+
+  fillSelect('t-category',   guild.categories,   config.categoryId,   n => n.name);
+  fillSelect('t-logchannel', guild.textChannels,  config.logChannelId, n => `#${n.name}`);
+
+  const modRoleIds = Array.isArray(config.modRoleIds)
+    ? config.modRoleIds.filter(Boolean)
+    : (config.modRoleId ? [config.modRoleId] : []);
+  msInit('t-modroles', roleItems(), modRoleIds);
+
+  const pc = config.priorityCategories || {};
+  document.getElementById('t-pc-enabled').checked = !!pc.enabled;
+  fillSelect('t-pc-low',    guild.categories, pc.Low,    n => n.name);
+  fillSelect('t-pc-medium', guild.categories, pc.Medium, n => n.name);
+  fillSelect('t-pc-high',   guild.categories, pc.High,   n => n.name);
+  togglePriorityCategories();
+
+  document.getElementById('t-maxtickets').value = config.maxTickets || 1;
+  document.getElementById('t-namescheme').value = config.nameScheme || 'ticket-{number}';
+  document.getElementById('t-welcome').value = config.welcomeMessage || '';
+  const ac = config.autoClose || {};
+  document.getElementById('t-ac-enabled').checked = !!ac.enabled;
+  document.getElementById('t-ac-hours').value = ac.inactivityHours || 0;
+  document.getElementById('t-ac-leave').checked = !!ac.closeOnLeave;
+
+  document.getElementById('t-priority-enabled').checked = config.priorityEnabled !== false;
+  toggleTicketPriority();
+
+  const ppr = config.priorityPingRoles || {};
+  msInit('t-openping', roleItems(), config.openPingRoles || []);
+  msInit('t-pp-low',    roleItems(), ppr.Low || []);
+  msInit('t-pp-medium', roleItems(), ppr.Medium || []);
+  msInit('t-pp-high',   roleItems(), ppr.High || []);
+
+  document.getElementById('t-form-enabled').checked = !!config.form?.enabled;
+  state.ticketForm = (config.form?.fields || []).map(f => ({ ...f }));
+  renderFormFields();
+
+  state.ticketTypes = config.types ? [...config.types] : [];
+  renderTypeChips();
+  await loadOpenTickets();
+  show('tickets-body');
+}
+
+function togglePriorityCategories() {
+  const on = document.getElementById('t-pc-enabled').checked;
+  document.getElementById('t-pc-options').classList.toggle('hidden', !on);
+}
+
+function toggleTicketPriority() {
+  const on = document.getElementById('t-priority-enabled').checked;
+  document.getElementById('t-priority-cat-card').classList.toggle('hidden', !on);
+  document.getElementById('t-pp-section').classList.toggle('hidden', !on);
+}
+
+// ── Ticket open-form questions (dynamic list) ─────
+function renderFormFields() {
+  const box = document.getElementById('t-form-fields');
+  box.innerHTML = state.ticketForm.map((f, i) => `
+    <div class="tf-row" data-i="${i}">
+      <input type="text" class="tf-label" placeholder="Question / label" maxlength="45" value="${esc(f.label || '')}">
+      <input type="text" class="tf-ph" placeholder="Placeholder (optional)" maxlength="100" value="${esc(f.placeholder || '')}">
+      <select class="tf-style">
+        <option value="short"${f.style === 'short' ? ' selected' : ''}>Short</option>
+        <option value="paragraph"${f.style === 'paragraph' ? ' selected' : ''}>Paragraph</option>
+      </select>
+      <label class="tf-req"><input type="checkbox" class="tf-required" ${f.required !== false ? 'checked' : ''}> Required</label>
+      <button class="btn btn-secondary tf-del" onclick="removeFormField(${i})">✕</button>
+    </div>`).join('') || '<p class="lv-empty">No questions, a ticket opens immediately.</p>';
+}
+
+function collectFormFields() {
+  state.ticketForm = [...document.querySelectorAll('#t-form-fields .tf-row')].map(row => ({
+    label:       row.querySelector('.tf-label').value.trim(),
+    placeholder: row.querySelector('.tf-ph').value.trim(),
+    style:       row.querySelector('.tf-style').value,
+    required:    row.querySelector('.tf-required').checked
+  }));
+  return state.ticketForm;
+}
+
+function addFormField() {
+  collectFormFields();
+  if (state.ticketForm.length >= 5) return;
+  state.ticketForm.push({ label: '', placeholder: '', style: 'short', required: true });
+  renderFormFields();
+}
+
+function removeFormField(i) {
+  collectFormFields();
+  state.ticketForm.splice(i, 1);
+  renderFormFields();
+}
+
+function fillSelect(id, items, savedId, labelFn) {
+  const el = document.getElementById(id);
+  el.innerHTML = '<option value="">None</option>';
+  for (const item of items) {
+    const opt = document.createElement('option');
+    opt.value = item.id;
+    opt.textContent = labelFn(item);
+    if (item.id === savedId) opt.selected = true;
+    el.appendChild(opt);
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  Reusable searchable multi-select (chips + dropdown)
+//  Usage: msInit('host-id', [{id,label}], [selectedIds]);  msValues('host-id')
+// ══════════════════════════════════════════════════
+const msStore = {};
+
+function roleItems()    { return (state.guildData?.roles || []).map(r => ({ id: r.id, label: '@' + r.name })); }
+function channelItems() { return (state.guildData?.textChannels || []).map(c => ({ id: c.id, label: '#' + c.name })); }
+
+function msInit(hostId, items, selected = []) {
+  msStore[hostId] = { items, selected: new Set(selected) };
+  const host = document.getElementById(hostId);
+  if (!host) return;
+  host.classList.add('multiselect');
+  host.innerHTML = `
+    <div class="multiselect-control" onclick="msToggleMenu('${hostId}', event)">
+      <div class="multiselect-tags" data-tags></div>
+      <span class="guild-chevron">▾</span>
+    </div>
+    <div class="multiselect-menu hidden" data-menu>
+      <input class="ms-search" placeholder="🔍 Search…" oninput="msSearch('${hostId}', this.value)" onclick="event.stopPropagation()">
+      <div class="ms-options" data-options></div>
+    </div>`;
+  msRenderTags(hostId);
+  msRenderOptions(hostId, '');
+}
+
+function msValues(hostId) { return [...(msStore[hostId]?.selected || [])]; }
+
+function msRenderTags(hostId) {
+  const st = msStore[hostId], host = document.getElementById(hostId);
+  if (!st || !host) return;
+  const sel = [...st.selected].map(id => st.items.find(i => i.id === id)).filter(Boolean);
+  host.querySelector('[data-tags]').innerHTML = sel.length
+    ? sel.map(i => `<span class="ms-tag">${esc(i.label)}<button class="ms-tag-x" onclick="msRemove('${hostId}','${i.id}',event)">✕</button></span>`).join('')
+    : '<span class="multiselect-placeholder">None selected</span>';
+}
+
+function msRenderOptions(hostId, query) {
+  const st = msStore[hostId], host = document.getElementById(hostId);
+  if (!st || !host) return;
+  const q = (query || '').toLowerCase();
+  const opts = st.items.filter(i => !q || i.label.toLowerCase().includes(q));
+  host.querySelector('[data-options]').innerHTML = opts.length
+    ? opts.map(i => `<label class="ms-option${st.selected.has(i.id) ? ' on' : ''}" data-id="${i.id}">
+        <input type="checkbox" ${st.selected.has(i.id) ? 'checked' : ''} onchange="msToggle('${hostId}','${i.id}')">
+        <span>${esc(i.label)}</span></label>`).join('')
+    : '<div class="ms-empty">No matches.</div>';
+}
+
+function msToggleMenu(hostId, e) {
+  e.stopPropagation();
+  const menu = document.getElementById(hostId).querySelector('[data-menu]');
+  const open = menu.classList.contains('hidden');
+  document.querySelectorAll('.multiselect-menu').forEach(m => m.classList.add('hidden'));
+  if (open) { menu.classList.remove('hidden'); menu.querySelector('.ms-search')?.focus(); }
+}
+
+function msToggle(hostId, id) {
+  const st = msStore[hostId];
+  if (st.selected.has(id)) st.selected.delete(id); else st.selected.add(id);
+  msRenderTags(hostId);
+  document.getElementById(hostId).querySelector(`.ms-option[data-id="${id}"]`)?.classList.toggle('on', st.selected.has(id));
+}
+
+function msRemove(hostId, id, e) {
+  e.stopPropagation();
+  msStore[hostId].selected.delete(id);
+  msRenderTags(hostId);
+  const label = document.getElementById(hostId).querySelector(`.ms-option[data-id="${id}"]`);
+  if (label) { label.classList.remove('on'); const cb = label.querySelector('input'); if (cb) cb.checked = false; }
+}
+
+function msSearch(hostId, val) { msRenderOptions(hostId, val); }
+
+function renderTypeChips() {
+  document.getElementById('types-chips').innerHTML = state.ticketTypes.map(t =>
+    `<div class="type-chip"><span>${esc(t)}</span><button class="remove" onclick="removeType('${esc(t)}')" title="Remove">✕</button></div>`
+  ).join('');
+}
+
+function addType() {
+  const input = document.getElementById('new-type-input');
+  const val   = input.value.trim();
+  if (!val || state.ticketTypes.includes(val) || state.ticketTypes.length >= 25) return;
+  state.ticketTypes.push(val);
+  renderTypeChips();
+  input.value = '';
+}
+
+function removeType(name) {
+  state.ticketTypes = state.ticketTypes.filter(t => t !== name);
+  renderTypeChips();
+}
+
+function syncColor(source) {
+  if (source === 'picker') {
+    document.getElementById('t-color-hex').value = document.getElementById('t-color-picker').value;
+  } else {
+    const v = document.getElementById('t-color-hex').value;
+    if (/^#[0-9a-fA-F]{6}$/.test(v)) document.getElementById('t-color-picker').value = v;
+  }
+}
+
+async function saveTicketConfig() {
+  if (!state.guildId) return;
+  const msg = document.getElementById('ticket-save-msg');
+  const payload = {
+    panelTitle:       document.getElementById('t-title').value.trim() || null,
+    panelDescription: document.getElementById('t-desc').value.trim()  || null,
+    panelColor:       document.getElementById('t-color-hex').value    || '#5865F2',
+    categoryId:       document.getElementById('t-category').value     || null,
+    logChannelId:     document.getElementById('t-logchannel').value   || null,
+    modRoleIds:       msValues('t-modroles'),
+    types:            state.ticketTypes,
+    priorityCategories: {
+      enabled: document.getElementById('t-pc-enabled').checked,
+      Low:     document.getElementById('t-pc-low').value    || null,
+      Medium:  document.getElementById('t-pc-medium').value || null,
+      High:    document.getElementById('t-pc-high').value   || null
+    },
+    openPingRoles: msValues('t-openping'),
+    priorityPingRoles: {
+      Low:    msValues('t-pp-low'),
+      Medium: msValues('t-pp-medium'),
+      High:   msValues('t-pp-high')
+    },
+    priorityEnabled: document.getElementById('t-priority-enabled').checked,
+    maxTickets:    parseInt(document.getElementById('t-maxtickets').value, 10) || 1,
+    nameScheme:    document.getElementById('t-namescheme').value.trim() || 'ticket-{number}',
+    welcomeMessage: document.getElementById('t-welcome').value.trim() || null,
+    autoClose: {
+      enabled:         document.getElementById('t-ac-enabled').checked,
+      inactivityHours: parseInt(document.getElementById('t-ac-hours').value, 10) || 0,
+      closeOnLeave:    document.getElementById('t-ac-leave').checked
+    },
+    form: {
+      enabled: document.getElementById('t-form-enabled').checked,
+      fields:  collectFormFields().filter(f => f.label)
+    }
+  };
+  try {
+    await api('PUT', `/api/guild/${state.guildId}/tickets`, payload);
+    setStatus(msg, 'ok', '✅ Saved!');
+  } catch {
+    setStatus(msg, 'err', '❌ Failed to save.');
+  }
+}
+
+async function loadOpenTickets() {
+  const el  = document.getElementById('open-tickets-list');
+  const list = await api('GET', `/api/guild/${state.guildId}/open-tickets`);
+  if (!list.length) {
+    el.innerHTML = '<span style="color:var(--muted)">No open tickets.</span>';
+    return;
+  }
+  const badgeCls = { Low: 'badge-low', Medium: 'badge-medium', High: 'badge-high' };
+  el.innerHTML = list.map(t => `
+    <div class="ticket-row">
+      <span class="ticket-ch">#${esc(t.channelName)}</span>
+      <span class="ticket-meta">Type: ${esc(t.type)}</span>
+      <span class="badge ${badgeCls[t.priority] || ''}">${esc(t.priority)}</span>
+      <span class="ticket-meta">Claimed: ${t.claimedBy ? `<@${t.claimedBy}>` : 'No'}</span>
+      <span class="ticket-meta">${timeAgo(t.createdAt)}</span>
+      <button class="btn btn-secondary" style="padding:4px 12px;font-size:12px;margin-left:auto"
+              onclick="openChat('${t.channelId}','${esc(t.channelName)}')">💬 Live Chat</button>
+    </div>`).join('');
+}
+
+// ── ANTI-NUKE / SECURITY ──────────────────────────
+async function loadSecurityConfig() {
+  hide('security-body'); hide('security-save-bar');
+  if (!state.guildId) { show('security-no-guild'); return; }
+  hide('security-no-guild');
+
+  const [{ config, protections, punishments }, guild] = await Promise.all([
+    api('GET', `/api/guild/${state.guildId}/security`),
+    ensureGuildData()
+  ]);
+
+  state.security     = config;
+  state.securityMeta = { protections, punishments };
+  renderSecurity(guild);
+  show('security-body'); show('security-save-bar');
+}
+
+function channelOptionsHtml(selected) {
+  const roleNone = `<option value="">None</option>`;
+  return roleNone + (state.guildData?.textChannels || [])
+    .map(c => `<option value="${c.id}"${c.id === selected ? ' selected' : ''}>#${esc(c.name)}</option>`).join('');
+}
+
+function roleMultiHtml(selectedArr) {
+  const sel = new Set(selectedArr || []);
+  return (state.guildData?.roles || [])
+    .map(r => `<option value="${r.id}"${sel.has(r.id) ? ' selected' : ''}>@${esc(r.name)}</option>`).join('');
+}
+
+function renderSecurity(guild) {
+  const c = state.security;
+  const { protections, punishments } = state.securityMeta;
+
+  const punishOpts = key => punishments
+    .map(p => `<option value="${p}"${c.protections[key].punishment === p ? ' selected' : ''}>${p}</option>`).join('');
+
+  const rows = protections.map(p => {
+    const pc = c.protections[p.key];
+    return `<tr data-key="${p.key}">
+      <td><label class="sec-switch"><input type="checkbox" class="sec-p-enabled" ${pc.enabled ? 'checked' : ''}><span>${esc(p.label)}</span></label></td>
+      <td><input type="number" class="sec-p-limit" min="1" value="${pc.limit}" style="width:64px"></td>
+      <td><input type="number" class="sec-p-window" min="1" value="${Math.round(pc.windowMs / 1000)}" style="width:64px"> s</td>
+      <td><select class="sec-p-punish">${punishOpts(p.key)}</select></td>
+      <td><select class="sec-p-roles" multiple size="3">${roleMultiHtml(pc.whitelist.roles)}</select></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('security-body').innerHTML = `
+    <div class="card">
+      <label class="sec-switch sec-master">
+        <input type="checkbox" id="sec-enabled" ${c.enabled ? 'checked' : ''}>
+        <span><strong>Enable Anti-Nuke</strong>. When off, nothing is detected or punished.</span>
+      </label>
+      <div class="form-row" style="margin-top:14px">
+        <label>Security Log Channel</label>
+        <select id="sec-logchannel">${channelOptionsHtml(c.logChannelId)}</select>
+        <span class="hint">Triggered protections are reported here.</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Global Whitelist</h3>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:12px">Exempt from <em>all</em> protections. The server owner and bot owner are always exempt.</p>
+      <div class="card-grid">
+        <div class="form-row">
+          <label>Whitelisted Roles</label>
+          <div id="sec-global-roles"></div>
+        </div>
+        <div class="form-row">
+          <label>Whitelisted User IDs</label>
+          <textarea id="sec-global-users" placeholder="One ID per line or comma-separated">${esc((c.globalWhitelist.users || []).join('\n'))}</textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Protections</h3>
+      <div class="log-table-wrap">
+        <table class="log-table sec-table">
+          <thead><tr>
+            <th>Protection</th><th>Limit</th><th>Window</th><th>Punishment</th><th>Whitelisted Roles</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  msInit('sec-global-roles', roleItems(), c.globalWhitelist.roles);
+}
+
+function selectedValues(el) {
+  return [...el.selectedOptions].map(o => o.value).filter(Boolean);
+}
+
+async function saveSecurityConfig() {
+  if (!state.guildId || !state.security) return;
+  const msg = document.getElementById('security-save-msg');
+
+  const userIds = (document.getElementById('sec-global-users').value.match(/\d{16,20}/g)) || [];
+
+  const protections = {};
+  document.querySelectorAll('.sec-table tbody tr').forEach(tr => {
+    protections[tr.dataset.key] = {
+      enabled:    tr.querySelector('.sec-p-enabled').checked,
+      limit:      Math.max(1, parseInt(tr.querySelector('.sec-p-limit').value, 10) || 1),
+      windowMs:   Math.max(1, parseInt(tr.querySelector('.sec-p-window').value, 10) || 1) * 1000,
+      punishment: tr.querySelector('.sec-p-punish').value,
+      whitelist:  { users: [], roles: selectedValues(tr.querySelector('.sec-p-roles')) }
+    };
+  });
+
+  const payload = {
+    enabled:      document.getElementById('sec-enabled').checked,
+    logChannelId: document.getElementById('sec-logchannel').value || null,
+    globalWhitelist: { users: userIds, roles: msValues('sec-global-roles') },
+    protections
+  };
+
+  try {
+    const res = await api('PUT', `/api/guild/${state.guildId}/security`, payload);
+    state.security = res.config;
+    setStatus(msg, 'ok', '✅ Saved!');
+  } catch {
+    setStatus(msg, 'err', '❌ Failed to save.');
+  }
+}
+
+// ── VERIFICATION ──────────────────────────────────
+async function loadVerification() {
+  hide('verif-body');
+  if (!state.guildId) { show('verif-no-guild'); return; }
+  hide('verif-no-guild');
+
+  const [config, guild] = await Promise.all([
+    api('GET', `/api/guild/${state.guildId}/verification`),
+    ensureGuildData()
+  ]);
+
+  document.getElementById('verif-enabled').checked = !!config.enabled;
+  document.getElementById('verif-title').value = config.panelTitle || '';
+  document.getElementById('verif-desc').value  = config.panelDescription || '';
+  document.getElementById('verif-minage').value = config.minAccountAgeDays || 0;
+  document.getElementById('verif-requireavatar').checked = !!config.requireAvatar;
+  fillSelect('verif-channel', guild.textChannels, config.channelId,      n => `#${n.name}`);
+  fillSelect('verif-role',    guild.roles,        config.verifiedRoleId, n => `@${n.name}`);
+  show('verif-body');
+}
+
+async function saveVerification(repost) {
+  if (!state.guildId) return;
+  const msg = document.getElementById('verif-save-msg');
+  const payload = {
+    enabled:          document.getElementById('verif-enabled').checked,
+    channelId:        document.getElementById('verif-channel').value || null,
+    verifiedRoleId:   document.getElementById('verif-role').value || null,
+    panelTitle:       document.getElementById('verif-title').value.trim() || null,
+    panelDescription: document.getElementById('verif-desc').value.trim() || null,
+    minAccountAgeDays: parseInt(document.getElementById('verif-minage').value, 10) || 0,
+    requireAvatar:    document.getElementById('verif-requireavatar').checked,
+    repost: !!repost
+  };
+  try {
+    const res = await api('PUT', `/api/guild/${state.guildId}/verification`, payload);
+    setStatus(msg, 'ok', repost ? (res.posted ? '✅ Saved & panel posted!' : '✅ Saved (panel not posted, check the channel).') : '✅ Saved!');
+  } catch {
+    setStatus(msg, 'err', '❌ Failed to save.');
+  }
+}
+
+// ── SOCIAL ALERTS ─────────────────────────────────
+async function loadSocial() {
+  hide('social-body');
+  if (!state.guildId) { show('social-no-guild'); return; }
+  hide('social-no-guild');
+  await ensureGuildData();
+  const data = await api('GET', `/api/guild/${state.guildId}/social`);
+  state.socialConfig = data.config;
+  state.socialProviders = data.providers;
+  renderSocial();
+  show('social-body');
+}
+
+function socCreatorsHtml(pid) {
+  const list = state.socialConfig.platforms[pid].creators;
+  if (!list.length) return '<span class="hint">No creators followed yet.</span>';
+  return list.map(c => `<span class="ms-tag">${esc(c.name)}<button class="ms-tag-x" onclick="socialRemove('${pid}','${esc(c.key)}')">✕</button></span>`).join('');
+}
+
+function renderSocial() {
+  const cards = state.socialProviders.map(p => {
+    const pc = state.socialConfig.platforms[p.id];
+    const warn = p.needsAuth && !p.configured
+      ? `<div class="soc-warn">⚠️ Add <code>TWITCH_CLIENT_ID</code> and <code>TWITCH_CLIENT_SECRET</code> to the bot's <code>.env</code> file to enable ${esc(p.label)}. See <code>.env.example</code> for steps.</div>`
+      : '';
+    return `<div class="card">
+      <div class="soc-head">
+        <h3>${p.emoji} ${esc(p.label)} <span class="hint">· ${p.kind === 'live' ? 'goes live' : 'new posts'}</span></h3>
+        <label class="sec-switch"><input type="checkbox" id="soc-${p.id}-enabled" ${chk(pc.enabled)}><span>Enabled</span></label>
+      </div>
+      ${warn}
+      <div class="card-grid">
+        <div class="form-row"><label>Notification Channel</label><select id="soc-${p.id}-channel"></select></div>
+        <div class="form-row"><label>Mention Role (optional)</label><select id="soc-${p.id}-role"></select></div>
+      </div>
+      <div class="form-row"><label>Message</label>
+        <textarea id="soc-${p.id}-template" rows="2">${esc(pc.template)}</textarea>
+        <span class="hint">Placeholders: {name} {title} {url} {platform}</span></div>
+      <div class="form-row"><label>Creators</label>
+        <div class="ms-tags-static" id="soc-${p.id}-creators">${socCreatorsHtml(p.id)}</div>
+        <div class="btn-row" style="margin-top:10px">
+          <input type="text" id="soc-${p.id}-add" placeholder="${esc(p.example)}" style="flex:1;min-width:200px">
+          <button class="btn btn-secondary" onclick="socialAdd('${p.id}')">Add</button>
+          <button class="btn btn-secondary" onclick="socialTest('${p.id}')">Send test</button>
+        </div>
+        <span class="hint" id="soc-${p.id}-msg"></span>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('social-body').innerHTML = cards + `
+    <div class="save-bar"><button class="btn btn-primary" onclick="saveSocial()">Save Settings</button>
+      <span id="social-save-msg" class="save-status"></span></div>`;
+
+  for (const p of state.socialProviders) {
+    const pc = state.socialConfig.platforms[p.id];
+    fillSelect(`soc-${p.id}-channel`, state.guildData.textChannels, pc.channelId, n => `#${n.name}`);
+    fillSelect(`soc-${p.id}-role`, state.guildData.roles, pc.mentionRoleId, n => `@${n.name}`);
+  }
+}
+
+async function saveSocial() {
+  const platforms = {};
+  for (const p of state.socialProviders) {
+    platforms[p.id] = {
+      enabled: boolv(`soc-${p.id}-enabled`),
+      channelId: document.getElementById(`soc-${p.id}-channel`).value || null,
+      mentionRoleId: document.getElementById(`soc-${p.id}-role`).value || null,
+      template: document.getElementById(`soc-${p.id}-template`).value
+    };
+  }
+  const msg = document.getElementById('social-save-msg');
+  try { const r = await api('PUT', `/api/guild/${state.guildId}/social`, { platforms }); state.socialConfig = r.config; setStatus(msg, 'ok', '✅ Saved!'); }
+  catch { setStatus(msg, 'err', '❌ Failed to save.'); }
+}
+
+async function socialAdd(pid) {
+  const input = document.getElementById(`soc-${pid}-add`);
+  const account = input.value.trim();
+  const msg = document.getElementById(`soc-${pid}-msg`);
+  if (!account) return;
+  msg.textContent = 'Adding…';
+  try {
+    const r = await api('POST', `/api/guild/${state.guildId}/social/creator`, { platform: pid, account });
+    state.socialConfig = r.config;
+    input.value = '';
+    document.getElementById(`soc-${pid}-creators`).innerHTML = socCreatorsHtml(pid);
+    msg.textContent = '';
+  } catch (e) { msg.textContent = '❌ ' + e.message; }
+}
+
+async function socialRemove(pid, key) {
+  try {
+    const r = await api('POST', `/api/guild/${state.guildId}/social/creator/delete`, { platform: pid, key });
+    state.socialConfig = r.config;
+    document.getElementById(`soc-${pid}-creators`).innerHTML = socCreatorsHtml(pid);
+  } catch {}
+}
+
+async function socialTest(pid) {
+  const msg = document.getElementById(`soc-${pid}-msg`);
+  msg.textContent = 'Sending…';
+  try { await api('POST', `/api/guild/${state.guildId}/social/test`, { platform: pid }); msg.textContent = '✅ Test sent.'; setTimeout(() => msg.textContent = '', 3000); }
+  catch (e) { msg.textContent = '❌ ' + e.message; }
+}
+
+// ── POLLS ─────────────────────────────────────────
+async function loadPolls() {
+  hide('polls-body');
+  if (!state.guildId) { show('polls-no-guild'); return; }
+  hide('polls-no-guild');
+  await ensureGuildData();
+  const data = await api('GET', `/api/guild/${state.guildId}/polls`);
+  state.pollConfig = data.config;
+  state.pollList = data.polls;
+  if (!state.pollOptions) state.pollOptions = ['', ''];
+  renderPolls();
+  show('polls-body');
+}
+
+const POLL_STATUS = { active: '🟢 Active', scheduled: '🕒 Scheduled', ended: '🔒 Ended', cancelled: '🚫 Cancelled' };
+function channelName(id) { const c = (state.guildData?.textChannels || []).find(x => x.id === id); return c ? c.name : id; }
+
+function pollOptionRows() {
+  return state.pollOptions.map((v, i) => `
+    <div class="lv-row">
+      <input class="poll-opt" placeholder="Option ${i + 1}" value="${esc(v)}" style="flex:1;min-width:160px">
+      <button class="btn btn-secondary lv-del" onclick="pollDelOption(${i})">✕</button>
+    </div>`).join('');
+}
+function pollSyncOptions() { state.pollOptions = [...document.querySelectorAll('.poll-opt')].map(i => i.value); }
+function pollAddOption() { pollSyncOptions(); if (state.pollOptions.length < 25) state.pollOptions.push(''); document.getElementById('poll-options').innerHTML = pollOptionRows(); }
+function pollDelOption(i) { pollSyncOptions(); state.pollOptions.splice(i, 1); while (state.pollOptions.length < 2) state.pollOptions.push(''); document.getElementById('poll-options').innerHTML = pollOptionRows(); }
+
+function pollListCard(title, list, actionable) {
+  if (!list.length) return '';
+  const rows = list.map(p => {
+    const bars = p.options.map(o => `<div class="hint">${esc(o.label)}: ${o.count} (${o.percent}%)${o.leading && o.count ? ' 🏆' : ''}</div>`).join('');
+    const when = p.status === 'scheduled' && p.scheduledFor ? `opens ${new Date(p.scheduledFor).toLocaleString()}`
+               : p.endsAt ? `ends ${new Date(p.endsAt).toLocaleString()}` : '';
+    const btns = actionable ? `<div class="btn-row">
+      ${p.status === 'active' ? `<button class="btn btn-secondary" onclick="pollAction('${p.id}','end')">End</button>` : ''}
+      ${p.status === 'active' || p.status === 'scheduled' ? `<button class="btn btn-secondary" onclick="pollAction('${p.id}','cancel')">Cancel</button>` : ''}
+    </div>` : '';
+    return `<div class="alt-flag-row" style="align-items:flex-start">
+      <div style="flex:1;min-width:200px">
+        <div><strong>${esc(p.question)}</strong> <span class="hint">· ${POLL_STATUS[p.status] || p.status} · ${p.voters} voter(s)${p.multi ? ' · multi' : ''}${p.anonymous ? ' · anon' : ''}</span></div>
+        <div class="hint">#${esc(channelName(p.channelId))} · <code>${esc(p.id)}</code>${when ? ` · ${esc(when)}` : ''}</div>
+        <div style="margin-top:6px">${bars}</div>
+      </div>${btns}</div>`;
+  }).join('');
+  return `<div class="card"><h3>${title}</h3><div class="alt-flags">${rows}</div></div>`;
+}
+
+function renderPolls() {
+  const cfg = state.pollConfig;
+  const live = state.pollList.filter(p => p.status === 'active' || p.status === 'scheduled');
+  const past = state.pollList.filter(p => p.status === 'ended' || p.status === 'cancelled').slice(0, 20);
+
+  document.getElementById('polls-body').innerHTML = `
+    <div class="card">
+      <h3>Create a Poll</h3>
+      <div class="card-grid">
+        <div class="form-row"><label>Channel</label><select id="poll-channel"></select></div>
+        <div class="form-row"><label>Question</label><input type="text" id="poll-question" maxlength="256" placeholder="What should we play next?"></div>
+      </div>
+      <div class="form-row"><label>Options</label><div id="poll-options">${pollOptionRows()}</div>
+        <button class="btn btn-secondary" style="margin-top:8px" onclick="pollAddOption()">+ Add Option</button></div>
+      <div class="card-grid">
+        <label class="sec-switch"><input type="checkbox" id="poll-multi"><span>Allow multiple choices</span></label>
+        <div class="form-row"><label>Max choices (0 = all)</label><input type="number" id="poll-maxchoices" min="0" value="0"></div>
+        <label class="sec-switch"><input type="checkbox" id="poll-anon"><span>Anonymous</span></label>
+        <label class="sec-switch"><input type="checkbox" id="poll-hide"><span>Hide results until it ends</span></label>
+      </div>
+      <div class="card-grid">
+        <div class="form-row"><label>Auto-end after (minutes, 0 = off)</label><input type="number" id="poll-duration" min="0" value="0"></div>
+        <div class="form-row"><label>Start in (minutes, 0 = now)</label><input type="number" id="poll-schedule" min="0" value="0"></div>
+        <div class="form-row"><label>Restrict voting to roles</label><div id="poll-roles"></div></div>
+      </div>
+      <div class="save-bar"><button class="btn btn-primary" onclick="createPoll()">Create &amp; Post</button>
+        <span id="poll-create-msg" class="save-status"></span></div>
+    </div>
+    ${pollListCard('Active &amp; Scheduled', live, true)}
+    ${past.length ? pollListCard('History', past, false) : ''}
+    <div class="card">
+      <h3>Poll Settings</h3>
+      <div class="card-grid">
+        <div class="form-row"><label>Default auto-end (minutes)</label><input type="number" id="pollcfg-duration" min="0" value="${cfg.defaultDurationMin}"></div>
+        <div class="form-row"><label>Max options per poll</label><input type="number" id="pollcfg-maxopts" min="2" max="25" value="${cfg.maxOptions}"></div>
+        <div class="form-row"><label>Results channel (optional)</label><select id="pollcfg-results"></select><span class="hint">A summary is posted here when a poll ends.</span></div>
+      </div>
+      <div class="form-row"><label>Roles allowed to create polls</label><div id="pollcfg-creators"></div>
+        <span class="hint">Members with Manage Messages can always create polls.</span></div>
+      <div class="save-bar"><button class="btn btn-primary" onclick="savePollConfig()">Save Settings</button>
+        <span id="pollcfg-msg" class="save-status"></span></div>
+    </div>`;
+
+  fillSelect('poll-channel', state.guildData.textChannels, null, n => `#${n.name}`);
+  fillSelect('pollcfg-results', state.guildData.textChannels, cfg.resultsChannelId, n => `#${n.name}`);
+  msInit('poll-roles', roleItems(), []);
+  msInit('pollcfg-creators', roleItems(), cfg.creatorRoleIds);
+}
+
+async function createPoll() {
+  pollSyncOptions();
+  const payload = {
+    channelId: document.getElementById('poll-channel').value,
+    question: document.getElementById('poll-question').value.trim(),
+    options: state.pollOptions.map(s => s.trim()).filter(Boolean),
+    multi: boolv('poll-multi'),
+    maxChoices: numv('poll-maxchoices', 0),
+    anonymous: boolv('poll-anon'),
+    hideResults: boolv('poll-hide'),
+    durationMin: numv('poll-duration', 0),
+    scheduleMin: numv('poll-schedule', 0),
+    allowedRoleIds: msValues('poll-roles')
+  };
+  const okMsg = (ok, text) => setStatus(document.getElementById('poll-create-msg'), ok ? 'ok' : 'err', text);
+  if (!payload.channelId) return okMsg(false, '❌ Pick a channel.');
+  if (!payload.question || payload.options.length < 2) return okMsg(false, '❌ Need a question and 2+ options.');
+  try {
+    await api('POST', `/api/guild/${state.guildId}/polls`, payload);
+    state.pollOptions = ['', ''];
+    await loadPolls();
+    okMsg(true, '✅ Poll posted!');
+  } catch (e) { okMsg(false, '❌ ' + e.message); }
+}
+
+async function savePollConfig() {
+  const msg = document.getElementById('pollcfg-msg');
+  const payload = {
+    defaultDurationMin: numv('pollcfg-duration', 0),
+    maxOptions: numv('pollcfg-maxopts', 10),
+    resultsChannelId: document.getElementById('pollcfg-results').value || null,
+    creatorRoleIds: msValues('pollcfg-creators')
+  };
+  try { const r = await api('PUT', `/api/guild/${state.guildId}/polls/config`, payload); state.pollConfig = r.config; setStatus(msg, 'ok', '✅ Saved!'); }
+  catch { setStatus(msg, 'err', '❌ Failed to save.'); }
+}
+
+async function pollAction(id, op) {
+  try { await api('POST', `/api/guild/${state.guildId}/polls/${id}/${op}`); await loadPolls(); } catch {}
+}
+
+// ── ALT DETECTION ─────────────────────────────────
+const ALT_SIG_PARAMS = {
+  youngAccount: [{ key: 'maxAgeDays', label: 'Max age (days)', min: 1 }],
+  instantJoin:  [{ key: 'withinHours', label: 'Within (hours)', min: 1 }],
+  joinBurst:    [{ key: 'joins', label: 'Joins', min: 2 }, { key: 'windowSec', label: 'Window (s)', min: 5 }]
+};
+
+async function loadAltDetect() {
+  hide('alt-body'); hide('alt-save-bar');
+  if (!state.guildId) { show('alt-no-guild'); return; }
+  hide('alt-no-guild');
+  await ensureGuildData();
+  const data = await api('GET', `/api/guild/${state.guildId}/altdetect`);
+  state.altdetect = data.config;
+  state.altMeta = { signals: data.signals, presets: data.presets, actions: data.actions, flags: data.flags, pending: data.pending };
+  renderAltDetect();
+  show('alt-body'); show('alt-save-bar');
+}
+
+function altActionOptions(selected) {
+  return state.altMeta.actions.map(a =>
+    `<option value="${a.value}"${a.value === selected ? ' selected' : ''}>${esc(a.label)}</option>`).join('');
+}
+
+function altPresetButtons() {
+  return Object.keys(state.altMeta.presets).map(name => {
+    const on = state.altdetect.sensitivity === name ? ' btn-primary' : ' btn-secondary';
+    return `<button class="btn${on}" style="text-transform:capitalize" onclick="applyAltPreset('${name}')">${name}</button>`;
+  }).join('') + (state.altdetect.sensitivity === 'custom'
+    ? '<span class="hint" style="align-self:center">Custom settings</span>' : '');
+}
+
+function altSignalCard(meta) {
+  const c = state.altdetect.signals[meta.key];
+  if (!c) return '';
+  const params = (ALT_SIG_PARAMS[meta.key] || []).map(p =>
+    `<div class="form-row"><label>${p.label}</label>
+       <input type="number" id="alt-sig-${meta.key}-${p.key}" min="${p.min || 0}" value="${c[p.key]}"></div>`).join('');
+  return `
+    <div class="card">
+      <label class="sec-switch sec-master"><input type="checkbox" id="alt-sig-${meta.key}-en" ${chk(c.enabled)}>
+        <span><strong>${esc(meta.label)}</strong></span></label>
+      <p class="hint" style="margin:6px 0 12px">${esc(meta.desc)}</p>
+      <div class="card-grid">
+        <div class="form-row"><label>Weight (points)</label>
+          <input type="number" id="alt-sig-${meta.key}-w" min="0" max="100" value="${c.weight}"></div>
+        ${params}
+      </div>
+    </div>`;
+}
+
+function altFlagsCard() {
+  const flags = state.altMeta.flags || [];
+  if (!flags.length) return `<div class="card"><h3>Recent Flags</h3><p class="hint">No accounts have been flagged yet.</p></div>`;
+  const rows = flags.map(f => {
+    const tone = f.level === 'high' ? 'l-error' : 'l-warn';
+    const sigs = (f.signals || []).map(s => s.label).join(', ') || 'none';
+    const clear = f.status === 'pending'
+      ? `<button class="btn btn-secondary" onclick="clearAltFlag('${f.userId}')">Mark cleared</button>` : '';
+    return `<div class="alt-flag-row">
+      <span class="${tone}" style="font-weight:600">${f.score}/100</span>
+      <div style="flex:1;min-width:160px">
+        <div><code>${esc(f.tag || f.userId)}</code> · <span class="hint">${esc(f.status)}</span></div>
+        <div class="hint">${esc(sigs)}</div>
+      </div>${clear}</div>`;
+  }).join('');
+  return `<div class="card"><h3>Recent Flags <span class="hint">(${state.altMeta.pending} pending)</span></h3>
+    <div class="alt-flags">${rows}</div></div>`;
+}
+
+function renderAltDetect() {
+  const c = state.altdetect;
+  document.getElementById('alt-body').innerHTML = `
+    <div class="card">
+      <label class="sec-switch sec-master"><input type="checkbox" id="alt-enabled" ${chk(c.enabled)}>
+        <span><strong>Enable Alt Detection</strong></span></label>
+    </div>
+    <div class="card">
+      <h3>Sensitivity</h3>
+      <p class="hint" style="margin-bottom:12px">Presets set the thresholds and account-age window below. Editing any value switches to Custom.</p>
+      <div class="btn-row" id="alt-presets">${altPresetButtons()}</div>
+      <div class="card-grid" style="margin-top:14px">
+        <div class="form-row"><label>Flag at score ≥</label><input type="number" id="alt-th-flag" min="1" max="100" value="${c.thresholds.flag}"></div>
+        <div class="form-row"><label>High risk at score ≥</label><input type="number" id="alt-th-high" min="1" max="100" value="${c.thresholds.high}"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Actions</h3>
+      <p class="hint" style="margin-bottom:12px">What to do automatically when a member is flagged. "Flag for review" only posts to the review channel.</p>
+      <div class="card-grid">
+        <div class="form-row"><label>When flagged (Suspicious)</label><select id="alt-act-flag">${altActionOptions(c.actions.onFlag)}</select></div>
+        <div class="form-row"><label>When high risk</label><select id="alt-act-high">${altActionOptions(c.actions.onHigh)}</select></div>
+        <div class="form-row"><label>Review Channel</label><select id="alt-review-ch"></select><span class="hint">Where flag alerts and review buttons are posted.</span></div>
+        <div class="form-row"><label>Quarantine Role</label><select id="alt-quarantine"></select><span class="hint">Added by the Quarantine action.</span></div>
+      </div>
+      <label class="sec-switch" style="margin-top:8px"><input type="checkbox" id="alt-dm" ${chk(c.dmOnAction)}>
+        <span>DM members before kicking or banning them</span></label>
+    </div>
+    <div class="card">
+      <h3>Exempt Roles</h3>
+      <p class="hint" style="margin-bottom:10px">Members with any of these roles are never screened.</p>
+      <div id="alt-exempt"></div>
+    </div>
+    <h3 style="margin:24px 4px 4px">Detection Signals</h3>
+    <p class="hint" style="margin:0 4px 8px">Each enabled signal adds up to its weight in points. A member is flagged when the total reaches the threshold above.</p>
+    ${state.altMeta.signals.map(altSignalCard).join('')}
+    ${altFlagsCard()}`;
+
+  fillSelect('alt-review-ch', state.guildData.textChannels, c.reviewChannelId, n => `#${n.name}`);
+  fillSelect('alt-quarantine', state.guildData.roles, c.quarantineRoleId, n => `@${n.name}`);
+  msInit('alt-exempt', roleItems(), c.exemptRoleIds);
+}
+
+function collectAltDetect() {
+  const c = state.altdetect;
+  c.enabled = boolv('alt-enabled');
+  c.thresholds = { flag: numv('alt-th-flag', 50), high: numv('alt-th-high', 75) };
+  c.actions = { onFlag: document.getElementById('alt-act-flag').value, onHigh: document.getElementById('alt-act-high').value };
+  c.reviewChannelId = document.getElementById('alt-review-ch').value || null;
+  c.quarantineRoleId = document.getElementById('alt-quarantine').value || null;
+  c.dmOnAction = boolv('alt-dm');
+  c.exemptRoleIds = msValues('alt-exempt');
+  for (const meta of state.altMeta.signals) {
+    const s = c.signals[meta.key];
+    s.enabled = boolv(`alt-sig-${meta.key}-en`);
+    s.weight = numv(`alt-sig-${meta.key}-w`, s.weight);
+    for (const p of ALT_SIG_PARAMS[meta.key] || []) s[p.key] = numv(`alt-sig-${meta.key}-${p.key}`, s[p.key]);
+  }
+  return c;
+}
+
+function applyAltPreset(name) {
+  collectAltDetect();
+  const p = state.altMeta.presets[name];
+  if (!p) return;
+  state.altdetect.sensitivity = name;
+  state.altdetect.thresholds = { ...p.thresholds };
+  state.altdetect.signals.youngAccount.maxAgeDays = p.youngAccountDays;
+  state.altdetect.signals.joinBurst.joins = p.burst.joins;
+  state.altdetect.signals.joinBurst.windowSec = p.burst.windowSec;
+  renderAltDetect();
+}
+
+async function saveAltDetect() {
+  if (!state.guildId) return;
+  const msg = document.getElementById('alt-save-msg');
+  const payload = collectAltDetect();
+  payload.sensitivity = state.altdetect.sensitivity; // server re-derives custom if values diverge
+  try {
+    const res = await api('PUT', `/api/guild/${state.guildId}/altdetect`, payload);
+    state.altdetect = res.config;
+    renderAltDetect();
+    setStatus(msg, 'ok', '✅ Saved!');
+  } catch { setStatus(msg, 'err', '❌ Failed to save.'); }
+}
+
+async function clearAltFlag(userId) {
+  try {
+    await api('POST', `/api/guild/${state.guildId}/altdetect/flags/${userId}`, { status: 'cleared' });
+    const f = state.altMeta.flags.find(x => x.userId === userId);
+    if (f) { f.status = 'cleared'; state.altMeta.pending = Math.max(0, state.altMeta.pending - 1); }
+    renderAltDetect();
+  } catch {}
+}
+
+// ── LEVELING ──────────────────────────────────────
+async function loadLeveling() {
+  hide('leveling-body'); hide('leveling-save-bar');
+  if (!state.guildId) { show('leveling-no-guild'); return; }
+  hide('leveling-no-guild');
+
+  const [data, guild] = await Promise.all([
+    api('GET', `/api/guild/${state.guildId}/leveling`),
+    ensureGuildData()
+  ]);
+  state.leveling = data.config;
+  state.levelingMeta = { curves: data.curves, announceModes: data.announceModes };
+  renderLeveling(guild);
+  show('leveling-body'); show('leveling-save-bar');
+}
+
+function lvChannelOpts(sel) {
+  return '<option value="">None</option>' + (state.guildData?.textChannels || [])
+    .map(c => `<option value="${c.id}"${c.id === sel ? ' selected' : ''}>#${esc(c.name)}</option>`).join('');
+}
+function lvRoleOpts(sel) {
+  return '<option value="">None</option>' + (state.guildData?.roles || [])
+    .map(r => `<option value="${r.id}"${r.id === sel ? ' selected' : ''}>@${esc(r.name)}</option>`).join('');
+}
+const chk = b => b ? 'checked' : '';
+
+function renderLeveling() {
+  const c = state.leveling;
+  const curveOpts = state.levelingMeta.curves.map(v => `<option value="${v}"${c.formula.curve === v ? ' selected' : ''}>${v}</option>`).join('');
+  const annOpts = state.levelingMeta.announceModes.map(v => `<option value="${v}"${c.announce.mode === v ? ' selected' : ''}>${ANN_LABELS[v] || v}</option>`).join('');
+
+  // Friendly "speed" preset: maps to the standard curve + a multiplier. Falls back to Custom.
+  const sp = (c.formula.curve === 'mee6' && [0.5, 1, 2].includes(c.multiplier)) ? String(c.multiplier) : 'custom';
+  const speedOpt = (v, label) => `<option value="${v}"${sp === v ? ' selected' : ''}>${label}</option>`;
+  const speedOpts = speedOpt('0.5', 'Slow (takes longer to level up)')
+    + speedOpt('1', 'Normal (recommended)')
+    + speedOpt('2', 'Fast (level up quickly)')
+    + speedOpt('custom', 'Custom (set it yourself below)');
+
+  const rewardRows = c.roleRewards.map((r, i) => `
+    <div class="lv-row" data-i="${i}">
+      <span>Level</span>
+      <input type="number" min="1" class="lv-rw-level" value="${r.level}" style="width:80px">
+      <select class="lv-rw-role">${lvRoleOpts(r.roleId)}</select>
+      <button class="btn btn-secondary lv-del" onclick="lvDel('roleRewards',${i})">✕</button>
+    </div>`).join('') || '<p class="lv-empty">No role rewards yet.</p>';
+
+  const cboostRows = c.channelBoosts.map((b, i) => `
+    <div class="lv-row" data-i="${i}">
+      <select class="lv-cb-channel">${lvChannelOpts(b.id)}</select>
+      <span>×</span>
+      <input type="number" min="0" step="0.1" class="lv-cb-mult" value="${b.multiplier}" style="width:80px">
+      <button class="btn btn-secondary lv-del" onclick="lvDel('channelBoosts',${i})">✕</button>
+    </div>`).join('') || '<p class="lv-empty">No channel boosts.</p>';
+
+  const rboostRows = c.roleBoosts.map((b, i) => `
+    <div class="lv-row" data-i="${i}">
+      <select class="lv-rb-role">${lvRoleOpts(b.id)}</select>
+      <span>×</span>
+      <input type="number" min="0" step="0.1" class="lv-rb-mult" value="${b.multiplier}" style="width:80px">
+      <button class="btn btn-secondary lv-del" onclick="lvDel('roleBoosts',${i})">✕</button>
+    </div>`).join('') || '<p class="lv-empty">No role boosts.</p>';
+
+  document.getElementById('leveling-body').innerHTML = `
+    <div class="card">
+      <label class="sec-switch sec-master"><input type="checkbox" id="lv-enabled" ${chk(c.enabled)}>
+        <span><strong>Enable Leveling</strong>. When off, no XP is tracked or awarded.</span></label>
+    </div>
+
+    <div class="card">
+      <h3>XP Sources</h3>
+      <div class="card-grid">
+        <div class="form-row"><label class="sec-switch"><input type="checkbox" id="lv-msg-enabled" ${chk(c.message.enabled)}><span>Message XP</span></label></div>
+        <div></div>
+        <div class="form-row"><label>Min XP / message</label><input type="number" id="lv-msg-min" min="0" value="${c.message.min}"></div>
+        <div class="form-row"><label>Max XP / message</label><input type="number" id="lv-msg-max" min="0" value="${c.message.max}"></div>
+        <div class="form-row"><label>Message cooldown (seconds)</label><input type="number" id="lv-msg-cd" min="0" value="${c.message.cooldown}"></div>
+        <div></div>
+        <div class="form-row"><label class="sec-switch"><input type="checkbox" id="lv-react-enabled" ${chk(c.reaction.enabled)}><span>Reaction XP</span></label></div>
+        <div></div>
+        <div class="form-row"><label>XP / reaction</label><input type="number" id="lv-react-xp" min="0" value="${c.reaction.xp}"></div>
+        <div class="form-row"><label>Reaction cooldown (seconds)</label><input type="number" id="lv-react-cd" min="0" value="${c.reaction.cooldown}"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Voice XP</h3>
+      <label class="sec-switch" style="margin-bottom:14px"><input type="checkbox" id="lv-voice-enabled" ${chk(c.voice.enabled)}><span>Enable voice XP</span></label>
+      <div class="card-grid">
+        <div class="form-row"><label>XP / minute</label><input type="number" id="lv-voice-xp" min="0" value="${c.voice.xpPerMinute}"></div>
+        <div class="form-row"><label>Min users in channel</label><input type="number" id="lv-voice-min" min="1" value="${c.voice.minUsers}"></div>
+      </div>
+      <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="lv-voice-afk" ${chk(c.voice.ignoreAfk)}><span>No XP in AFK channel</span></label>
+      <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="lv-voice-muted" ${chk(c.voice.ignoreMuted)}><span>No XP while muted</span></label>
+      <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="lv-voice-deaf" ${chk(c.voice.ignoreDeafened)}><span>No XP while deafened</span></label>
+    </div>
+
+    <div class="card">
+      <h3>Leveling Speed &amp; Limits</h3>
+      <div class="card-grid">
+        <div class="form-row"><label>Leveling Speed</label><select id="lv-speed" onchange="lvApplySpeed()">${speedOpts}</select>
+          <span class="hint">How quickly members earn levels. Pick one and you are done.</span></div>
+        <div class="form-row"><label>Highest Level</label><input type="number" id="lv-maxlevel" min="0" value="${c.maxLevel}">
+          <span class="hint">Members stop leveling past this. Leave at 0 for no limit.</span></div>
+      </div>
+      <details class="lv-advanced">
+        <summary>Advanced settings (most people can skip this)</summary>
+        <p class="hint" style="margin:10px 0 14px">The speed option above already sets these for you. Only change them if you want fine control.</p>
+        <div class="card-grid">
+          <div class="form-row"><label>XP Curve</label><select id="lv-curve" onchange="lvSpeedToCustom()">${curveOpts}</select>
+            <span class="hint">How fast the XP needed per level grows. "mee6" is the popular default.</span></div>
+          <div class="form-row"><label>XP Multiplier</label><input type="number" id="lv-multiplier" min="0" step="0.1" value="${c.multiplier}" onchange="lvSpeedToCustom()">
+            <span class="hint">Multiplies all XP earned. 2 means double XP.</span></div>
+          <div class="form-row"><label>Starting XP per level</label><input type="number" id="lv-base" min="1" value="${c.formula.baseXp}" onchange="lvSpeedToCustom()">
+            <span class="hint">Used by the linear and exponential curves.</span></div>
+          <div class="form-row"><label>Growth factor</label><input type="number" id="lv-factor" min="1.01" step="0.05" value="${c.formula.factor}" onchange="lvSpeedToCustom()">
+            <span class="hint">Used by the exponential curve only.</span></div>
+        </div>
+      </details>
+    </div>
+
+    <div class="card">
+      <h3>Level-Up Announcements</h3>
+      <div class="card-grid">
+        <div class="form-row"><label>Where to announce</label><select id="lv-ann-mode">${annOpts}</select>
+          <span class="hint">Send a message when someone levels up, and choose where it goes.</span></div>
+        <div class="form-row"><label>Announcement Channel</label><select id="lv-ann-channel">${lvChannelOpts(c.announce.channelId)}</select>
+          <span class="hint">Only used when "a specific channel" is chosen above.</span></div>
+      </div>
+      <div class="form-row"><label>Message</label><textarea id="lv-ann-msg">${esc(c.announce.message)}</textarea>
+        <span class="hint">Placeholders: {user} {username} {level} {server}</span></div>
+    </div>
+
+    <div class="card">
+      <h3>Role Rewards</h3>
+      <p class="hint" style="margin-bottom:12px">Grant roles at levels. Multiple rewards per level allowed.</p>
+      <div id="lv-rewards">${rewardRows}</div>
+      <button class="btn btn-secondary" style="margin-top:10px" onclick="lvAdd('roleRewards')">+ Add Reward</button>
+      <div style="margin-top:14px">
+        <label class="sec-switch"><input type="checkbox" id="lv-stack" ${chk(c.stackRewards)}><span>Stack rewards (keep lower-level reward roles)</span></label>
+        <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="lv-removereset" ${chk(c.removeRewardsOnReset)}><span>Remove reward roles when a member is reset</span></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Boosts</h3>
+      <div class="card-grid">
+        <div>
+          <label class="form-row" style="margin-bottom:8px">Channel Boosts</label>
+          <div id="lv-cboosts">${cboostRows}</div>
+          <button class="btn btn-secondary" style="margin-top:8px" onclick="lvAdd('channelBoosts')">+ Channel Boost</button>
+        </div>
+        <div>
+          <label class="form-row" style="margin-bottom:8px">Role Boosts</label>
+          <div id="lv-rboosts">${rboostRows}</div>
+          <button class="btn btn-secondary" style="margin-top:8px" onclick="lvAdd('roleBoosts')">+ Role Boost</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>No-XP Channels &amp; Roles</h3>
+      <div class="card-grid">
+        <div class="form-row"><label>No-XP Channels</label><div id="lv-noxp-channels"></div></div>
+        <div class="form-row"><label>No-XP Roles</label><div id="lv-noxp-roles"></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Leaderboards &amp; Rank Card</h3>
+      <label class="sec-switch"><input type="checkbox" id="lv-lb-weekly" ${chk(c.leaderboard.weeklyEnabled)}><span>Weekly leaderboard</span></label>
+      <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="lv-lb-monthly" ${chk(c.leaderboard.monthlyEnabled)}><span>Monthly leaderboard</span></label>
+      <div class="form-row" style="margin-top:14px"><label>Rank Card Accent</label>
+        <div class="color-row"><input type="color" id="lv-accent" value="${c.rankCard.accent}"></div>
+      </div>
+    </div>`;
+
+  msInit('lv-noxp-channels', channelItems(), c.noXpChannels);
+  msInit('lv-noxp-roles', roleItems(), c.noXpRoles);
+}
+
+// Friendly labels for the announcement-mode select (raw values stay as-is for the backend).
+const ANN_LABELS = {
+  channel: 'A specific channel',
+  current: 'The channel they were chatting in',
+  dm:      'Direct message to the member',
+  off:     'Do not announce'
+};
+
+// Speed preset writes the curve + multiplier; touching an advanced field flips it to Custom.
+function lvApplySpeed() {
+  const v = document.getElementById('lv-speed').value;
+  if (v === 'custom') return;
+  document.getElementById('lv-curve').value = 'mee6';
+  document.getElementById('lv-multiplier').value = v;
+  markDirty();
+}
+function lvSpeedToCustom() {
+  const sel = document.getElementById('lv-speed');
+  if (sel) sel.value = 'custom';
+}
+
+const lvDefaults = {
+  roleRewards:   () => ({ level: 1, roleId: state.guildData?.roles?.[0]?.id || '' }),
+  channelBoosts: () => ({ id: state.guildData?.textChannels?.[0]?.id || '', multiplier: 2 }),
+  roleBoosts:    () => ({ id: state.guildData?.roles?.[0]?.id || '', multiplier: 2 })
+};
+
+function lvAdd(key) { collectLeveling(); state.leveling[key].push(lvDefaults[key]()); renderLeveling(); }
+function lvDel(key, i) { collectLeveling(); state.leveling[key].splice(i, 1); renderLeveling(); }
+
+const numv = (id, d) => { const n = Number(document.getElementById(id).value); return Number.isFinite(n) ? n : d; };
+const boolv = id => document.getElementById(id).checked;
+
+function collectLeveling() {
+  const c = state.leveling;
+  c.enabled = boolv('lv-enabled');
+  c.message = { enabled: boolv('lv-msg-enabled'), min: numv('lv-msg-min', 15), max: numv('lv-msg-max', 25), cooldown: numv('lv-msg-cd', 60) };
+  c.reaction = { enabled: boolv('lv-react-enabled'), xp: numv('lv-react-xp', 5), cooldown: numv('lv-react-cd', 60) };
+  c.voice = { enabled: boolv('lv-voice-enabled'), xpPerMinute: numv('lv-voice-xp', 10), minUsers: numv('lv-voice-min', 2),
+              ignoreAfk: boolv('lv-voice-afk'), ignoreMuted: boolv('lv-voice-muted'), ignoreDeafened: boolv('lv-voice-deaf') };
+  c.formula = { curve: document.getElementById('lv-curve').value, baseXp: numv('lv-base', 100), factor: numv('lv-factor', 1.2) };
+  c.multiplier = numv('lv-multiplier', 1);
+  c.maxLevel = numv('lv-maxlevel', 0);
+  c.announce = { mode: document.getElementById('lv-ann-mode').value, channelId: document.getElementById('lv-ann-channel').value || null,
+                 message: document.getElementById('lv-ann-msg').value };
+  c.stackRewards = boolv('lv-stack');
+  c.removeRewardsOnReset = boolv('lv-removereset');
+  c.leaderboard = { weeklyEnabled: boolv('lv-lb-weekly'), monthlyEnabled: boolv('lv-lb-monthly') };
+  c.rankCard = { accent: document.getElementById('lv-accent').value };
+  c.noXpChannels = msValues('lv-noxp-channels');
+  c.noXpRoles = msValues('lv-noxp-roles');
+
+  c.roleRewards = [...document.querySelectorAll('#lv-rewards .lv-row')].map(row => ({
+    level: Number(row.querySelector('.lv-rw-level').value) || 1,
+    roleId: row.querySelector('.lv-rw-role').value
+  })).filter(r => r.roleId);
+  c.channelBoosts = [...document.querySelectorAll('#lv-cboosts .lv-row')].map(row => ({
+    id: row.querySelector('.lv-cb-channel').value,
+    multiplier: Number(row.querySelector('.lv-cb-mult').value) || 1
+  })).filter(b => b.id);
+  c.roleBoosts = [...document.querySelectorAll('#lv-rboosts .lv-row')].map(row => ({
+    id: row.querySelector('.lv-rb-role').value,
+    multiplier: Number(row.querySelector('.lv-rb-mult').value) || 1
+  })).filter(b => b.id);
+  return c;
+}
+
+async function saveLeveling() {
+  if (!state.guildId) return;
+  const msg = document.getElementById('leveling-save-msg');
+  try {
+    const res = await api('PUT', `/api/guild/${state.guildId}/leveling`, collectLeveling());
+    state.leveling = res.config;
+    setStatus(msg, 'ok', '✅ Saved!');
+  } catch {
+    setStatus(msg, 'err', '❌ Failed to save.');
+  }
+}
+
+// ── MODERATORS ────────────────────────────────────
+async function loadModerators() {
+  hide('mods-body');
+  if (!state.guildId) { show('mods-no-guild'); return; }
+  hide('mods-no-guild');
+
+  const [config, guild] = await Promise.all([
+    api('GET', `/api/guild/${state.guildId}/moderators`),
+    ensureGuildData()
+  ]);
+
+  msInit('mods-roles', roleItems(), config.roles || []);
+  document.getElementById('mods-users').value = (config.users || []).join('\n');
+  show('mods-body');
+}
+
+async function saveModerators() {
+  if (!state.guildId) return;
+  const msg = document.getElementById('mods-save-msg');
+  const roles = msValues('mods-roles');
+  const users = (document.getElementById('mods-users').value.match(/\d{16,20}/g)) || [];
+  try {
+    await api('PUT', `/api/guild/${state.guildId}/moderators`, { roles, users });
+    setStatus(msg, 'ok', '✅ Saved!');
+  } catch { setStatus(msg, 'err', '❌ Failed to save.'); }
+}
+
+// ── SETTINGS ──────────────────────────────────────
+async function loadSettings() {
+  hide('settings-body');
+  if (!state.guildId) { show('settings-no-guild'); return; }
+  hide('settings-no-guild');
+
+  const data = await api('GET', `/api/guild/${state.guildId}/prefix`);
+  const input = document.getElementById('set-prefix');
+  input.value = data.prefix;
+  input.placeholder = data.defaultPrefix;
+  show('settings-body');
+}
+
+async function saveSettings() {
+  if (!state.guildId) return;
+  const msg = document.getElementById('settings-save-msg');
+  try {
+    const res = await api('PUT', `/api/guild/${state.guildId}/prefix`, { prefix: document.getElementById('set-prefix').value });
+    document.getElementById('set-prefix').value = res.prefix;
+    setStatus(msg, 'ok', '✅ Saved!');
+  } catch (e) {
+    setStatus(msg, 'err', `❌ ${e.message || 'Failed to save.'}`);
+  }
+}
+
+// ── ACTIVITY ──────────────────────────────────────
+async function loadActivity() {
+  hide('activity-body'); hide('activity-save-bar');
+  if (!state.guildId) { show('activity-no-guild'); return; }
+  hide('activity-no-guild');
+
+  const [data, guild] = await Promise.all([
+    api('GET', `/api/guild/${state.guildId}/activity`),
+    ensureGuildData()
+  ]);
+  state.activity = data.config;
+  renderActivity(guild);
+  show('activity-body'); show('activity-save-bar');
+}
+
+function renderActivity() {
+  const c = state.activity;
+
+  document.getElementById('activity-body').innerHTML = `
+    <div class="card">
+      <label class="sec-switch sec-master"><input type="checkbox" id="act-enabled" ${chk(c.enabled)}>
+        <span><strong>Enable Activity Tracking</strong></span></label>
+    </div>
+    <div class="card">
+      <h3>Score Weights</h3>
+      <p class="hint" style="margin-bottom:14px">Activity score = messages×msg + voice-minutes×voice + reactions×reaction.</p>
+      <div class="card-grid">
+        <div class="form-row"><label>Per Message</label><input type="number" id="act-w-msg" min="0" step="0.1" value="${c.weights.message}"></div>
+        <div class="form-row"><label>Per Voice Minute</label><input type="number" id="act-w-voice" min="0" step="0.1" value="${c.weights.voicePerMinute}"></div>
+        <div class="form-row"><label>Per Reaction</label><input type="number" id="act-w-react" min="0" step="0.1" value="${c.weights.reaction}"></div>
+      </div>
+      <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="act-bots" ${chk(c.countBots)}><span>Count bot activity</span></label>
+    </div>
+    <div class="card">
+      <h3>Ignored Channels &amp; Roles</h3>
+      <div class="card-grid">
+        <div class="form-row"><label>Ignored Channels</label><div id="act-ig-channels"></div></div>
+        <div class="form-row"><label>Ignored Roles</label><div id="act-ig-roles"></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Leaderboards</h3>
+      <label class="sec-switch"><input type="checkbox" id="act-lb-weekly" ${chk(c.leaderboard.weeklyEnabled)}><span>Weekly activity leaderboard</span></label>
+      <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="act-lb-monthly" ${chk(c.leaderboard.monthlyEnabled)}><span>Monthly activity leaderboard</span></label>
+    </div>`;
+
+  msInit('act-ig-channels', channelItems(), c.ignoredChannels);
+  msInit('act-ig-roles', roleItems(), c.ignoredRoles);
+}
+
+async function saveActivity() {
+  if (!state.guildId) return;
+  const msg = document.getElementById('activity-save-msg');
+  const payload = {
+    enabled: boolv('act-enabled'),
+    weights: { message: numv('act-w-msg', 1), voicePerMinute: numv('act-w-voice', 2), reaction: numv('act-w-react', 1) },
+    countBots: boolv('act-bots'),
+    ignoredChannels: msValues('act-ig-channels'),
+    ignoredRoles: msValues('act-ig-roles'),
+    leaderboard: { weeklyEnabled: boolv('act-lb-weekly'), monthlyEnabled: boolv('act-lb-monthly') }
+  };
+  try {
+    const res = await api('PUT', `/api/guild/${state.guildId}/activity`, payload);
+    state.activity = res.config;
+    setStatus(msg, 'ok', '✅ Saved!');
+  } catch { setStatus(msg, 'err', '❌ Failed to save.'); }
+}
+
+// ── TRUST SCORE ───────────────────────────────────
+async function loadTrust() {
+  hide('trust-body'); hide('trust-save-bar');
+  if (!state.guildId) { show('trust-no-guild'); return; }
+  hide('trust-no-guild');
+  const { config } = await api('GET', `/api/guild/${state.guildId}/trust`);
+  state.trust = config;
+  renderTrust();
+  show('trust-body'); show('trust-save-bar');
+}
+
+function renderTrust() {
+  const c = state.trust;
+  const tierRows = c.tiers.map((t, i) => `
+    <div class="lv-row" data-i="${i}">
+      <input type="text" class="tr-tier-name" placeholder="Tier name" value="${esc(t.name)}" style="flex:1;min-width:140px">
+      <span>at score ≥</span>
+      <input type="number" class="tr-tier-min" min="0" max="100" value="${t.min}" style="width:80px">
+      <button class="btn btn-secondary lv-del" onclick="trustDelTier(${i})">✕</button>
+    </div>`).join('') || '<p class="lv-empty">No tiers.</p>';
+
+  document.getElementById('trust-body').innerHTML = `
+    <div class="card">
+      <label class="sec-switch sec-master"><input type="checkbox" id="tr-enabled" ${chk(c.enabled)}>
+        <span><strong>Enable Trust Score</strong></span></label>
+    </div>
+    <div class="card">
+      <h3>Signal Weights</h3>
+      <p class="hint" style="margin-bottom:14px">Relative importance of each positive signal (0 disables it).</p>
+      <div class="card-grid">
+        <div class="form-row"><label>Account Age</label><input type="number" id="tr-w-age" min="0" step="0.5" value="${c.weights.accountAge}"></div>
+        <div class="form-row"><label>Server Tenure</label><input type="number" id="tr-w-tenure" min="0" step="0.5" value="${c.weights.tenure}"></div>
+        <div class="form-row"><label>Activity</label><input type="number" id="tr-w-activity" min="0" step="0.5" value="${c.weights.activity}"></div>
+        <div class="form-row"><label>Level</label><input type="number" id="tr-w-level" min="0" step="0.5" value="${c.weights.level}"></div>
+        <div class="form-row"><label>Verified</label><input type="number" id="tr-w-verified" min="0" step="0.5" value="${c.weights.verified}"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Caps &amp; Penalties</h3>
+      <div class="card-grid">
+        <div class="form-row"><label>Activity score for full marks</label><input type="number" id="tr-cap-activity" min="1" value="${c.caps.activity}"></div>
+        <div class="form-row"><label>Level for full marks</label><input type="number" id="tr-cap-level" min="1" value="${c.caps.level}"></div>
+        <div class="form-row"><label>Points lost per warning</label><input type="number" id="tr-warnpen" min="0" max="100" value="${c.warningPenalty}"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Tiers</h3>
+      <p class="hint" style="margin-bottom:12px">Named bands shown on the trust card, by minimum score.</p>
+      <div id="tr-tiers">${tierRows}</div>
+      <button class="btn btn-secondary" style="margin-top:10px" onclick="trustAddTier()">+ Add Tier</button>
+    </div>`;
+}
+
+function collectTrust() {
+  const c = state.trust;
+  c.enabled = boolv('tr-enabled');
+  c.weights = {
+    accountAge: numv('tr-w-age', 1), tenure: numv('tr-w-tenure', 1), activity: numv('tr-w-activity', 2),
+    level: numv('tr-w-level', 1), verified: numv('tr-w-verified', 1)
+  };
+  c.caps = { activity: numv('tr-cap-activity', 5000), level: numv('tr-cap-level', 30) };
+  c.warningPenalty = numv('tr-warnpen', 10);
+  c.tiers = [...document.querySelectorAll('#tr-tiers .lv-row')].map(r => ({
+    name: r.querySelector('.tr-tier-name').value.trim(),
+    min:  Number(r.querySelector('.tr-tier-min').value) || 0
+  })).filter(t => t.name);
+  return c;
+}
+
+function trustAddTier() { collectTrust(); state.trust.tiers.push({ name: 'New Tier', min: 0 }); renderTrust(); }
+function trustDelTier(i) { collectTrust(); state.trust.tiers.splice(i, 1); renderTrust(); }
+
+async function saveTrust() {
+  if (!state.guildId) return;
+  const msg = document.getElementById('trust-save-msg');
+  try {
+    const res = await api('PUT', `/api/guild/${state.guildId}/trust`, collectTrust());
+    state.trust = res.config;
+    setStatus(msg, 'ok', '✅ Saved!');
+  } catch { setStatus(msg, 'err', '❌ Failed to save.'); }
+}
+
+// ── AUTOROLES ─────────────────────────────────────
+async function loadAutorole() {
+  hide('autorole-body'); hide('autorole-save-bar');
+  if (!state.guildId) { show('autorole-no-guild'); return; }
+  hide('autorole-no-guild');
+
+  const [{ config }] = await Promise.all([
+    api('GET', `/api/guild/${state.guildId}/autorole`),
+    ensureGuildData()
+  ]);
+  state.autorole = config;
+  document.getElementById('ar-enabled').checked = !!config.enabled;
+  msInit('ar-roles', roleItems(), config.roleIds);
+  msInit('ar-bot-roles', roleItems(), config.botRoleIds);
+  show('autorole-body'); show('autorole-save-bar');
+}
+
+async function saveAutorole() {
+  if (!state.guildId) return;
+  const msg = document.getElementById('autorole-save-msg');
+  const payload = {
+    enabled:    boolv('ar-enabled'),
+    roleIds:    msValues('ar-roles'),
+    botRoleIds: msValues('ar-bot-roles')
+  };
+  try {
+    const r = await api('PUT', `/api/guild/${state.guildId}/autorole`, payload);
+    state.autorole = r.config;
+    setStatus(msg, 'ok', '✅ Saved!');
+  } catch { setStatus(msg, 'err', '❌ Failed to save.'); }
+}
+
+// ── REACTION ROLES ────────────────────────────────
+async function loadReactionRoles() {
+  hide('rr-body');
+  if (!state.guildId) { show('rr-no-guild'); return; }
+  hide('rr-no-guild');
+  await ensureGuildData();
+  const data = await api('GET', `/api/guild/${state.guildId}/reactionroles`);
+  state.reactionMenus = data.menus;
+  state.reactionModes = data.modes;
+  renderReactionRoles();
+  show('rr-body');
+}
+
+function rrModeOpts(sel) {
+  return state.reactionModes.map(m =>
+    `<option value="${m.value}"${m.value === sel ? ' selected' : ''}>${esc(m.label)}</option>`).join('');
+}
+
+function rrMapRow(menuId, m) {
+  return `
+    <div class="rr-map-row lv-row">
+      <input class="rr-emoji" placeholder="👍 or :custom:" value="${esc(m?.emoji || '')}" style="width:140px">
+      <span>→</span>
+      <select class="rr-role">${lvRoleOpts(m?.roleId || '')}</select>
+      <button class="btn btn-secondary lv-del" onclick="rrDelMap(this)">✕</button>
+    </div>`;
+}
+function rrDelMap(btn) { btn.closest('.rr-map-row')?.remove(); markDirty(); }
+function rrAddMap(containerId) {
+  document.getElementById(containerId).insertAdjacentHTML('beforeend', rrMapRow(containerId.replace(/^rr-|-maps$/g, '')));
+}
+function rrCollectMaps(containerId) {
+  return [...document.querySelectorAll(`#${containerId} .rr-map-row`)].map(r => ({
+    emoji:  r.querySelector('.rr-emoji').value.trim(),
+    roleId: r.querySelector('.rr-role').value
+  })).filter(m => m.emoji && m.roleId);
+}
+
+function rrMenuCard(menu) {
+  const link = menu.messageId
+    ? `<a href="https://discord.com/channels/${state.guildId}/${menu.channelId}/${menu.messageId}" target="_blank">Jump to message</a>`
+    : 'Not posted yet';
+  const managedFields = menu.managed ? `
+    <div class="form-row"><label>Title</label><input type="text" id="rr-${menu.id}-title" value="${esc(menu.title || '')}"></div>
+    <div class="form-row"><label>Description</label><textarea id="rr-${menu.id}-desc">${esc(menu.description || '')}</textarea></div>` : '';
+  const colorField = menu.managed
+    ? `<div class="form-row"><label>Color</label><div class="color-row"><input type="color" id="rr-${menu.id}-color" value="${menu.color}"></div></div>` : '<div></div>';
+  const rows = menu.mappings.map(m => rrMapRow(menu.id, m)).join('') || rrMapRow(menu.id);
+
+  return `
+    <div class="card">
+      <h3>Panel <code>${esc(menu.id)}</code> ${menu.managed ? '' : '<span class="hint">· existing message</span>'}</h3>
+      <p class="hint" style="margin-bottom:12px">#${esc(channelName(menu.channelId))} · ${link}</p>
+      <div class="card-grid">
+        <div class="form-row"><label>Mode</label><select id="rr-${menu.id}-mode">${rrModeOpts(menu.mode)}</select></div>
+        ${colorField}
+      </div>
+      ${managedFields}
+      <div class="form-row"><label>Emoji → Role pairs</label>
+        <div id="rr-${menu.id}-maps">${rows}</div>
+        <button class="btn btn-secondary" style="margin-top:8px" onclick="rrAddMap('rr-${menu.id}-maps')">+ Add pair</button>
+        <span class="hint" style="display:block;margin-top:6px">Use a normal emoji (😀) or a custom one from this server (type <code>:name:</code> and pick it, then copy it here).</span>
+      </div>
+      <div class="save-bar" style="position:static;margin-top:4px">
+        <button class="btn btn-primary" onclick="rrSave('${menu.id}')">Save Panel</button>
+        <button class="btn btn-secondary" onclick="rrDelete('${menu.id}')">Delete</button>
+        <span id="rr-${menu.id}-msg" class="save-status"></span>
+      </div>
+    </div>`;
+}
+
+function renderReactionRoles() {
+  const existing = state.reactionMenus.map(rrMenuCard).join('');
+  document.getElementById('rr-body').innerHTML = `
+    <div class="card">
+      <h3>Create a Panel</h3>
+      <div class="card-grid">
+        <div class="form-row"><label>Channel</label><select id="rr-new-channel">${lvChannelOpts('')}</select></div>
+        <div class="form-row"><label>Mode</label><select id="rr-new-mode">${rrModeOpts('normal')}</select></div>
+        <div class="form-row"><label>Source</label>
+          <select id="rr-new-source" onchange="rrToggleSource()">
+            <option value="bot">Bot posts a new message</option>
+            <option value="existing">Use an existing message</option>
+          </select></div>
+      </div>
+      <div id="rr-new-bot-fields">
+        <div class="card-grid">
+          <label class="sec-switch"><input type="checkbox" id="rr-new-embed" checked><span>Post as an embed</span></label>
+          <div class="form-row"><label>Color</label><div class="color-row"><input type="color" id="rr-new-color" value="#5865F2"></div></div>
+        </div>
+        <div class="form-row"><label>Title</label><input type="text" id="rr-new-title" placeholder="🎭 Reaction Roles"></div>
+        <div class="form-row"><label>Description</label><textarea id="rr-new-desc" placeholder="React below to get your roles!"></textarea></div>
+      </div>
+      <div id="rr-new-existing-fields" class="hidden">
+        <div class="form-row"><label>Existing Message ID</label>
+          <input type="text" id="rr-new-msgid" placeholder="123456789012345678">
+          <span class="hint">Enable Developer Mode in Discord, right-click the message → Copy Message ID. The message must be in the channel above.</span>
+        </div>
+      </div>
+      <div class="form-row"><label>Emoji → Role pairs</label>
+        <div id="rr-new-maps">${rrMapRow('new')}</div>
+        <button class="btn btn-secondary" style="margin-top:8px" onclick="rrAddMap('rr-new-maps')">+ Add pair</button>
+      </div>
+      <div class="save-bar" style="position:static;margin-top:4px">
+        <button class="btn btn-primary" onclick="rrCreate()">Create Panel</button>
+        <span id="rr-new-msg" class="save-status"></span>
+      </div>
+    </div>
+    ${existing}`;
+  rrToggleSource();
+}
+
+function rrToggleSource() {
+  const src = document.getElementById('rr-new-source').value;
+  document.getElementById('rr-new-bot-fields').classList.toggle('hidden', src !== 'bot');
+  document.getElementById('rr-new-existing-fields').classList.toggle('hidden', src !== 'existing');
+}
+
+async function rrCreate() {
+  const msg = document.getElementById('rr-new-msg');
+  const source = document.getElementById('rr-new-source').value;
+  const payload = {
+    channelId: document.getElementById('rr-new-channel').value,
+    mode:      document.getElementById('rr-new-mode').value,
+    managed:   source === 'bot',
+    mappings:  rrCollectMaps('rr-new-maps')
+  };
+  if (!payload.channelId) return setStatus(msg, 'err', '❌ Pick a channel.');
+  if (source === 'bot') {
+    payload.embed = boolv('rr-new-embed');
+    payload.title = document.getElementById('rr-new-title').value.trim() || null;
+    payload.description = document.getElementById('rr-new-desc').value.trim() || null;
+    payload.color = document.getElementById('rr-new-color').value;
+  } else {
+    payload.messageId = document.getElementById('rr-new-msgid').value.trim();
+    if (!payload.messageId) return setStatus(msg, 'err', '❌ Enter the message ID.');
+  }
+  try {
+    await api('POST', `/api/guild/${state.guildId}/reactionroles`, payload);
+    await loadReactionRoles();
+  } catch (e) { setStatus(document.getElementById('rr-new-msg'), 'err', '❌ ' + e.message); }
+}
+
+async function rrSave(id) {
+  const menu = state.reactionMenus.find(m => m.id === id);
+  if (!menu) return;
+  const msg = document.getElementById(`rr-${id}-msg`);
+  const payload = {
+    mode:     document.getElementById(`rr-${id}-mode`).value,
+    mappings: rrCollectMaps(`rr-${id}-maps`)
+  };
+  if (menu.managed) {
+    payload.embed = menu.embed;
+    payload.title = document.getElementById(`rr-${id}-title`).value.trim() || null;
+    payload.description = document.getElementById(`rr-${id}-desc`).value.trim() || null;
+    payload.color = document.getElementById(`rr-${id}-color`).value;
+  }
+  try {
+    await api('PUT', `/api/guild/${state.guildId}/reactionroles/${id}`, payload);
+    setStatus(msg, 'ok', '✅ Saved!');
+    await loadReactionRoles();
+  } catch (e) { setStatus(msg, 'err', '❌ ' + e.message); }
+}
+
+async function rrDelete(id) {
+  if (!confirm('Delete this reaction-role panel? If the bot posted the message, it will be deleted too.')) return;
+  try { await api('DELETE', `/api/guild/${state.guildId}/reactionroles/${id}`); await loadReactionRoles(); }
+  catch (e) { alert('Failed to delete: ' + e.message); }
+}
+
+// ── BOT LOGS ──────────────────────────────────────
+async function loadBotLogs() {
+  const file   = document.getElementById('log-file-select').value;
+  const viewer = document.getElementById('log-viewer');
+  viewer.textContent = 'Loading…';
+  try {
+    const { lines } = await api('GET', `/api/logs/${file}`);
+    if (!lines.length) { viewer.textContent = 'No entries found.'; return; }
+    viewer.innerHTML = lines.map(colorLine).join('\n');
+  } catch {
+    viewer.textContent = 'Failed to load logs.';
+  }
+}
+
+function colorLine(line) {
+  const s = line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  if (/error|exception|fail/i.test(s))       return `<span class="l-error">${s}</span>`;
+  if (/warn/i.test(s))                        return `<span class="l-warn">${s}</span>`;
+  if (/info|start|ready|logged in/i.test(s)) return `<span class="l-info">${s}</span>`;
+  return s;
+}
+
+// ── LIVE CHAT (Socket.IO) ─────────────────────────
+let chatSocket = null;
+let chatTypingTimer = null;
+let typingClearTimer = null;
+
+function ensureSocket() {
+  if (chatSocket) return chatSocket;
+  chatSocket = io({ path: '/socket.io' });
+
+  chatSocket.on('history', msgs => {
+    const box = document.getElementById('chat-messages');
+    box.innerHTML = msgs.map(chatMsgHtml).join('');
+    box.scrollTop = box.scrollHeight;
+  });
+  chatSocket.on('message', m => appendChatMessage(m));
+  chatSocket.on('typing', ({ name }) => showTyping(name));
+  chatSocket.on('chat_error', msg => {
+    document.getElementById('chat-messages').innerHTML =
+      `<div class="chat-sys">${esc(msg)}</div>`;
+  });
+  return chatSocket;
+}
+
+function openChat(channelId, channelName) {
+  ensureSocket();
+  document.getElementById('chat-title').textContent = `#${channelName}`;
+  document.getElementById('chat-messages').innerHTML = '<div class="chat-sys">Loading…</div>';
+  document.getElementById('chat-typing').textContent = '';
+  show('chat-overlay');
+  chatSocket.emit('join', { guildId: state.guildId, channelId });
+  document.getElementById('chat-input').focus();
+}
+
+function closeChat() {
+  if (chatSocket) chatSocket.emit('leave');
+  hide('chat-overlay');
+}
+
+function sendChat() {
+  const input = document.getElementById('chat-input');
+  const content = input.value.trim();
+  if (!content || !chatSocket) return;
+  chatSocket.emit('staff_message', { content });
+  input.value = '';
+}
+
+function chatTyping() {
+  if (!chatSocket) return;
+  if (chatTypingTimer) return;
+  chatSocket.emit('typing');
+  chatTypingTimer = setTimeout(() => { chatTypingTimer = null; }, 1500);
+}
+
+function showTyping(name) {
+  const el = document.getElementById('chat-typing');
+  el.textContent = `${name} is typing…`;
+  clearTimeout(typingClearTimer);
+  typingClearTimer = setTimeout(() => el.textContent = '', 3000);
+}
+
+function appendChatMessage(m) {
+  const box = document.getElementById('chat-messages');
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+  box.insertAdjacentHTML('beforeend', chatMsgHtml(m));
+  if (atBottom) box.scrollTop = box.scrollHeight;
+}
+
+function chatMsgHtml(m) {
+  const time = new Date(m.timestamp).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const atts = (m.attachments || []).map(a => {
+    const img = a.contentType?.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(a.name || '');
+    return img
+      ? `<a href="${esc(a.url)}" target="_blank"><img class="chat-img" src="${esc(a.url)}" alt=""></a>`
+      : `<a href="${esc(a.url)}" target="_blank" class="msg-file">📎 ${esc(a.name || 'file')}</a>`;
+  }).join('');
+  return `<div class="chat-msg${m.bot ? ' chat-bot' : ''}">
+    <div class="chat-msg-head"><span class="chat-author">${esc(m.authorTag)}</span>
+    ${m.bot ? '<span class="bot-tag">APP</span>' : ''}<span class="chat-ts">${time}</span></div>
+    ${m.content ? `<div class="chat-text">${esc(m.content)}</div>` : ''}${atts}
+  </div>`;
+}
+
+// ── Helpers ───────────────────────────────────────
+async function api(method, url, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const res  = await fetch(url, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+  return data;
+}
+
+function show(id) { document.getElementById(id).classList.remove('hidden'); }
+function hide(id) { document.getElementById(id).classList.add('hidden'); }
+function esc(s)   { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function setStatus(el, type, msg) {
+  el.className = `save-status ${type}`;
+  el.textContent = msg;
+  if (type === 'ok') { const bar = el.closest('.save-bar'); if (bar) bar.classList.remove('dirty'); }
+  setTimeout(() => el.textContent = '', 4000);
+}
+
+function timeAgo(ts) {
+  const d = Date.now() - ts;
+  if (d < 60000)   return `${Math.floor(d/1000)}s ago`;
+  if (d < 3600000) return `${Math.floor(d/60000)}m ago`;
+  return `${Math.floor(d/3600000)}h ago`;
+}
+
+// ═══════════════════════════════════════
+//  TRANSCRIPTS
+// ═══════════════════════════════════════
+async function loadTranscripts() {
+  const listWrap = document.getElementById('tx-list');
+  const noGuild  = document.getElementById('tx-no-guild');
+
+  // Reset to list view whenever we (re)load
+  show('tx-list-view');
+  hide('tx-viewer');
+
+  if (!state.guildId) { show('tx-no-guild'); hide('tx-list'); return; }
+  hide('tx-no-guild');
+
+  const list = await api('GET', `/api/guild/${state.guildId}/transcripts`);
+  const tbody = document.getElementById('tx-rows');
+
+  if (!list.length) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:30px">No transcripts saved yet. Close a ticket to generate one.</td></tr>`;
+  } else {
+    const badgeCls = p => ({ Low: 'badge-low', Medium: 'badge-medium', High: 'badge-high' }[p] || '');
+    tbody.innerHTML = list.map(t => `
+      <tr>
+        <td><span class="log-key">#${esc(t.number || '?')}</span></td>
+        <td style="font-size:13px">${esc(t.channelName || '')}</td>
+        <td>${esc(t.type || '')}</td>
+        <td><span class="badge ${badgeCls(t.priority)}">${esc(t.priority || '')}</span></td>
+        <td style="font-size:13px">${esc(t.closedBy?.tag || 'Unknown')}</td>
+        <td style="font-size:12px;color:var(--muted)">${t.closedAt ? new Date(t.closedAt).toLocaleString() : '…'}</td>
+        <td style="color:var(--muted)">${t.messageCount}</td>
+        <td><button class="btn btn-secondary" style="padding:5px 12px;font-size:12px" onclick="viewTranscript('${esc(t.filename)}')">View</button></td>
+      </tr>`).join('');
+  }
+
+  show('tx-list');
+}
+
+async function viewTranscript(filename) {
+  let data;
+  try { data = await api('GET', `/api/transcript/${encodeURIComponent(filename)}`); }
+  catch { return alert('Failed to load transcript.'); }
+
+  // Switch to viewer
+  hide('tx-list-view');
+  show('tx-viewer');
+
+  // Header metadata
+  const badgeCls = p => ({ Low: 'badge-low', Medium: 'badge-medium', High: 'badge-high' }[p] || '');
+  document.getElementById('tx-meta').innerHTML =
+    `<strong>#${esc(data.number || '?')} · ${esc(data.channelName)}</strong>
+     <span class="muted"> &nbsp;|&nbsp; Type: ${esc(data.type)}
+     &nbsp;|&nbsp; <span class="badge ${badgeCls(data.priority)}" style="font-size:11px">${esc(data.priority)}</span>
+     &nbsp;|&nbsp; Closed by ${esc(data.closedBy?.tag || '?')}
+     &nbsp;|&nbsp; ${data.messages?.length || 0} messages
+     ${data.closedAt ? `&nbsp;|&nbsp; ${new Date(data.closedAt).toLocaleString()}` : ''}</span>`;
+
+  // Render messages
+  const container = document.getElementById('tx-messages');
+  if (!data.messages?.length) {
+    container.innerHTML = '<p style="text-align:center;color:var(--muted);padding:40px">No messages recorded.</p>';
+    return;
+  }
+
+  let html = '';
+  let lastDate = null;
+
+  for (const m of data.messages) {
+    const msgDate = new Date(m.timestamp).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    if (msgDate !== lastDate) {
+      html += `<div class="msg-date-sep"><span>${msgDate}</span></div>`;
+      lastDate = msgDate;
+    }
+    html += renderMessage(m);
+  }
+
+  container.innerHTML = html;
+  container.scrollTop = 0;
+}
+
+function closeTranscript() {
+  hide('tx-viewer');
+  show('tx-list-view');
+}
+
+function renderMessage(m) {
+  const time = new Date(m.timestamp).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+
+  const avatar = m.authorAvatar
+    ? `<img src="${m.authorAvatar}" class="msg-avatar" alt="" onerror="this.outerHTML='<div class=\\'msg-avatar-fallback\\'>${m.authorTag.charAt(0).toUpperCase()}</div>'">`
+    : `<div class="msg-avatar-fallback">${esc(m.authorTag.charAt(0).toUpperCase())}</div>`;
+
+  const content = m.content
+    ? `<div class="msg-text">${renderMarkdown(m.content)}</div>`
+    : '';
+
+  const attachments = (m.attachments || []).map(a => {
+    const isImg = a.contentType?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg|avif)$/i.test(a.name || '');
+    if (isImg) {
+      const src = esc(a.proxyUrl || a.url);
+      return `<div class="msg-img-wrap">
+        <a href="${esc(a.url)}" target="_blank" rel="noopener">
+          <img src="${src}" class="msg-img" alt="${esc(a.name || 'image')}"
+               onerror="this.closest('.msg-img-wrap').innerHTML='<span class=\\'img-expired\\'>🖼️ Image (link expired)</span>'">
+        </a>
+      </div>`;
+    }
+    return `<a href="${esc(a.url)}" target="_blank" rel="noopener" class="msg-file">📎 ${esc(a.name || 'file')}</a>`;
+  }).join('');
+
+  const embeds = (m.embeds || []).filter(e => e.title || e.description || e.fields?.length).map(e => {
+    const borderColor = e.color ? `#${e.color.toString(16).padStart(6, '0')}` : '#5865F2';
+    const fields = (e.fields || []).map(f =>
+      `<div class="embed-field"><strong>${esc(f.name)}</strong><br>${esc(f.value)}</div>`
+    ).join('');
+    const img = e.image   ? `<img src="${esc(e.image)}"     class="embed-img" alt="">` : '';
+    const thu = e.thumbnail ? `<img src="${esc(e.thumbnail)}" class="embed-img" style="max-width:80px;float:right;margin-left:8px" alt="">` : '';
+    return `<div class="msg-embed" style="border-left-color:${borderColor}">
+      ${thu}
+      ${e.title       ? `<div class="embed-title">${esc(e.title)}</div>` : ''}
+      ${e.description ? `<div class="embed-desc">${esc(e.description)}</div>` : ''}
+      ${fields}${img}
+      <div style="clear:both"></div>
+    </div>`;
+  }).join('');
+
+  return `<div class="msg-row${m.authorBot ? ' msg-bot' : ''}">
+    <div class="msg-avatar-wrap">${avatar}</div>
+    <div class="msg-body">
+      <div class="msg-meta">
+        <span class="msg-author">${esc(m.authorTag)}</span>
+        ${m.authorBot ? '<span class="bot-tag">APP</span>' : ''}
+        <span class="msg-ts">${time}</span>
+      </div>
+      ${content}${attachments}${embeds}
+    </div>
+  </div>`;
+}
+
+function renderMarkdown(text) {
+  return esc(text)
+    .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/__(.*?)__/g, '<u>$1</u>')
+    .replace(/~~(.*?)~~/g, '<s>$1</s>')
+    .replace(/\n/g, '<br>');
+}

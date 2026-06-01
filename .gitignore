@@ -1,0 +1,25 @@
+# ── Secrets & local-only files (NEVER commit) ──
+.env
+.session-secret
+tunnel-url.txt
+
+# ── Dependencies (reinstalled with npm install) ──
+node_modules/
+
+# ── Generated logs & ticket transcripts (contain user data) ──
+logs/
+transcripts/
+
+# ── Runtime data = the bot's "database". Ignore every root-level JSON
+#    (levels, warnings, tickets, autoroles, …) EXCEPT the package files.
+#    A fresh clone starts these empty automatically. ──
+/*.json
+!package.json
+!package-lock.json
+
+# ── Atomic-write backups / temp files ──
+*.bak
+*.tmp
+
+# Local Claude Code settings
+.claude/settings.local.json

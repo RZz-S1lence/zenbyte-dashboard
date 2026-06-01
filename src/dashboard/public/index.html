@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zen's Robotics Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ═══════════════ LOGIN ═══════════════ -->
+<div id="login-screen" class="login-screen hidden">
+  <div class="login-card">
+    <div class="login-brand">
+      <img id="login-avatar" class="login-bot-avatar hidden" src="" alt="">
+      <h1>Zen's Robotics</h1>
+      <p>Bot Dashboard</p>
+    </div>
+
+    <p class="login-blurb">Sign in with Discord to manage the servers where you have administrator permissions.</p>
+
+    <a href="/auth/discord" class="btn btn-discord" id="discord-login-btn">
+      <svg width="20" height="20" viewBox="0 0 127 96" fill="currentColor" aria-hidden="true"><path d="M107.7 8.07A105.1 105.1 0 0 0 81.47 0a72.06 72.06 0 0 0-3.36 6.83 97.68 97.68 0 0 0-29.11 0A72.37 72.37 0 0 0 45.64 0a105.89 105.89 0 0 0-26.25 8.09C2.79 32.65-1.71 56.6.54 80.21a105.73 105.73 0 0 0 32.17 16.15 77.7 77.7 0 0 0 6.89-11.11 68.42 68.42 0 0 1-10.85-5.18c.91-.66 1.8-1.34 2.66-2a75.57 75.57 0 0 0 64.32 0c.87.71 1.76 1.39 2.66 2a68.68 68.68 0 0 1-10.87 5.19 77 77 0 0 0 6.89 11.1 105.25 105.25 0 0 0 32.19-16.14c2.64-27.38-4.51-51.11-18.9-72.15ZM42.45 65.69C36.18 65.69 31 60 31 53s5-12.74 11.43-12.74S54 46 53.89 53s-5.05 12.69-11.44 12.69Zm42.24 0C78.41 65.69 73.25 60 73.25 53s5-12.74 11.44-12.74S96.23 46 96.12 53s-5.04 12.69-11.43 12.69Z"/></svg>
+      <span>Login with Discord</span>
+    </a>
+
+    <p id="auth-err" class="auth-error"></p>
+  </div>
+</div>
+
+<!-- ═══════════════ NO SERVERS / ADD BOT ═══════════════ -->
+<div id="addbot-screen" class="login-screen hidden">
+  <div class="login-card">
+    <div class="login-brand">
+      <img id="addbot-avatar" class="login-bot-avatar hidden" src="" alt="">
+      <h1>Add ZenByte to your server</h1>
+      <p>Bot Dashboard</p>
+    </div>
+    <p class="login-blurb">You're signed in, but ZenByte isn't in any server where you're an administrator yet. Add it to a server you manage, then come back here to set it up.</p>
+
+    <a href="#" id="addbot-invite" target="_blank" rel="noopener" class="btn btn-discord">
+      <span>➕ Add ZenByte to a Server</span>
+    </a>
+    <a href="#" id="addbot-support" target="_blank" rel="noopener" class="btn btn-secondary" style="margin-top:12px">
+      <span>💬 Join the ZenByte Support Server</span>
+    </a>
+
+    <button class="btn-logout" style="margin-top:20px" onclick="logout()">Logout</button>
+  </div>
+</div>
+
+<!-- ═══════════════ DASHBOARD ═══════════════ -->
+<div id="dashboard" class="dashboard hidden">
+
+  <!-- Mobile menu toggle + backdrop -->
+  <button id="sidebar-toggle" class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Toggle menu">☰</button>
+  <div id="sidebar-backdrop" class="sidebar-backdrop" onclick="closeSidebar()"></div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+
+    <div class="sidebar-header">
+      <img id="sidebar-bot-avatar" class="sidebar-bot-avatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'%3E%3Ccircle cx='18' cy='18' r='18' fill='%235865F2'/%3E%3C/svg%3E" alt="">
+      <span>Zen's Robotics</span>
+    </div>
+
+    <!-- Guild selector -->
+    <div class="guild-selector" id="guild-selector">
+      <div class="guild-btn" id="guild-btn" onclick="toggleGuildDropdown()">
+        <div id="guild-btn-icon" class="guild-icon-circle" style="background:#383a40;font-size:12px">?</div>
+        <div class="guild-btn-text">
+          <span id="guild-btn-name">Select a server</span>
+        </div>
+        <span class="guild-chevron">▾</span>
+      </div>
+      <div id="guild-dropdown" class="guild-dropdown hidden"></div>
+    </div>
+
+    <nav>
+      <div class="nav-section">General</div>
+      <a class="nav-item active" data-page="overview" onclick="goto('overview')"><span class="icon">📊</span> Overview</a>
+      <a class="nav-item" data-page="settings" onclick="goto('settings')"><span class="icon">⚙️</span> Settings</a>
+      <a class="nav-item" data-page="commands" onclick="goto('commands')"><span class="icon">⌨️</span> Commands</a>
+
+      <div class="nav-section">Engagement</div>
+      <a class="nav-item" data-page="leveling" onclick="goto('leveling')"><span class="icon">⭐</span> Leveling</a>
+      <a class="nav-item" data-page="activity" onclick="goto('activity')"><span class="icon">📈</span> Activity</a>
+      <a class="nav-item" data-page="polls" onclick="goto('polls')"><span class="icon">🗳️</span> Polls</a>
+      <a class="nav-item" data-page="social" onclick="goto('social')"><span class="icon">📡</span> Social Alerts</a>
+
+      <div class="nav-section">Roles</div>
+      <a class="nav-item" data-page="autorole" onclick="goto('autorole')"><span class="icon">🎭</span> Autoroles</a>
+      <a class="nav-item" data-page="reactionroles" onclick="goto('reactionroles')"><span class="icon">😀</span> Reaction Roles</a>
+
+      <div class="nav-section">Moderation &amp; Safety</div>
+      <a class="nav-item" data-page="moderators" onclick="goto('moderators')"><span class="icon">🛂</span> Moderators</a>
+      <a class="nav-item" data-page="security" onclick="goto('security')"><span class="icon">🛡️</span> Anti-Nuke</a>
+      <a class="nav-item" data-page="verification" onclick="goto('verification')"><span class="icon">✅</span> Verification</a>
+      <a class="nav-item" data-page="altdetect" onclick="goto('altdetect')"><span class="icon">🕵️</span> Alt Detection</a>
+      <a class="nav-item" data-page="trust" onclick="goto('trust')"><span class="icon">🤝</span> Trust Score</a>
+
+      <div class="nav-section">Tickets</div>
+      <a class="nav-item" data-page="tickets"  onclick="goto('tickets')"> <span class="icon">🎫</span> Tickets</a>
+      <a class="nav-item" data-page="transcripts" onclick="goto('transcripts')"> <span class="icon">📜</span> Transcripts</a>
+
+      <div class="nav-section">Logs</div>
+      <a class="nav-item" data-page="logs"     onclick="goto('logs')">    <span class="icon">📋</span> Log Channels</a>
+      <a class="nav-item" data-page="botlogs"     onclick="goto('botlogs')">     <span class="icon">🖥️</span> Bot Logs</a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <span id="sidebar-user" class="sidebar-user"></span>
+      <a id="sidebar-support" href="#" target="_blank" rel="noopener" class="sidebar-support-link">💬 Support Server</a>
+      <button class="btn-logout" onclick="logout()">Logout</button>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="main-content">
+
+    <!-- ─── OVERVIEW ─── -->
+    <div id="page-overview" class="page active">
+      <div class="page-header">
+        <h2>Overview</h2>
+        <p>Real-time bot status</p>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Status</div>
+          <div class="stat-value" id="stat-status">…</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Bot Tag</div>
+          <div class="stat-value" id="stat-tag" style="font-size:15px">…</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Servers</div>
+          <div class="stat-value" id="stat-guilds">…</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Uptime</div>
+          <div class="stat-value" id="stat-uptime" style="font-size:15px">…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── COMMANDS ─── -->
+    <div id="page-commands" class="page">
+      <div class="page-header">
+        <h2>Commands</h2>
+        <p>Every command the bot has loaded, generated live with nothing hardcoded.</p>
+      </div>
+      <div class="cmd-toolbar">
+        <input type="text" id="cmd-search" placeholder="🔍 Search commands…" oninput="renderCommands()">
+        <span id="cmd-count" class="cmd-count"></span>
+      </div>
+      <div id="commands-body"></div>
+    </div>
+
+    <!-- ─── SETTINGS ─── -->
+    <div id="page-settings" class="page">
+      <div class="page-header">
+        <h2>Server Settings</h2>
+        <p>General options for how the bot behaves in this server.</p>
+      </div>
+      <div id="settings-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="settings-body" class="hidden">
+        <div class="card">
+          <h3>Command Prefix</h3>
+          <div class="form-row" style="max-width:280px">
+            <label>Prefix</label>
+            <input type="text" id="set-prefix" maxlength="5" placeholder="?">
+            <span class="hint">Used for text commands like <code>?ban</code>. Slash commands always work too. 1 to 5 characters, no spaces.</span>
+          </div>
+        </div>
+        <div class="save-bar">
+          <button class="btn btn-primary" onclick="saveSettings()">Save Changes</button>
+          <span class="save-hint">Unsaved changes</span>
+          <span id="settings-save-msg" class="save-status"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── LOG CHANNELS ─── -->
+    <div id="page-logs" class="page">
+      <div class="page-header">
+        <h2>Log Channels</h2>
+        <p>Assign a Discord channel to each log type. Set to <em>None</em> to disable.</p>
+      </div>
+      <div id="logs-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="logs-body" class="hidden">
+        <div class="log-table-wrap">
+          <table class="log-table">
+            <thead><tr>
+              <th style="width:150px">Log Type</th>
+              <th>Description</th>
+              <th style="width:260px">Channel</th>
+            </tr></thead>
+            <tbody id="log-rows"></tbody>
+          </table>
+        </div>
+        <div class="save-bar">
+          <button class="btn btn-primary" onclick="saveLogConfig()">Save All</button>
+          <span class="save-hint">Unsaved changes</span>
+          <span id="log-save-msg" class="save-status"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── TICKETS ─── -->
+    <div id="page-tickets" class="page">
+      <div class="page-header">
+        <h2>Ticket System</h2>
+        <p>Configure the ticket panel, channels, and available types.</p>
+      </div>
+      <div id="tickets-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="tickets-body" class="hidden">
+
+        <div class="card">
+          <h3>🟢 Open Tickets</h3>
+          <div id="open-tickets-list"><span style="color:var(--muted)">No open tickets.</span></div>
+        </div>
+
+        <div class="card">
+          <h3>Panel Appearance</h3>
+          <div class="card-grid">
+            <div class="form-row">
+              <label>Panel Title</label>
+              <input type="text" id="t-title" placeholder="🎫 Support Tickets">
+            </div>
+            <div class="form-row">
+              <label>Embed Color</label>
+              <div class="color-row">
+                <input type="color" id="t-color-picker" value="#5865F2" oninput="syncColor('picker')">
+                <input type="text"  id="t-color-hex"    value="#5865F2" placeholder="#5865F2" oninput="syncColor('hex')">
+              </div>
+            </div>
+          </div>
+          <div class="form-row">
+            <label>Panel Description</label>
+            <textarea id="t-desc" placeholder="Need help? Click the button below to open a ticket!"></textarea>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Channels &amp; Roles</h3>
+          <div class="card-grid">
+            <div class="form-row">
+              <label>Ticket Category</label>
+              <select id="t-category"><option value="">None</option></select>
+              <span class="hint">New ticket channels are placed inside this category.</span>
+            </div>
+            <div class="form-row">
+              <label>Transcript Log Channel</label>
+              <select id="t-logchannel"><option value="">None</option></select>
+              <span class="hint">Closed ticket transcripts are posted here.</span>
+            </div>
+            <div class="form-row">
+              <label>Moderator Roles</label>
+              <div id="t-modroles"></div>
+              <span class="hint">All selected roles are pinged and added to every new ticket.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Behavior</h3>
+          <div class="card-grid">
+            <div class="form-row"><label>Max Open Tickets per User</label><input type="number" id="t-maxtickets" min="1" max="50"></div>
+            <div class="form-row"><label>Channel Name Scheme</label><input type="text" id="t-namescheme" placeholder="ticket-{number}"><span class="hint">Placeholders: {number} {username} {type}</span></div>
+          </div>
+          <div class="form-row"><label>Welcome Message</label><textarea id="t-welcome" placeholder="Hello {user}! Support will be with you shortly."></textarea><span class="hint">Placeholders: {user} {username} {type} {number}</span></div>
+          <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="t-ac-enabled"><span>Enable auto-close</span></label>
+          <div class="form-row" style="margin-top:10px"><label>Close after inactivity (hours, 0 = off)</label><input type="number" id="t-ac-hours" min="0" max="720" style="max-width:160px"></div>
+          <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="t-ac-leave"><span>Close a ticket when its opener leaves the server</span></label>
+        </div>
+
+        <div class="card">
+          <label class="sec-switch sec-master"><input type="checkbox" id="t-priority-enabled" onchange="toggleTicketPriority()">
+            <span><strong>Enable Ticket Priority</strong>. Adds a “Set Priority” button to tickets. When off, all priority options below are hidden.</span></label>
+        </div>
+
+        <div class="card" id="t-priority-cat-card">
+          <h3>Priority Categories</h3>
+          <label class="sec-switch"><input type="checkbox" id="t-pc-enabled" onchange="togglePriorityCategories()">
+            <span>Move tickets into a different category based on their priority</span></label>
+          <div id="t-pc-options" class="hidden" style="margin-top:16px">
+            <div class="card-grid">
+              <div class="form-row"><label>🟢 Low Priority</label><select id="t-pc-low"><option value="">None</option></select></div>
+              <div class="form-row"><label>🟡 Medium Priority</label><select id="t-pc-medium"><option value="">None</option></select></div>
+              <div class="form-row"><label>🔴 High Priority</label><select id="t-pc-high"><option value="">None</option></select></div>
+            </div>
+            <span class="hint">When a moderator sets a ticket's priority, it's moved to the matching category.</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Ping Roles</h3>
+          <div class="form-row">
+            <label>Ping on Ticket Open</label>
+            <div id="t-openping"></div>
+            <span class="hint">These roles are mentioned when a ticket is opened. Leave empty to ping the moderator roles.</span>
+          </div>
+          <div id="t-pp-section">
+            <p style="color:var(--muted);font-size:13px;margin:6px 0 12px">Ping roles when a ticket is set to a priority:</p>
+            <div class="card-grid">
+              <div class="form-row"><label>🟢 Low</label><div id="t-pp-low"></div></div>
+              <div class="form-row"><label>🟡 Medium</label><div id="t-pp-medium"></div></div>
+              <div class="form-row"><label>🔴 High</label><div id="t-pp-high"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Open Form</h3>
+          <label class="sec-switch"><input type="checkbox" id="t-form-enabled">
+            <span>Ask questions in a pop-up form when a ticket is opened</span></label>
+          <div id="t-form-fields" style="margin-top:14px"></div>
+          <button class="btn btn-secondary" style="margin-top:6px" onclick="addFormField()">+ Add Question</button>
+          <span class="hint" style="display:block;margin-top:8px">Up to 5 questions (Discord modal limit). Answers appear in the ticket.</span>
+        </div>
+
+        <div class="card">
+          <h3>Ticket Types</h3>
+          <p style="color:var(--muted);font-size:13px;margin-bottom:14px">
+            Users pick from these types when opening a ticket. Leave empty to skip the selector.
+          </p>
+          <div id="types-chips" class="types-grid"></div>
+          <div class="add-type-row">
+            <input type="text" id="new-type-input" placeholder="e.g. Partnership" maxlength="32"
+                   onkeydown="if(event.key==='Enter') addType()">
+            <button class="btn btn-secondary" onclick="addType()">+ Add</button>
+          </div>
+        </div>
+
+        <div class="save-bar">
+          <button class="btn btn-primary" onclick="saveTicketConfig()">Save Changes</button>
+          <span class="save-hint">Unsaved changes</span>
+          <span id="ticket-save-msg" class="save-status"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── LEVELING ─── -->
+    <div id="page-leveling" class="page">
+      <div class="page-header">
+        <h2>Leveling</h2>
+        <p>XP, level rewards, multipliers, leaderboards and rank cards, all fully configurable.</p>
+      </div>
+      <div id="leveling-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="leveling-body" class="hidden"></div>
+      <div id="leveling-save-bar" class="save-bar hidden">
+        <button class="btn btn-primary" onclick="saveLeveling()">Save Changes</button>
+        <span class="save-hint">Unsaved changes</span>
+        <span id="leveling-save-msg" class="save-status"></span>
+      </div>
+    </div>
+
+    <!-- ─── ACTIVITY ─── -->
+    <div id="page-activity" class="page">
+      <div class="page-header">
+        <h2>Activity</h2>
+        <p>Track member engagement (messages, voice time and reactions) with a weighted activity score.</p>
+      </div>
+      <div id="activity-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="activity-body" class="hidden"></div>
+      <div id="activity-save-bar" class="save-bar hidden">
+        <button class="btn btn-primary" onclick="saveActivity()">Save Changes</button>
+        <span class="save-hint">Unsaved changes</span>
+        <span id="activity-save-msg" class="save-status"></span>
+      </div>
+    </div>
+
+    <!-- ─── TRUST SCORE ─── -->
+    <div id="page-trust" class="page">
+      <div class="page-header">
+        <h2>Trust Score</h2>
+        <p>A unified 0–100 score per member, blending account age, server tenure, activity, level, verification and warnings.</p>
+      </div>
+      <div id="trust-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="trust-body" class="hidden"></div>
+      <div id="trust-save-bar" class="save-bar hidden">
+        <button class="btn btn-primary" onclick="saveTrust()">Save Changes</button>
+        <span class="save-hint">Unsaved changes</span>
+        <span id="trust-save-msg" class="save-status"></span>
+      </div>
+    </div>
+
+    <!-- ─── MODERATORS ─── -->
+    <div id="page-moderators" class="page">
+      <div class="page-header">
+        <h2>Moderators</h2>
+        <p>Roles and members here can use mod-level commands (warn, timeout, ticket tools) without full Administrator.</p>
+      </div>
+      <div id="mods-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="mods-body" class="hidden">
+        <div class="card">
+          <h3>Moderator Roles</h3>
+          <div class="form-row">
+            <div id="mods-roles"></div>
+            <span class="hint">Everyone with these roles counts as a moderator.</span>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Moderator Users</h3>
+          <div class="form-row">
+            <label>User IDs</label>
+            <textarea id="mods-users" placeholder="One ID per line or comma-separated"></textarea>
+            <span class="hint">Individual users granted moderator access.</span>
+          </div>
+        </div>
+        <div class="save-bar">
+          <button class="btn btn-primary" onclick="saveModerators()">Save Changes</button>
+          <span class="save-hint">Unsaved changes</span>
+          <span id="mods-save-msg" class="save-status"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── ANTI-NUKE / SECURITY ─── -->
+    <div id="page-security" class="page">
+      <div class="page-header">
+        <h2>Anti-Nuke &amp; Security</h2>
+        <p>Detect and automatically punish mass-destructive admin actions. Disabled by default. Review the limits before enabling.</p>
+      </div>
+      <div id="security-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="security-body" class="hidden"></div>
+      <div id="security-save-bar" class="save-bar hidden">
+        <button class="btn btn-primary" onclick="saveSecurityConfig()">Save Changes</button>
+        <span class="save-hint">Unsaved changes</span>
+        <span id="security-save-msg" class="save-status"></span>
+      </div>
+    </div>
+
+    <!-- ─── VERIFICATION ─── -->
+    <div id="page-verification" class="page">
+      <div class="page-header">
+        <h2>Verification</h2>
+        <p>Require new members to solve a captcha before they gain access.</p>
+      </div>
+      <div id="verif-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="verif-body" class="hidden">
+        <div class="card">
+          <label class="sec-switch sec-master">
+            <input type="checkbox" id="verif-enabled">
+            <span><strong>Enable Verification</strong></span>
+          </label>
+          <div class="card-grid" style="margin-top:14px">
+            <div class="form-row">
+              <label>Panel Channel</label>
+              <select id="verif-channel"><option value="">None</option></select>
+              <span class="hint">Where the Verify button is posted.</span>
+            </div>
+            <div class="form-row">
+              <label>Verified Role</label>
+              <select id="verif-role"><option value="">None</option></select>
+              <span class="hint">Granted after solving the captcha. Keep the bot's role above it.</span>
+            </div>
+          </div>
+          <div class="form-row">
+            <label>Panel Title</label>
+            <input type="text" id="verif-title" placeholder="✅ Server Verification">
+          </div>
+          <div class="form-row">
+            <label>Panel Description</label>
+            <textarea id="verif-desc" placeholder="Click Verify below and solve the captcha to gain access."></textarea>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Verification Requirements</h3>
+          <p style="color:var(--muted);font-size:13px;margin-bottom:14px">
+            Extra checks a member must pass before they can verify. For automatic action against likely alt accounts at join, use the <strong>Alt Detection</strong> page.
+          </p>
+          <div class="card-grid">
+            <div class="form-row">
+              <label>Minimum Account Age (days)</label>
+              <input type="number" id="verif-minage" min="0" placeholder="0 = off">
+              <span class="hint">Accounts younger than this can't verify.</span>
+            </div>
+          </div>
+          <label class="sec-switch" style="margin-top:8px">
+            <input type="checkbox" id="verif-requireavatar">
+            <span>Require a profile picture to verify</span>
+          </label>
+        </div>
+
+        <div class="save-bar">
+          <button class="btn btn-primary" onclick="saveVerification(false)">Save</button>
+          <button class="btn btn-secondary" onclick="saveVerification(true)">Save &amp; Post Panel</button>
+          <span class="save-hint">Unsaved changes</span>
+          <span id="verif-save-msg" class="save-status"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── AUTOROLES ─── -->
+    <div id="page-autorole" class="page">
+      <div class="page-header">
+        <h2>Autoroles</h2>
+        <p>Roles handed out automatically the moment someone joins the server.</p>
+      </div>
+      <div id="autorole-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="autorole-body" class="hidden">
+        <div class="card">
+          <label class="sec-switch sec-master"><input type="checkbox" id="ar-enabled">
+            <span><strong>Enable Autoroles</strong>. When off, nothing is given on join.</span></label>
+        </div>
+        <div class="card">
+          <h3>Roles for People</h3>
+          <div class="form-row">
+            <div id="ar-roles"></div>
+            <span class="hint">Every human who joins receives these roles. Keep the bot's role above them.</span>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Roles for Bots</h3>
+          <div class="form-row">
+            <div id="ar-bot-roles"></div>
+            <span class="hint">Given to bots when they are added. Leave empty to skip bots.</span>
+          </div>
+        </div>
+      </div>
+      <div id="autorole-save-bar" class="save-bar hidden">
+        <button class="btn btn-primary" onclick="saveAutorole()">Save Changes</button>
+        <span class="save-hint">Unsaved changes</span>
+        <span id="autorole-save-msg" class="save-status"></span>
+      </div>
+    </div>
+
+    <!-- ─── REACTION ROLES ─── -->
+    <div id="page-reactionroles" class="page">
+      <div class="page-header">
+        <h2>Reaction Roles</h2>
+        <p>Let members give themselves roles by reacting to a message. The bot can post the message for you, or you can point it at an existing one.</p>
+      </div>
+      <div id="rr-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="rr-body" class="hidden"></div>
+    </div>
+
+    <!-- ─── SOCIAL ALERTS ─── -->
+    <div id="page-social" class="page">
+      <div class="page-header">
+        <h2>Social Alerts</h2>
+        <p>Post a message in your server when a creator goes live or uploads. YouTube, Reddit and Kick work with no setup; Twitch needs free API keys in the bot's .env file.</p>
+      </div>
+      <div id="social-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="social-body" class="hidden"></div>
+    </div>
+
+    <!-- ─── POLLS ─── -->
+    <div id="page-polls" class="page">
+      <div class="page-header">
+        <h2>Polls</h2>
+        <p>Create polls, post them straight to a channel, and track results. Members vote with a menu on the poll message; you can end, cancel or review polls here at any time.</p>
+      </div>
+      <div id="polls-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="polls-body" class="hidden"></div>
+    </div>
+
+    <!-- ─── ALT DETECTION ─── -->
+    <div id="page-altdetect" class="page">
+      <div class="page-header">
+        <h2>Alt Detection</h2>
+        <p>Score new members against throwaway-account heuristics, flag likely alts for moderator review, and optionally act automatically. No method is certain, so tune the sensitivity to balance catches against false positives.</p>
+      </div>
+      <div id="alt-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="alt-body" class="hidden"></div>
+      <div id="alt-save-bar" class="save-bar hidden">
+        <button class="btn btn-primary" onclick="saveAltDetect()">Save Changes</button>
+        <span class="save-hint">Unsaved changes</span>
+        <span id="alt-save-msg" class="save-status"></span>
+      </div>
+    </div>
+
+    <!-- ─── TRANSCRIPTS ─── -->
+    <div id="page-transcripts" class="page">
+      <div class="page-header">
+        <h2>Transcripts</h2>
+        <p>Browse and read past ticket conversations, with images shown inline.</p>
+      </div>
+
+      <!-- List view -->
+      <div id="tx-list-view">
+        <div id="tx-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+        <div id="tx-list" class="hidden">
+          <div class="card" style="padding:0;overflow:hidden">
+            <table class="log-table">
+              <thead><tr>
+                <th style="width:60px">#</th>
+                <th>Channel</th>
+                <th style="width:110px">Type</th>
+                <th style="width:90px">Priority</th>
+                <th>Closed By</th>
+                <th style="width:160px">Date</th>
+                <th style="width:70px">Msgs</th>
+                <th style="width:70px"></th>
+              </tr></thead>
+              <tbody id="tx-rows"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Viewer -->
+      <div id="tx-viewer" class="hidden">
+        <div class="tx-viewer-bar">
+          <button class="btn btn-secondary" onclick="closeTranscript()">← Back</button>
+          <div id="tx-meta" class="tx-meta"></div>
+        </div>
+        <div id="tx-messages" class="tx-messages"></div>
+      </div>
+    </div>
+
+    <!-- ─── BOT LOGS ─── -->
+    <div id="page-botlogs" class="page">
+      <div class="page-header">
+        <h2>Bot Logs</h2>
+        <p>Recent entries from the PM2 log files.</p>
+      </div>
+      <div class="log-viewer-header">
+        <select id="log-file-select" onchange="loadBotLogs()">
+          <option value="bot">Combined Log</option>
+          <option value="error">Error Log</option>
+          <option value="out">Output Log</option>
+        </select>
+        <button class="btn btn-secondary" onclick="loadBotLogs()">↺ Refresh</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('log-viewer').innerHTML=''">Clear View</button>
+      </div>
+      <pre id="log-viewer" class="log-viewer">Select a log file and click Refresh.</pre>
+    </div>
+
+  </main>
+</div>
+
+<!-- ═══════════════ LIVE CHAT OVERLAY ═══════════════ -->
+<div id="chat-overlay" class="chat-overlay hidden">
+  <div class="chat-window">
+    <div class="chat-header">
+      <span id="chat-title">Ticket Chat</span>
+      <button class="chat-close" onclick="closeChat()">✕</button>
+    </div>
+    <div id="chat-messages" class="chat-messages"></div>
+    <div id="chat-typing" class="chat-typing"></div>
+    <div class="chat-input-row">
+      <input type="text" id="chat-input" placeholder="Type a message as staff…"
+             onkeydown="if(event.key==='Enter') sendChat(); else chatTyping()">
+      <button class="btn btn-primary" onclick="sendChat()">Send</button>
+    </div>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
