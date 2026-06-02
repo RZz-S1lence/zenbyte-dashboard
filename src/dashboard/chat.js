@@ -4,6 +4,20 @@ const { assertGuildAccess } = require('./auth');
 
 const roomFor = (guildId, channelId) => `ticket:${guildId}:${channelId}`;
 
+// Simple per-socket sliding-window rate limiter for inbound events. The client
+// is fully untrusted, so even an authenticated session must not be able to flood
+// the bot (which would relay into Discord) or hammer the access checks.
+function makeLimiter(max, windowMs) {
+  const hits = [];
+  return () => {
+    const now = Date.now();
+    while (hits.length && hits[0] <= now - windowMs) hits.shift();
+    if (hits.length >= max) return false;
+    hits.push(now);
+    return true;
+  };
+}
+
 function serializeMessage(message) {
   return {
     id:           message.id,
@@ -36,7 +50,17 @@ function attachChat(server, sessionMiddleware, client) {
     const session = socket.request.session;
     let current = null; // { guildId, channelId }
 
-    socket.on('join', async ({ guildId, channelId }) => {
+    // Per-socket rate limits: joins and messages are throttled independently.
+    const joinLimit = makeLimiter(15, 10000);   // 15 joins / 10s
+    const msgLimit  = makeLimiter(5, 5000);     // 5 messages / 5s
+
+    socket.on('join', async ({ guildId, channelId } = {}) => {
+      if (!joinLimit()) { socket.emit('chat_error', 'You are doing that too fast. Slow down.'); return; }
+      // Validate shapes before trusting them anywhere downstream.
+      if (!/^\d{16,20}$/.test(guildId || '') || !/^\d{16,20}$/.test(channelId || '')) {
+        socket.emit('chat_error', 'Invalid channel.');
+        return;
+      }
       // Server-side authorization: user must be a live admin of this guild.
       if (!await assertGuildAccess(client, session, guildId)) {
         logger.warn(`Blocked WS join: user=${session.userId} guild=${guildId}`);
@@ -58,8 +82,14 @@ function attachChat(server, sessionMiddleware, client) {
       }
     });
 
-    socket.on('staff_message', async ({ content }) => {
-      if (!current || !content?.trim()) return;
+    socket.on('staff_message', async ({ content } = {}) => {
+      if (!current || typeof content !== 'string' || !content.trim()) return;
+      if (!msgLimit()) { socket.emit('chat_error', 'You are sending messages too fast.'); return; }
+      // The ticket may have closed since join; re-confirm it is still open.
+      if (!client.store.isTicketChannel(current.guildId, current.channelId)) {
+        socket.emit('chat_error', 'That ticket is no longer open.');
+        return;
+      }
       // Re-verify access live on every send (immediate revocation if admin is lost).
       if (!await assertGuildAccess(client, session, current.guildId, { fresh: true })) {
         logger.warn(`Blocked WS message: user=${session.userId} guild=${current.guildId}`);

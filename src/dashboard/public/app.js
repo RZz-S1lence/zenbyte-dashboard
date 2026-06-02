@@ -2201,9 +2201,12 @@ function closeTranscript() {
 function renderMessage(m) {
   const time = new Date(m.timestamp).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
+  // authorTag is an attacker-controlled Discord username. Strip any character
+  // that could break out of the HTML attribute / inline JS string, then escape.
+  const initial = ((m.authorTag || '?').charAt(0).toUpperCase().replace(/['"<>&\\]/g, '') || '?');
   const avatar = m.authorAvatar
-    ? `<img src="${m.authorAvatar}" class="msg-avatar" alt="" onerror="this.outerHTML='<div class=\\'msg-avatar-fallback\\'>${m.authorTag.charAt(0).toUpperCase()}</div>'">`
-    : `<div class="msg-avatar-fallback">${esc(m.authorTag.charAt(0).toUpperCase())}</div>`;
+    ? `<img src="${esc(m.authorAvatar)}" class="msg-avatar" alt="" onerror="this.outerHTML='<div class=\\'msg-avatar-fallback\\'>${esc(initial)}</div>'">`
+    : `<div class="msg-avatar-fallback">${esc(initial)}</div>`;
 
   const content = m.content
     ? `<div class="msg-text">${renderMarkdown(m.content)}</div>`
