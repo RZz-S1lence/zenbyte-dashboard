@@ -46,11 +46,79 @@ const state = {
   mcPreview:   null    // live current values per type
 };
 
+// ── Inline icon system (replaces emojis everywhere) ─────────────────────────
+// Each entry is the inner markup of a 24×24 line icon. Use svg('name') in markup.
+const ICONS = {
+  check:   '<polyline points="20 6 9 17 4 12"/>',
+  x:       '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  plus:    '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  refresh: '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+  edit:    '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  trash:   '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+  search:  '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  clipboard:'<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>',
+  inbox:   '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+  gear:    '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  megaphone:'<path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
+  star:    '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  ticket:  '<path d="M3 7v2a2 2 0 1 1 0 6v2c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2v-2a2 2 0 1 1 0-6V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2Z"/><path d="M13 5v14"/>',
+  hash:    '<line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>',
+  shield:  '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  home:    '<path d="M3 9.5 12 3l9 6.5V20a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+  users:   '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  user:    '<circle cx="12" cy="8" r="4"/><path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>',
+  bot:     '<rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4"/><circle cx="9" cy="13" r="1"/><circle cx="15" cy="13" r="1"/><path d="M9 17h6"/>',
+  bolt:    '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  signal:  '<circle cx="12" cy="12" r="2"/><path d="M4.93 19.07a10 10 0 0 1 0-14.14M7.76 16.24a6 6 0 0 1 0-8.49M16.24 7.76a6 6 0 0 1 0 8.49M19.07 4.93a10 10 0 0 1 0 14.14"/>',
+  clock:   '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  file:    '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/>',
+  monitor: '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',
+  folder:  '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+  book:    '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+  speaker: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"/>',
+  trophy:  '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
+  smile:   '<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>',
+  eye:     '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+  envelope:'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/>',
+  gem:     '<path d="M6 3h12l4 6-10 13L2 9Z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/>',
+  tag:     '<path d="M12 2H2v10l9.29 9.29a2 2 0 0 0 2.83 0l7.17-7.17a2 2 0 0 0 0-2.83L12 2Z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+  lock:    '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  ban:     '<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>',
+  warn:    '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  paperclip:'<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+  image:   '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/>',
+  menu:    '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>',
+  arrowDown:'<line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>',
+  chat:    '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  list:    '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
+  pause:   '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>',
+  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'
+};
+// Returns an inline SVG string. `extra` is appended to the class list.
+function svg(name, extra = '') {
+  const inner = ICONS[name];
+  if (!inner) return '';
+  return `<svg class="ic ${extra}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+}
+// A small filled status dot (green/yellow/red) — replaces 🟢 🟡 🔴.
+function dot(color) { return `<span class="sdot" style="background:${color}"></span>`; }
+
+// Fills any static element marked <... data-icon="name"> with its SVG. Lets the
+// HTML stay emoji-free without inlining big SVG blobs everywhere.
+function hydrateIcons(root = document) {
+  root.querySelectorAll('[data-icon]').forEach(el => {
+    if (el.dataset.iconDone) return;
+    el.innerHTML = svg(el.dataset.icon);
+    el.dataset.iconDone = '1';
+  });
+}
+
 // ── Boot ─────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
   const auth = await api('GET', '/api/auth').catch(() => ({ authenticated: false }));
   state.links = auth.links || null;
   applyLinks(state.links);
+  hydrateIcons();
   if (auth.authenticated) await enterDashboard(auth.user);
   else showLogin(auth);
 });
@@ -172,7 +240,8 @@ async function loadStatus() {
     const s = await api('GET', '/api/status');
     const setTxt = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
 
-    setTxt('stat-status',   s.ready ? '🟢 Online' : '🔴 Offline');
+    const statusEl = document.getElementById('stat-status');
+    if (statusEl) statusEl.innerHTML = s.ready ? `${dot('var(--green)')}Online` : `${dot('var(--red)')}Offline`;
     setTxt('stat-guilds',   s.guilds);
     setTxt('stat-members',  (s.members ?? 0).toLocaleString());
     setTxt('stat-commands', s.commands ?? '—');
@@ -302,7 +371,7 @@ function renderCommands() {
     const enabledCount = state.commands.length - totalDisabled;
     const viewNames = filtered.map(c => c.name);
     toolbar = `<div class="cmd-bulkbar">
-      <span class="cmd-stats">✅ ${enabledCount} enabled · ⛔ ${totalDisabled} disabled</span>
+      <span class="cmd-stats">${svg('check')} ${enabledCount} enabled · ${svg('ban')} ${totalDisabled} disabled</span>
       <span class="cmd-bulk">
         <button class="btn btn-secondary btn-sm" ${viewNames.length ? '' : 'disabled'}
           onclick='bulkToggleCommands(${JSON.stringify(viewNames)}, true)'>Enable all shown</button>
@@ -616,7 +685,7 @@ function renderFormFields() {
         <option value="paragraph"${f.style === 'paragraph' ? ' selected' : ''}>Paragraph</option>
       </select>
       <label class="tf-req"><input type="checkbox" class="tf-required" ${f.required !== false ? 'checked' : ''}> Required</label>
-      <button class="btn btn-secondary tf-del" onclick="removeFormField(${i})">✕</button>
+      <button class="btn btn-secondary tf-del" onclick="removeFormField(${i})">${svg('x')}</button>
     </div>`).join('') || '<p class="lv-empty">No questions, a ticket opens immediately.</p>';
 }
 
@@ -675,7 +744,7 @@ function msInit(hostId, items, selected = []) {
       <span class="guild-chevron">▾</span>
     </div>
     <div class="multiselect-menu hidden" data-menu>
-      <input class="ms-search" placeholder="🔍 Search…" oninput="msSearch('${hostId}', this.value)" onclick="event.stopPropagation()">
+      <input class="ms-search" placeholder="Search…" oninput="msSearch('${hostId}', this.value)" onclick="event.stopPropagation()">
       <div class="ms-options" data-options></div>
     </div>`;
   msRenderTags(hostId);
@@ -689,7 +758,7 @@ function msRenderTags(hostId) {
   if (!st || !host) return;
   const sel = [...st.selected].map(id => st.items.find(i => i.id === id)).filter(Boolean);
   host.querySelector('[data-tags]').innerHTML = sel.length
-    ? sel.map(i => `<span class="ms-tag">${esc(i.label)}<button class="ms-tag-x" onclick="msRemove('${hostId}','${i.id}',event)">✕</button></span>`).join('')
+    ? sel.map(i => `<span class="ms-tag">${esc(i.label)}<button class="ms-tag-x" onclick="msRemove('${hostId}','${i.id}',event)">${svg('x')}</button></span>`).join('')
     : '<span class="multiselect-placeholder">None selected</span>';
 }
 
@@ -732,7 +801,7 @@ function msSearch(hostId, val) { msRenderOptions(hostId, val); }
 
 function renderTypeChips() {
   document.getElementById('types-chips').innerHTML = state.ticketTypes.map(t =>
-    `<div class="type-chip"><span>${esc(t)}</span><button class="remove" onclick="removeType('${esc(t)}')" title="Remove">✕</button></div>`
+    `<div class="type-chip"><span>${esc(t)}</span><button class="remove" onclick="removeType('${esc(t)}')" title="Remove">${svg('x')}</button></div>`
   ).join('');
 }
 
@@ -820,7 +889,7 @@ async function loadOpenTickets() {
       <span class="ticket-meta">Claimed: ${t.claimedBy ? `<@${t.claimedBy}>` : 'No'}</span>
       <span class="ticket-meta">${timeAgo(t.createdAt)}</span>
       <button class="btn btn-secondary" style="padding:4px 12px;font-size:12px;margin-left:auto"
-              onclick="openChat('${t.channelId}','${esc(t.channelName)}')">💬 Live Chat</button>
+              onclick="openChat('${t.channelId}','${esc(t.channelName)}')">${svg('chat')} Live Chat</button>
     </div>`).join('');
 }
 
@@ -1009,14 +1078,14 @@ async function loadSocial() {
 function socCreatorsHtml(pid) {
   const list = state.socialConfig.platforms[pid].creators;
   if (!list.length) return '<span class="hint">No creators followed yet.</span>';
-  return list.map(c => `<span class="ms-tag">${esc(c.name)}<button class="ms-tag-x" onclick="socialRemove('${pid}','${esc(c.key)}')">✕</button></span>`).join('');
+  return list.map(c => `<span class="ms-tag">${esc(c.name)}<button class="ms-tag-x" onclick="socialRemove('${pid}','${esc(c.key)}')">${svg('x')}</button></span>`).join('');
 }
 
 function renderSocial() {
   const cards = state.socialProviders.map(p => {
     const pc = state.socialConfig.platforms[p.id];
     const warn = p.needsAuth && !p.configured
-      ? `<div class="soc-warn">⚠️ Add <code>TWITCH_CLIENT_ID</code> and <code>TWITCH_CLIENT_SECRET</code> to the bot's <code>.env</code> file to enable ${esc(p.label)}. See <code>.env.example</code> for steps.</div>`
+      ? `<div class="soc-warn">${svg('warn')} Add <code>TWITCH_CLIENT_ID</code> and <code>TWITCH_CLIENT_SECRET</code> to the bot's <code>.env</code> file to enable ${esc(p.label)}. See <code>.env.example</code> for steps.</div>`
       : '';
     return `<div class="card">
       <div class="soc-head">
@@ -1081,7 +1150,7 @@ async function socialAdd(pid) {
     input.value = '';
     document.getElementById(`soc-${pid}-creators`).innerHTML = socCreatorsHtml(pid);
     msg.textContent = '';
-  } catch (e) { msg.textContent = '❌ ' + e.message; }
+  } catch (e) { msg.innerHTML = svg('x') + ' ' + esc(e.message); }
 }
 
 async function socialRemove(pid, key) {
@@ -1095,8 +1164,8 @@ async function socialRemove(pid, key) {
 async function socialTest(pid) {
   const msg = document.getElementById(`soc-${pid}-msg`);
   msg.textContent = 'Sending…';
-  try { await api('POST', `/api/guild/${state.guildId}/social/test`, { platform: pid }); msg.textContent = '✅ Test sent.'; setTimeout(() => msg.textContent = '', 3000); }
-  catch (e) { msg.textContent = '❌ ' + e.message; }
+  try { await api('POST', `/api/guild/${state.guildId}/social/test`, { platform: pid }); msg.innerHTML = svg('check') + ' Test sent.'; setTimeout(() => msg.textContent = '', 3000); }
+  catch (e) { msg.innerHTML = svg('x') + ' ' + esc(e.message); }
 }
 
 // ── POLLS ─────────────────────────────────────────
@@ -1113,14 +1182,14 @@ async function loadPolls() {
   show('polls-body');
 }
 
-const POLL_STATUS = { active: '🟢 Active', scheduled: '🕒 Scheduled', ended: '🔒 Ended', cancelled: '🚫 Cancelled' };
+const POLL_STATUS = { active: `${dot('var(--green)')}Active`, scheduled: `${svg('clock')} Scheduled`, ended: `${svg('lock')} Ended`, cancelled: `${svg('ban')} Cancelled` };
 function channelName(id) { const c = (state.guildData?.textChannels || []).find(x => x.id === id); return c ? c.name : id; }
 
 function pollOptionRows() {
   return state.pollOptions.map((v, i) => `
     <div class="lv-row">
       <input class="poll-opt" placeholder="Option ${i + 1}" value="${esc(v)}" style="flex:1;min-width:160px">
-      <button class="btn btn-secondary lv-del" onclick="pollDelOption(${i})">✕</button>
+      <button class="btn btn-secondary lv-del" onclick="pollDelOption(${i})">${svg('x')}</button>
     </div>`).join('');
 }
 function pollSyncOptions() { state.pollOptions = [...document.querySelectorAll('.poll-opt')].map(i => i.value); }
@@ -1130,7 +1199,7 @@ function pollDelOption(i) { pollSyncOptions(); state.pollOptions.splice(i, 1); w
 function pollListCard(title, list, actionable) {
   if (!list.length) return '';
   const rows = list.map(p => {
-    const bars = p.options.map(o => `<div class="hint">${esc(o.label)}: ${o.count} (${o.percent}%)${o.leading && o.count ? ' 🏆' : ''}</div>`).join('');
+    const bars = p.options.map(o => `<div class="hint">${esc(o.label)}: ${o.count} (${o.percent}%)${o.leading && o.count ? ' ' + svg('trophy') : ''}</div>`).join('');
     const when = p.status === 'scheduled' && p.scheduledFor ? `opens ${new Date(p.scheduledFor).toLocaleString()}`
                : p.endsAt ? `ends ${new Date(p.endsAt).toLocaleString()}` : '';
     const btns = actionable ? `<div class="btn-row">
@@ -1446,7 +1515,7 @@ function renderLeveling() {
       <span>Level</span>
       <input type="number" min="1" class="lv-rw-level" value="${r.level}" style="width:80px">
       <select class="lv-rw-role">${lvRoleOpts(r.roleId)}</select>
-      <button class="btn btn-secondary lv-del" onclick="lvDel('roleRewards',${i})">✕</button>
+      <button class="btn btn-secondary lv-del" onclick="lvDel('roleRewards',${i})">${svg('x')}</button>
     </div>`).join('') || '<p class="lv-empty">No role rewards yet.</p>';
 
   const cboostRows = c.channelBoosts.map((b, i) => `
@@ -1454,7 +1523,7 @@ function renderLeveling() {
       <select class="lv-cb-channel">${lvChannelOpts(b.id)}</select>
       <span>×</span>
       <input type="number" min="0" step="0.1" class="lv-cb-mult" value="${b.multiplier}" style="width:80px">
-      <button class="btn btn-secondary lv-del" onclick="lvDel('channelBoosts',${i})">✕</button>
+      <button class="btn btn-secondary lv-del" onclick="lvDel('channelBoosts',${i})">${svg('x')}</button>
     </div>`).join('') || '<p class="lv-empty">No channel boosts.</p>';
 
   const rboostRows = c.roleBoosts.map((b, i) => `
@@ -1462,7 +1531,7 @@ function renderLeveling() {
       <select class="lv-rb-role">${lvRoleOpts(b.id)}</select>
       <span>×</span>
       <input type="number" min="0" step="0.1" class="lv-rb-mult" value="${b.multiplier}" style="width:80px">
-      <button class="btn btn-secondary lv-del" onclick="lvDel('roleBoosts',${i})">✕</button>
+      <button class="btn btn-secondary lv-del" onclick="lvDel('roleBoosts',${i})">${svg('x')}</button>
     </div>`).join('') || '<p class="lv-empty">No role boosts.</p>';
 
   document.getElementById('leveling-body').innerHTML = `
@@ -1802,7 +1871,7 @@ function renderTrust() {
       <input type="text" class="tr-tier-name" placeholder="Tier name" value="${esc(t.name)}" style="flex:1;min-width:140px">
       <span>at score ≥</span>
       <input type="number" class="tr-tier-min" min="0" max="100" value="${t.min}" style="width:80px">
-      <button class="btn btn-secondary lv-del" onclick="trustDelTier(${i})">✕</button>
+      <button class="btn btn-secondary lv-del" onclick="trustDelTier(${i})">${svg('x')}</button>
     </div>`).join('') || '<p class="lv-empty">No tiers.</p>';
 
   document.getElementById('trust-body').innerHTML = `
@@ -1922,7 +1991,7 @@ function rrMapRow(menuId, m) {
       <input class="rr-emoji" placeholder="👍 or :custom:" value="${esc(m?.emoji || '')}" style="width:140px">
       <span>→</span>
       <select class="rr-role">${lvRoleOpts(m?.roleId || '')}</select>
-      <button class="btn btn-secondary lv-del" onclick="rrDelMap(this)">✕</button>
+      <button class="btn btn-secondary lv-del" onclick="rrDelMap(this)">${svg('x')}</button>
     </div>`;
 }
 function rrDelMap(btn) { btn.closest('.rr-map-row')?.remove(); markDirty(); }
@@ -1988,7 +2057,7 @@ function renderReactionRoles() {
           <label class="sec-switch"><input type="checkbox" id="rr-new-embed" checked><span>Post as an embed</span></label>
           <div class="form-row"><label>Color</label><div class="color-row"><input type="color" id="rr-new-color" value="#5865F2"></div></div>
         </div>
-        <div class="form-row"><label>Title</label><input type="text" id="rr-new-title" placeholder="🎭 Reaction Roles"></div>
+        <div class="form-row"><label>Title</label><input type="text" id="rr-new-title" placeholder="Reaction Roles"></div>
         <div class="form-row"><label>Description</label><textarea id="rr-new-desc" placeholder="React below to get your roles!"></textarea></div>
       </div>
       <div id="rr-new-existing-fields" class="hidden">
@@ -2163,7 +2232,7 @@ function chatMsgHtml(m) {
     const img = a.contentType?.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(a.name || '');
     return img
       ? `<a href="${esc(a.url)}" target="_blank"><img class="chat-img" src="${esc(a.url)}" alt=""></a>`
-      : `<a href="${esc(a.url)}" target="_blank" class="msg-file">📎 ${esc(a.name || 'file')}</a>`;
+      : `<a href="${esc(a.url)}" target="_blank" class="msg-file">${svg('paperclip')} ${esc(a.name || 'file')}</a>`;
   }).join('');
   return `<div class="chat-msg${m.bot ? ' chat-bot' : ''}">
     <div class="chat-msg-head"><span class="chat-author">${esc(m.authorTag)}</span>
@@ -2187,10 +2256,13 @@ function hide(id) { document.getElementById(id).classList.add('hidden'); }
 function esc(s)   { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 function setStatus(el, type, msg) {
+  // Strip any leading emoji/symbols from the message; we render a clean SVG instead.
+  const clean = String(msg).replace(/^[\s️←-⇿⌀-➿⬀-⯿\u{1F000}-\u{1FAFF}]+/u, '').trim();
+  const ico = type === 'ok' ? svg('check') : type === 'err' ? svg('x') : '';
   el.className = `save-status ${type}`;
-  el.textContent = msg;
+  el.innerHTML = `${ico} ${esc(clean)}`;
   if (type === 'ok') { const bar = el.closest('.save-bar'); if (bar) bar.classList.remove('dirty'); }
-  setTimeout(() => el.textContent = '', 4000);
+  setTimeout(() => { el.innerHTML = ''; }, 4000);
 }
 
 function timeAgo(ts) {
@@ -2305,11 +2377,11 @@ function renderMessage(m) {
       return `<div class="msg-img-wrap">
         <a href="${esc(a.url)}" target="_blank" rel="noopener">
           <img src="${src}" class="msg-img" alt="${esc(a.name || 'image')}"
-               onerror="this.closest('.msg-img-wrap').innerHTML='<span class=\\'img-expired\\'>🖼️ Image (link expired)</span>'">
+               onerror="this.closest('.msg-img-wrap').innerHTML='<span class=\\'img-expired\\'>Image (link expired)</span>'">
         </a>
       </div>`;
     }
-    return `<a href="${esc(a.url)}" target="_blank" rel="noopener" class="msg-file">📎 ${esc(a.name || 'file')}</a>`;
+    return `<a href="${esc(a.url)}" target="_blank" rel="noopener" class="msg-file">${svg('paperclip')} ${esc(a.name || 'file')}</a>`;
   }).join('');
 
   const embeds = (m.embeds || []).filter(e => e.title || e.description || e.fields?.length).map(e => {
@@ -2409,7 +2481,7 @@ function renderFormsTab() {
     </div>`).join('') : '<p class="hint" style="padding:16px">No forms yet. Create your first application form.</p>';
 
   box.innerHTML = `
-    <div class="btn-row" style="margin-bottom:14px"><button class="btn btn-primary" onclick="appsNewForm()">➕ New Form</button></div>
+    <div class="btn-row" style="margin-bottom:14px"><button class="btn btn-primary" onclick="appsNewForm()">${svg('plus')} New Form</button></div>
     <div class="apps-form-list">${rows}</div>`;
 }
 
@@ -2474,7 +2546,7 @@ function renderFormBuilder(box) {
     </div>
     <div class="save-bar dirty">
       <button class="btn btn-primary" onclick="appsSaveForm()">Save Form</button>
-      <button class="btn btn-secondary" onclick="appsPreviewForm()">👁 Preview</button>
+      <button class="btn btn-secondary" onclick="appsPreviewForm()">${svg('eye')} Preview</button>
       <button class="btn btn-secondary" onclick="appsCancelEdit()">Cancel</button>
       <span id="apps-form-msg" class="save-status"></span>
     </div>`;
@@ -2488,7 +2560,7 @@ function renderQuestionEditor(q, i) {
       <span class="apps-drag" title="Drag to reorder">⋮⋮</span>
       <span class="apps-q-type">${QTYPE_LABEL[q.type] || q.type}</span>
       <label class="apps-q-req"><input type="checkbox" ${q.required ? 'checked' : ''} onchange="appsQEdit(${i},'required',this.checked)"> Required</label>
-      <button class="btn btn-secondary apps-q-del" onclick="appsRemoveQuestion(${i})">✕</button>
+      <button class="btn btn-secondary apps-q-del" onclick="appsRemoveQuestion(${i})">${svg('x')}</button>
     </div>
     <input type="text" placeholder="Question / prompt" maxlength="200" value="${esc(q.label)}" oninput="appsQEdit(${i},'label',this.value)">
     <input type="text" placeholder="Placeholder (optional)" maxlength="100" value="${esc(q.placeholder || '')}" oninput="appsQEdit(${i},'placeholder',this.value)">
@@ -2567,9 +2639,9 @@ function renderSubmissionsShell() {
       <div class="cmd-chips" id="apps-sub-chips"></div>
       <div class="btn-row" style="margin-top:10px;flex-wrap:wrap">
         <select onchange="appsSetForm(this.value)" style="max-width:220px">${formOpts}</select>
-        <input type="text" placeholder="🔍 Search applicant / answers…" value="${esc(state.appsFilter.search)}" oninput="appsSearchDebounced(this.value)" style="flex:1;min-width:180px">
-        <a class="btn btn-secondary" href="${exp('csv')}" target="_blank">⬇ CSV</a>
-        <a class="btn btn-secondary" href="${exp('json')}" target="_blank">⬇ JSON</a>
+        <input type="text" placeholder="Search applicant / answers…" value="${esc(state.appsFilter.search)}" oninput="appsSearchDebounced(this.value)" style="flex:1;min-width:180px">
+        <a class="btn btn-secondary" href="${exp('csv')}" target="_blank">${svg('download')} CSV</a>
+        <a class="btn btn-secondary" href="${exp('json')}" target="_blank">${svg('download')} JSON</a>
       </div>
     </div>
     <div class="log-table-wrap" style="margin-top:14px"><table class="log-table">
@@ -2634,11 +2706,11 @@ async function appsOpen(id) {
     <p>Status: <strong style="color:${hex6(m.color)}">${m.label}</strong></p>
     <div style="margin:12px 0">${answers}</div>
     <div class="btn-row" style="flex-wrap:wrap">
-      <button class="btn btn-primary" onclick="appsAction('${esc(appData.id)}','accept')">✅ Accept</button>
-      <button class="btn btn-secondary" onclick="appsAction('${esc(appData.id)}','hold')">⏸ Hold</button>
-      <button class="btn btn-secondary" onclick="appsAction('${esc(appData.id)}','deny',true)">❌ Deny</button>
-      <button class="btn btn-secondary" onclick="appsAction('${esc(appData.id)}','info',true)">✉ Request Info</button>
-      <button class="btn btn-secondary" onclick="appsAction('${esc(appData.id)}','note',true)">📝 Add Note</button>
+      <button class="btn btn-primary" onclick="appsAction('${esc(appData.id)}','accept')">${svg('check')} Accept</button>
+      <button class="btn btn-secondary" onclick="appsAction('${esc(appData.id)}','hold')">${svg('pause')} Hold</button>
+      <button class="btn btn-secondary" onclick="appsAction('${esc(appData.id)}','deny',true)">${svg('x')} Deny</button>
+      <button class="btn btn-secondary" onclick="appsAction('${esc(appData.id)}','info',true)">${svg('envelope')} Request Info</button>
+      <button class="btn btn-secondary" onclick="appsAction('${esc(appData.id)}','note',true)">${svg('clipboard')} Add Note</button>
     </div>
     <h4 style="margin-top:16px">History</h4>${history}`);
 }
@@ -2729,7 +2801,7 @@ async function renderAppsSettings() {
       <div class="card-grid" style="margin-top:14px">
         <div class="form-row"><label>Post Panel To</label><select id="apps-panel-ch"></select></div>
         <div class="form-row" style="align-self:end">
-          <button class="btn btn-secondary" onclick="appsPostPanel()">📨 Post / Update Panel</button></div>
+          <button class="btn btn-secondary" onclick="appsPostPanel()">${svg('inbox')} Post / Update Panel</button></div>
       </div>
     </div>
 
@@ -2826,15 +2898,15 @@ async function loadMemberCounters() {
   renderMemberCounters();
 }
 
-const MC_ICONS = { all: '👥', humans: '🧑', bots: '🤖', boosters: '🚀', role: '📛', channels: '📚', roles: '🎭' };
+const MC_ICONS = { all: 'users', humans: 'user', bots: 'bot', boosters: 'gem', role: 'tag', channels: 'book', roles: 'hash' };
 
 function mcChannelOptions(selected) {
   const gd = state.guildData || {};
   const grp = (label, arr, prefix) => (arr && arr.length)
     ? `<optgroup label="${label}">` + arr.map(c => `<option value="${c.id}"${c.id === selected ? ' selected' : ''}>${prefix}${esc(c.name)}</option>`).join('') + '</optgroup>' : '';
   return `<option value="">Select a channel…</option>`
-    + grp('Voice channels', gd.voiceChannels, '🔊 ')
-    + grp('Categories', gd.categories, '📁 ')
+    + grp('Voice channels', gd.voiceChannels, '')
+    + grp('Categories', gd.categories, '')
     + grp('Text channels', gd.textChannels, '# ');
 }
 function mcRoleOptions(selected) {
@@ -2844,12 +2916,12 @@ function mcRoleOptions(selected) {
 function mcChannelName(id) {
   const gd = state.guildData || {};
   const all = [
-    ...(gd.voiceChannels || []).map(c => ['🔊 ' + c.name, c.id]),
-    ...(gd.categories || []).map(c => ['📁 ' + c.name, c.id]),
-    ...(gd.textChannels || []).map(c => ['# ' + c.name, c.id])
+    ...(gd.voiceChannels || []).map(c => [c.name, c.id]),
+    ...(gd.categories || []).map(c => [c.name, c.id]),
+    ...(gd.textChannels || []).map(c => ['#' + c.name, c.id])
   ];
   const f = all.find(x => x[1] === id);
-  return f ? f[0] : '⚠️ deleted channel';
+  return f ? f[0] : '(deleted channel)';
 }
 function mcLiveValue(c) {
   const p = state.mcPreview || {};
@@ -2880,18 +2952,18 @@ function mcListHtml() {
   const head = `<div class="mc-head">
       <div class="mc-head-info"><strong>${state.mcCounters.length}</strong> counter${state.mcCounters.length === 1 ? '' : 's'} configured</div>
       <div class="mc-head-actions">
-        ${state.mcCounters.length ? `<button class="btn btn-secondary" onclick="mcRefresh()">🔄 Refresh now</button>` : ''}
-        <button class="btn btn-primary" onclick="mcAdd()">➕ Add Counter</button>
+        ${state.mcCounters.length ? `<button class="btn btn-secondary" onclick="mcRefresh()">${svg('refresh')} Refresh now</button>` : ''}
+        <button class="btn btn-primary" onclick="mcAdd()">${svg('plus')} Add Counter</button>
       </div>
     </div>
     <div id="mc-list-msg" class="save-status mc-list-msg"></div>`;
 
   if (!state.mcCounters.length) return head + `
     <div class="mc-empty">
-      <div class="mc-empty-ico">🔢</div>
+      <div class="mc-empty-ico">${svg('hash')}</div>
       <h4>No counters yet</h4>
       <p>Show live server stats — members, boosters, role counts — right in your channel list.</p>
-      <button class="btn btn-primary" onclick="mcAdd()">➕ Add your first counter</button>
+      <button class="btn btn-primary" onclick="mcAdd()">${svg('plus')} Add your first counter</button>
     </div>`;
 
   const cards = state.mcCounters.map(c => {
@@ -2899,16 +2971,16 @@ function mcListHtml() {
     const name = mcRender(c.type, c.template, c.roleId, c.lastValue);
     return `<div class="mc-card${c.enabled ? '' : ' mc-off'}">
       <div class="mc-card-top">
-        <span class="mc-type-badge">${MC_ICONS[c.type] || '🔢'} ${esc(meta.label || c.type)}</span>
+        <span class="mc-type-badge">${svg(MC_ICONS[c.type] || 'hash')} ${esc(meta.label || c.type)}</span>
         <label class="cmd-switch" title="${c.enabled ? 'Enabled' : 'Disabled'}">
           <input type="checkbox" ${c.enabled ? 'checked' : ''} onchange="mcToggle('${esc(c.id)}', this.checked)"><span class="cmd-slider"></span>
         </label>
       </div>
-      <div class="mc-pill"><span class="mc-pill-dot">🔊</span><span class="mc-pill-name">${esc(name)}</span></div>
+      <div class="mc-pill"><span class="mc-pill-dot">${svg('speaker')}</span><span class="mc-pill-name">${esc(name)}</span></div>
       <div class="mc-card-sub">renames ${esc(mcChannelName(c.channelId))}</div>
       <div class="mc-card-actions">
-        <button class="mc-act" onclick="mcEdit('${esc(c.id)}')">✏️ Edit</button>
-        <button class="mc-act mc-act-danger" onclick="mcDelete('${esc(c.id)}')">🗑️ Delete</button>
+        <button class="mc-act" onclick="mcEdit('${esc(c.id)}')">${svg('edit')} Edit</button>
+        <button class="mc-act mc-act-danger" onclick="mcDelete('${esc(c.id)}')">${svg('trash')} Delete</button>
       </div>
     </div>`;
   }).join('');
@@ -2925,20 +2997,20 @@ function mcEditorHtml() {
 
   const typeCards = state.mcTypes.map(t => `
     <button type="button" class="mc-type${t.key === type ? ' active' : ''}" data-type="${t.key}" onclick="mcSelectType('${t.key}')">
-      <span class="mc-type-ico">${MC_ICONS[t.key] || '🔢'}</span>
+      <span class="mc-type-ico">${svg(MC_ICONS[t.key] || 'hash')}</span>
       <span class="mc-type-label">${esc(t.label)}</span>
     </button>`).join('');
 
   return `
     <div class="card mc-editor">
       <div class="mc-editor-head">
-        <h3>${editing ? '✏️ Edit Counter' : '➕ New Counter'}</h3>
-        <button class="mc-x" onclick="mcCancelEdit()" title="Back to list">✕</button>
+        <h3>${editing ? 'Edit Counter' : 'New Counter'}</h3>
+        <button class="mc-x" onclick="mcCancelEdit()" title="Back to list">${svg('x')}</button>
       </div>
 
       <div class="mc-preview-wrap">
         <span class="mc-preview-label">Preview — how the channel will look</span>
-        <div class="mc-pill mc-pill-lg"><span class="mc-pill-dot">🔊</span><span class="mc-pill-name" id="mc-preview-pill"></span></div>
+        <div class="mc-pill mc-pill-lg"><span class="mc-pill-dot">${svg('speaker')}</span><span class="mc-pill-name" id="mc-preview-pill"></span></div>
       </div>
 
       <input type="hidden" id="mc-f-type" value="${type}">

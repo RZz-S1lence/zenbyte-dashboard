@@ -150,7 +150,11 @@ nav { flex: 1; padding: 10px 0; }
 }
 .nav-item:hover { background: var(--card2); color: var(--text); }
 .nav-item.active { background: var(--grad); color: var(--white); box-shadow: 0 8px 20px rgba(124,108,245,.35); }
-.nav-item .icon { font-size: 15px; width: 20px; text-align: center; }
+.nav-item .icon { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.nav-item .icon svg { width: 18px; height: 18px; display: block; }
+/* Active item: solid white icons. Inactive: slightly dimmed so labels lead. */
+.nav-item .icon svg { opacity: .9; }
+.nav-item.active .icon svg { opacity: 1; }
 .nav-section {
   font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px;
   color: var(--muted); opacity: .65; padding: 14px 16px 5px; margin: 0;
@@ -560,7 +564,8 @@ textarea { resize: vertical; min-height: 70px; width: 100%; }
 
 /* Empty state */
 .mc-empty { text-align: center; padding: 46px 20px; background: var(--card); border: 1px dashed var(--border2); border-radius: 14px; }
-.mc-empty-ico { font-size: 44px; margin-bottom: 8px; }
+.mc-empty-ico { font-size: 44px; margin-bottom: 8px; line-height: 0; }
+.mc-empty-ico .ic { width: 44px; height: 44px; opacity: .6; }
 .mc-empty h4 { margin: 0 0 6px; font-size: 17px; }
 .mc-empty p { color: var(--muted); font-size: 13.5px; max-width: 380px; margin: 0 auto 18px; }
 
@@ -580,8 +585,22 @@ textarea { resize: vertical; min-height: 70px; width: 100%; }
 .mc-type { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 8px; background: var(--card2); border: 1.5px solid var(--border2); border-radius: 12px; cursor: pointer; transition: .15s; color: var(--text); }
 .mc-type:hover { border-color: var(--accent); transform: translateY(-2px); }
 .mc-type.active { border-color: var(--accent); background: var(--grad-soft); box-shadow: 0 4px 14px rgba(124,108,245,.25); }
-.mc-type-ico { font-size: 24px; }
+.mc-type-ico { font-size: 24px; line-height: 0; }
+.mc-type-ico .ic { width: 24px; height: 24px; }
 .mc-type-label { font-size: 12px; font-weight: 600; text-align: center; }
+
+/* ═══ Inline icons (replace emojis) ═══ */
+.ic { width: 1.05em; height: 1.05em; display: inline-block; vertical-align: -0.16em; flex-shrink: 0; }
+button .ic, .btn .ic, .apps-tab .ic, .mc-act .ic, .cmd-cat-btn .ic { margin-right: 6px; vertical-align: -0.18em; }
+.sdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: 0.04em; flex-shrink: 0; }
+.save-status .ic { width: 1em; height: 1em; }
+/* Larger static icons (overview, mobile toggle) */
+.stat-ico { line-height: 0; }
+.stat-ico .ic { width: 30px; height: 30px; margin: 0; }
+.ov-q-ico { line-height: 0; }
+.ov-q-ico .ic { width: 20px; height: 20px; margin: 0; }
+.sidebar-toggle .ic { width: 20px; height: 20px; }
+.cmd-stats .ic { vertical-align: -0.18em; }
 
 /* ═══ Overview redesign ═══ */
 .ov-hero {
