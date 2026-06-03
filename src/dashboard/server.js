@@ -25,6 +25,20 @@ const {
   QUESTION_TYPES: APP_QUESTION_TYPES, STATUSES: APP_STATUSES, STATUS_META: APP_STATUS_META,
   ROLE_STATUSES: APP_ROLE_STATUSES, BUTTON_STYLES: APP_BUTTON_STYLES, DEFAULT_PANEL: APP_DEFAULT_PANEL
 } = require('../applications/config');
+const mcService = require('../membercounter/service');
+const { COUNTER_TYPES: MC_COUNTER_TYPES } = require('../membercounter/config');
+
+// Current live value for each counter type, so the dashboard can show a preview.
+function mcPreview(guild) {
+  return {
+    all:      guild.memberCount,
+    boosters: guild.premiumSubscriptionCount || 0,
+    channels: guild.channels.cache.size,
+    roles:    Math.max(0, guild.roles.cache.size - 1),
+    humans:   guild.members.cache.filter(m => !m.user.bot).size,
+    bots:     guild.members.cache.filter(m => m.user.bot).size
+  };
+}
 const logger = require('../utils/logger');
 const oauthClient = require('./auth');
 const { requireAuth, requireOwner, requireGuildAccess, clientIp } = require('./middleware');
@@ -199,6 +213,11 @@ module.exports = function startDashboard(client) {
       .map(c => ({ id: c.id, name: c.name, category: c.parent?.name || null }))
       .sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name));
 
+    const voiceChannels = guild.channels.cache
+      .filter(c => c.type === 2)
+      .map(c => ({ id: c.id, name: c.name, category: c.parent?.name || null }))
+      .sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name));
+
     const categories = guild.channels.cache
       .filter(c => c.type === 4)
       .map(c => ({ id: c.id, name: c.name }))
@@ -209,7 +228,7 @@ module.exports = function startDashboard(client) {
       .map(r => ({ id: r.id, name: r.name }))
       .sort((a, b) => b.rawPosition - a.rawPosition);
 
-    res.json({ id: guild.id, name: guild.name, textChannels, categories, roles });
+    res.json({ id: guild.id, name: guild.name, textChannels, voiceChannels, categories, roles });
   });
 
   // ── Log channels ───────────────────────────────
@@ -750,6 +769,48 @@ module.exports = function startDashboard(client) {
     const app2 = client.applications.getApplication(req.params.id, req.params.appId);
     if (!app2) return res.status(404).json({ error: 'Application not found' });
     res.json(app2);
+  });
+
+  // ── Member Counters ───────────────────────────
+  app.get('/api/guild/:id/membercounters', requireAuth, guildGuard, (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    res.json({
+      counters: client.memberCounters.list(req.params.id),
+      meta: { types: MC_COUNTER_TYPES },
+      // Live values so the dashboard can preview the current count per type.
+      preview: guild ? mcPreview(guild) : null
+    });
+  });
+
+  app.post('/api/guild/:id/membercounters', requireAuth, guildGuard, (req, res) => {
+    const counter = client.memberCounters.create(req.params.id, req.body || {});
+    if (!counter) return res.status(400).json({ error: 'Invalid counter — pick a channel and (for role counters) a role.' });
+    mcService.updateGuild(client, req.params.id, { force: true }).catch(() => {});
+    res.json({ success: true, counter });
+  });
+
+  app.put('/api/guild/:id/membercounters/order', requireAuth, guildGuard, (req, res) => {
+    const order = Array.isArray(req.body?.order) ? req.body.order.filter(x => typeof x === 'string') : [];
+    res.json({ success: true, counters: client.memberCounters.reorder(req.params.id, order) });
+  });
+
+  app.put('/api/guild/:id/membercounters/:counterId', requireAuth, guildGuard, (req, res) => {
+    const counter = client.memberCounters.update(req.params.id, req.params.counterId, req.body || {});
+    if (!counter) return res.status(404).json({ error: 'Counter not found or invalid.' });
+    mcService.updateGuild(client, req.params.id, { force: true }).catch(() => {});
+    res.json({ success: true, counter });
+  });
+
+  app.delete('/api/guild/:id/membercounters/:counterId', requireAuth, guildGuard, (req, res) => {
+    if (!client.memberCounters.delete(req.params.id, req.params.counterId))
+      return res.status(404).json({ error: 'Counter not found' });
+    res.json({ success: true });
+  });
+
+  // Force an immediate refresh of all counter channels (bypasses the cooldown).
+  app.post('/api/guild/:id/membercounters/refresh', requireAuth, guildGuard, async (req, res) => {
+    await mcService.updateGuild(client, req.params.id, { force: true }).catch(() => {});
+    res.json({ success: true });
   });
 
   const server = http.createServer(app);

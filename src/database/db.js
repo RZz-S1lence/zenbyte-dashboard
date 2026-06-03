@@ -68,6 +68,28 @@ const MIGRATIONS = [
         CREATE INDEX idx_actions_app ON application_actions (application_id, created_at);
       `);
     }
+  },
+  {
+    id: '002_member_counters',
+    up: d => {
+      d.exec(`
+        CREATE TABLE member_counters (
+          id          TEXT PRIMARY KEY,
+          guild_id    TEXT NOT NULL,
+          channel_id  TEXT NOT NULL,
+          type        TEXT NOT NULL,
+          template    TEXT NOT NULL,
+          role_id     TEXT,
+          enabled     INTEGER NOT NULL DEFAULT 1,
+          position    INTEGER NOT NULL DEFAULT 0,
+          last_value  INTEGER,
+          last_edit   INTEGER,
+          created_at  INTEGER NOT NULL,
+          updated_at  INTEGER NOT NULL
+        );
+        CREATE INDEX idx_counters_guild ON member_counters (guild_id, position);
+      `);
+    }
   }
 ];
 

@@ -91,6 +91,9 @@
       <div class="nav-section">Applications</div>
       <a class="nav-item" data-page="applications" onclick="goto('applications')"><span class="icon">📝</span> Applications</a>
 
+      <div class="nav-section">Server</div>
+      <a class="nav-item" data-page="membercounters" onclick="goto('membercounters')"><span class="icon">🔢</span> Member Counters</a>
+
       <div class="nav-section">Roles</div>
       <a class="nav-item" data-page="autorole" onclick="goto('autorole')"><span class="icon">🎭</span> Autoroles</a>
       <a class="nav-item" data-page="reactionroles" onclick="goto('reactionroles')"><span class="icon">😀</span> Reaction Roles</a>
@@ -185,6 +188,16 @@
         <button class="apps-modal-close" onclick="closeAppsModal()" aria-label="Close">✕</button>
         <div id="apps-modal-content"></div>
       </div>
+    </div>
+
+    <!-- ─── MEMBER COUNTERS ─── -->
+    <div id="page-membercounters" class="page">
+      <div class="page-header">
+        <h2>Member Counters</h2>
+        <p>Show live server stats as auto-updating channel names. Discord limits renames, so counters refresh every few minutes.</p>
+      </div>
+      <div id="mc-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="mc-body" class="hidden"></div>
     </div>
 
     <!-- ─── SETTINGS ─── -->

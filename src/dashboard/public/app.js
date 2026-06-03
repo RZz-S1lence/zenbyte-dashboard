@@ -38,7 +38,11 @@ const state = {
   appsTabCur:  'forms',// active Applications sub-tab
   appsSubs:    [],     // loaded submissions
   appsCounts:  {},     // submission counts by status
-  appsFilter:  { status: '', formId: '', search: '' }
+  appsFilter:  { status: '', formId: '', search: '' },
+  // Member counters
+  mcCounters:  [],     // counter list for the selected guild
+  mcTypes:     [],      // counter type metadata
+  mcPreview:   null    // live current values per type
 };
 
 // ── Boot ─────────────────────────────────────────
@@ -128,6 +132,7 @@ function goto(page) {
   if (page === 'polls'       && state.guildId) loadPolls();
   if (page === 'social'      && state.guildId) loadSocial();
   if (page === 'applications' && state.guildId) loadApplications();
+  if (page === 'membercounters' && state.guildId) loadMemberCounters();
   if (page === 'autorole'    && state.guildId) loadAutorole();
   if (page === 'reactionroles' && state.guildId) loadReactionRoles();
   if (page === 'activity'    && state.guildId) loadActivity();
@@ -376,6 +381,7 @@ async function selectGuild(id) {
   if (activePage === 'reactionroles') await loadReactionRoles();
   if (activePage === 'social')      await loadSocial();
   if (activePage === 'applications') await loadApplications();
+  if (activePage === 'membercounters') await loadMemberCounters();
   if (activePage === 'transcripts') await loadTranscripts();
 }
 
@@ -2729,4 +2735,167 @@ async function appsPostPanel() {
     state.appsConfig = r.config;
     setStatus(msg, 'ok', '✅ Panel posted!');
   } catch (e) { setStatus(msg, 'err', '❌ ' + e.message); }
+}
+
+// ═══════════════════════════════════════
+//  MEMBER COUNTERS
+// ═══════════════════════════════════════
+let mcEditingId = null;
+
+async function loadMemberCounters() {
+  hide('mc-body');
+  if (!state.guildId) { show('mc-no-guild'); return; }
+  hide('mc-no-guild');
+  await ensureGuildData();
+  try {
+    const data = await api('GET', `/api/guild/${state.guildId}/membercounters`);
+    state.mcCounters = data.counters || [];
+    state.mcTypes    = data.meta?.types || [];
+    state.mcPreview  = data.preview || {};
+  } catch { state.mcCounters = []; }
+  show('mc-body');
+  renderMemberCounters();
+}
+
+function mcChannelOptions(selected) {
+  const gd = state.guildData || {};
+  const grp = (label, arr, prefix) => (arr && arr.length)
+    ? `<optgroup label="${label}">` + arr.map(c => `<option value="${c.id}"${c.id === selected ? ' selected' : ''}>${prefix}${esc(c.name)}</option>`).join('') + '</optgroup>' : '';
+  return `<option value="">Select a channel…</option>`
+    + grp('Voice channels', gd.voiceChannels, '🔊 ')
+    + grp('Categories', gd.categories, '📁 ')
+    + grp('Text channels', gd.textChannels, '# ');
+}
+function mcTypeOptions(selected) {
+  return state.mcTypes.map(t => `<option value="${t.key}"${t.key === selected ? ' selected' : ''}>${esc(t.label)}</option>`).join('');
+}
+function mcRoleOptions(selected) {
+  return `<option value="">Select a role…</option>` +
+    (state.guildData?.roles || []).map(r => `<option value="${r.id}"${r.id === selected ? ' selected' : ''}>@${esc(r.name)}</option>`).join('');
+}
+function mcChannelName(id) {
+  const gd = state.guildData || {};
+  const all = [
+    ...(gd.voiceChannels || []).map(c => ['🔊 ' + c.name, c.id]),
+    ...(gd.categories || []).map(c => ['📁 ' + c.name, c.id]),
+    ...(gd.textChannels || []).map(c => ['# ' + c.name, c.id])
+  ];
+  const f = all.find(x => x[1] === id);
+  return f ? f[0] : '⚠️ deleted channel';
+}
+function mcLiveValue(c) {
+  const p = state.mcPreview || {};
+  if (c.type in p && p[c.type] != null) return Number(p[c.type]).toLocaleString();
+  if (c.lastValue != null) return Number(c.lastValue).toLocaleString();
+  return null;
+}
+
+function mcEditorCard() {
+  const c = mcEditingId ? state.mcCounters.find(x => x.id === mcEditingId) : null;
+  const type = c?.type || (state.mcTypes[0]?.key || 'all');
+  const meta = state.mcTypes.find(t => t.key === type) || {};
+  return `
+    <div class="card">
+      <h3>${c ? '✏️ Edit Counter' : '➕ Add a Counter'}</h3>
+      <div class="card-grid">
+        <div class="form-row"><label>Channel</label><select id="mc-f-channel">${mcChannelOptions(c?.channelId)}</select>
+          <span class="hint">A voice channel or category looks best. I need <strong>Manage Channels</strong> on it.</span></div>
+        <div class="form-row"><label>Counter Type</label><select id="mc-f-type" onchange="mcTypeChanged()">${mcTypeOptions(type)}</select></div>
+        <div class="form-row${meta.needsRole ? '' : ' hidden'}" id="mc-f-role-row"><label>Role</label><select id="mc-f-role">${mcRoleOptions(c?.roleId)}</select></div>
+      </div>
+      <div class="form-row"><label>Channel Name Template</label>
+        <input id="mc-f-template" maxlength="100" value="${esc(c?.template || '')}" placeholder="${esc(meta.defaultTemplate || '{count}')}">
+        <span class="hint">Placeholders: <code>{count}</code>, <code>{role}</code>, <code>{server}</code>. <span id="mc-f-preview"></span></span></div>
+      <div class="form-row"><label class="cmd-switch"><input type="checkbox" id="mc-f-enabled" ${c ? (c.enabled ? 'checked' : '') : 'checked'}><span class="cmd-slider"></span></label> <span style="margin-left:8px">Enabled</span></div>
+      <div class="save-bar">
+        <button class="btn btn-primary" onclick="mcSave()">${c ? 'Save Changes' : 'Add Counter'}</button>
+        ${c ? `<button class="btn btn-secondary" onclick="mcCancelEdit()">Cancel</button>` : ''}
+        <span id="mc-editor-msg" class="save-status"></span>
+      </div>
+    </div>`;
+}
+
+function mcListHtml() {
+  if (!state.mcCounters.length)
+    return `<div class="card"><p class="hint">No counters yet — add one above. Channels update automatically every few minutes and on member join/leave.</p></div>`;
+  const rows = state.mcCounters.map(c => {
+    const meta = state.mcTypes.find(t => t.key === c.type) || {};
+    const live = mcLiveValue(c);
+    return `<div class="apps-form-row">
+      <div class="apps-form-info">
+        <div class="apps-form-name">${esc(mcChannelName(c.channelId))} ${c.enabled ? '<span class="badge badge-low">Enabled</span>' : '<span class="badge">Disabled</span>'}</div>
+        <div class="hint">${esc(meta.label || c.type)} · <code>${esc(c.template)}</code>${live !== null ? ` · now: <strong>${live}</strong>` : ''}</div>
+      </div>
+      <div class="apps-form-actions">
+        <button class="btn btn-secondary" onclick="mcToggle('${esc(c.id)}',${c.enabled ? 'false' : 'true'})">${c.enabled ? 'Disable' : 'Enable'}</button>
+        <button class="btn btn-secondary" onclick="mcEdit('${esc(c.id)}')">Edit</button>
+        <button class="btn btn-secondary" onclick="mcDelete('${esc(c.id)}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="card">
+    <h3>Your Counters</h3>
+    <div class="apps-form-list">${rows}</div>
+    <div style="margin-top:14px"><button class="btn btn-secondary" onclick="mcRefresh()">🔄 Refresh now</button>
+      <span id="mc-list-msg" class="save-status"></span></div>
+  </div>`;
+}
+
+function renderMemberCounters() {
+  document.getElementById('mc-body').innerHTML = mcEditorCard() + mcListHtml();
+  mcTypeChanged();
+}
+
+function mcTypeChanged() {
+  const sel = document.getElementById('mc-f-type');
+  if (!sel) return;
+  const meta = state.mcTypes.find(t => t.key === sel.value) || {};
+  document.getElementById('mc-f-role-row').classList.toggle('hidden', !meta.needsRole);
+  const tpl = document.getElementById('mc-f-template');
+  if (tpl) tpl.placeholder = meta.defaultTemplate || '{count}';
+  const prev = document.getElementById('mc-f-preview');
+  if (prev) {
+    const v = (state.mcPreview || {})[sel.value];
+    prev.textContent = (v !== undefined && v !== null) ? `Current value: ${Number(v).toLocaleString()}`
+      : (meta.needsRole ? 'Current value depends on the chosen role.' : '');
+  }
+}
+
+async function mcSave() {
+  const msg = document.getElementById('mc-editor-msg');
+  const roleEl = document.getElementById('mc-f-role');
+  const payload = {
+    channelId: document.getElementById('mc-f-channel').value || null,
+    type:      document.getElementById('mc-f-type').value,
+    roleId:    roleEl ? (roleEl.value || null) : null,
+    template:  document.getElementById('mc-f-template').value,
+    enabled:   document.getElementById('mc-f-enabled').checked
+  };
+  if (!payload.channelId) return setStatus(msg, 'err', '❌ Pick a channel.');
+  const meta = state.mcTypes.find(t => t.key === payload.type) || {};
+  if (meta.needsRole && !payload.roleId) return setStatus(msg, 'err', '❌ Pick a role for this counter type.');
+  try {
+    if (mcEditingId) await api('PUT', `/api/guild/${state.guildId}/membercounters/${mcEditingId}`, payload);
+    else await api('POST', `/api/guild/${state.guildId}/membercounters`, payload);
+    mcEditingId = null;
+    await loadMemberCounters();
+  } catch (e) { setStatus(msg, 'err', '❌ ' + e.message); }
+}
+
+function mcEdit(id) { mcEditingId = id; renderMemberCounters(); document.getElementById('mc-body').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+function mcCancelEdit() { mcEditingId = null; renderMemberCounters(); }
+
+async function mcToggle(id, enable) {
+  try { await api('PUT', `/api/guild/${state.guildId}/membercounters/${id}`, { enabled: enable }); await loadMemberCounters(); }
+  catch (e) { alert(e.message); }
+}
+async function mcDelete(id) {
+  if (!confirm('Delete this counter? The channel stays — it just stops auto-updating.')) return;
+  try { await api('DELETE', `/api/guild/${state.guildId}/membercounters/${id}`); await loadMemberCounters(); }
+  catch (e) { alert(e.message); }
+}
+async function mcRefresh() {
+  const msg = document.getElementById('mc-list-msg');
+  try { await api('POST', `/api/guild/${state.guildId}/membercounters/refresh`, {}); setStatus(msg, 'ok', '✅ Refreshing channels now (Discord may delay renames).'); }
+  catch (e) { setStatus(msg, 'err', '❌ ' + e.message); }
 }

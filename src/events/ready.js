@@ -6,6 +6,7 @@ const leveling = require('../leveling/service');
 const activity = require('../activity/service');
 const polls = require('../polls/service');
 const social = require('../social/service');
+const memberCounter = require('../membercounter/service');
 const ticketHandler = require('../handlers/tickets');
 const logger = require('../utils/logger');
 
@@ -40,6 +41,9 @@ module.exports = {
     const socialTimer = setInterval(() => social.sweep(client).catch(() => {}), 180000);
     socialTimer.unref?.();
     setTimeout(() => social.sweep(client).catch(() => {}), 15000);
+
+    // Live member counters: warm-up pass + periodic refresh (rate-limit aware).
+    memberCounter.start(client);
 
     const tempFile = path.join(ROOT, 'restart-data.json');
     if (!fs.existsSync(tempFile)) return;

@@ -9,6 +9,7 @@ const CATEGORIES = [
   { key: 'Moderation', emoji: '🛡️', blurb: 'Warn, ban, mute and keep your server in order.' },
   { key: 'Security',   emoji: '🔐', blurb: 'Anti-nuke, verification and alt detection.' },
   { key: 'Config',     emoji: '🔧', blurb: 'Set up logging, tickets and moderators.' },
+  { key: 'Applications', emoji: '📝', blurb: 'Member application forms and staff review.' },
   { key: 'Leveling',   emoji: '📈', blurb: 'XP, levels and rank cards.' },
   { key: 'Activity',   emoji: '📊', blurb: 'Track member activity and view leaderboards.' },
   { key: 'Trust',      emoji: '🤝', blurb: 'Member trust scoring and leaderboards.' },

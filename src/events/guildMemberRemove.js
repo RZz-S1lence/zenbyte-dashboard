@@ -2,10 +2,12 @@ const { Events, AuditLogEvent } = require('discord.js');
 const { sendLog, getAuditLogExecutor } = require('../utils/audit');
 const antinuke = require('../security/antinuke');
 const ticketHandler = require('../handlers/tickets');
+const memberCounter = require('../membercounter/service');
 
 module.exports = {
   name: Events.GuildMemberRemove,
   async execute(client, member) {
+    memberCounter.scheduleGuildUpdate(client, member.guild.id);
     await ticketHandler.handleMemberLeave(client, member).catch(() => {});
 
     const kicker = await getAuditLogExecutor(member.guild, AuditLogEvent.MemberKick, member.id);

@@ -4,10 +4,12 @@ const altdetect = require('../altdetect/service');
 const antinuke = require('../security/antinuke');
 const leveling = require('../leveling/service');
 const autorole = require('../autorole/service');
+const memberCounter = require('../membercounter/service');
 
 module.exports = {
   name: Events.GuildMemberAdd,
   async execute(client, member) {
+    memberCounter.scheduleGuildUpdate(client, member.guild.id);
     if (member.user.bot) {
       const adder = await getAuditLogExecutor(member.guild, AuditLogEvent.BotAdd, member.id);
       if (adder) await antinuke.track(client, member.guild, 'botAdd', adder);
