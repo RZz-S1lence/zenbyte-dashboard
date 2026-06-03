@@ -2,6 +2,8 @@ const { SlashCommandBuilder, PermissionFlagsBits, ChannelType } = require('disco
 const embeds = require('../../utils/embeds');
 const reactionService = require('../../reactionrole/service');
 const { MODES, MODE_VALUES, parseEmoji } = require('../../reactionrole/config');
+const { isPremium, limitFor } = require('../../premium');
+const { upgradeReply } = require('../../premium/messages');
 
 const MODE_CHOICES = MODES.map(m => ({ name: m.value, value: m.value }));
 
@@ -58,6 +60,12 @@ module.exports = {
       });
     }
 
+    // Creating a new panel (managed or attached) counts against the panel limit.
+    if (sub === 'create' || sub === 'attach') {
+      if (!await isPremium(guild.id) && client.reactionroles.listMenus(guild.id).length >= limitFor('reactionPanels', false))
+        return interaction.reply(upgradeReply('reactionPanels'));
+    }
+
     if (sub === 'create') {
       const channel = interaction.options.getChannel('channel');
       const menu = client.reactionroles.createMenu(guild.id, {
@@ -111,8 +119,12 @@ module.exports = {
       const me = guild.members.me;
       if (me && role.position >= me.roles.highest.position)
         return interaction.reply({ embeds: [embeds.error(`${role} is above my top role. Move my role higher so I can assign it.`)], ephemeral: true });
-      if (menu.mappings.length >= 20)
-        return interaction.reply({ embeds: [embeds.error('A panel can hold at most 20 emoji→role pairs.')], ephemeral: true });
+      const prem = await isPremium(guild.id);
+      const mapCap = limitFor('reactionMappings', prem);
+      if (menu.mappings.length >= mapCap)
+        return interaction.reply(prem
+          ? { embeds: [embeds.error(`A panel can hold at most ${mapCap} emoji→role pairs.`)], ephemeral: true }
+          : upgradeReply('reactionMappings'));
       if (menu.mappings.some(m => (parsed.id ? m.id === parsed.id : m.name === parsed.name)))
         return interaction.reply({ embeds: [embeds.warn('That emoji is already used on this panel.')], ephemeral: true });
 

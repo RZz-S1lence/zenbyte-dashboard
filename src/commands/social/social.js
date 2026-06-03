@@ -2,6 +2,8 @@ const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const embeds = require('../../utils/embeds');
 const social = require('../../social/service');
 const { PROVIDERS, BY_ID } = require('../../social/providers');
+const { isPremium, limitFor } = require('../../premium');
+const { upgradeReply } = require('../../premium/messages');
 
 const platformChoices = PROVIDERS.map(p => ({ name: p.label, value: p.id }));
 const platformOption = o => o.setName('platform').setDescription('Which platform').setRequired(true).addChoices(...platformChoices);
@@ -33,6 +35,11 @@ module.exports = {
 
     if (sub === 'add') {
       const platform = interaction.options.getString('platform');
+      // Free servers are capped on total followed creators across all platforms.
+      const cfg = client.social.getConfig(interaction.guildId);
+      const total = Object.values(cfg.platforms).reduce((n, p) => n + (p.creators?.length || 0), 0);
+      if (!await isPremium(interaction.guildId) && total >= limitFor('socialCreators', false))
+        return interaction.reply(upgradeReply('socialCreators'));
       const res = await social.addCreator(client, interaction.guildId, platform, interaction.options.getString('account'));
       if (res.error) return interaction.reply({ embeds: [embeds.error(res.error)], ephemeral: true });
       const pc = client.social.getConfig(interaction.guildId).platforms[platform];

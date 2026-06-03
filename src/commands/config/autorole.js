@@ -1,5 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const embeds = require('../../utils/embeds');
+const { isPremium, limitFor } = require('../../premium');
+const { upgradeReply } = require('../../premium/messages');
 
 function roleList(guild, ids) {
   if (!ids.length) return '*None*';
@@ -65,6 +67,11 @@ module.exports = {
         return interaction.reply({ embeds: [embeds.error(`${role} is above my top role, so I can't assign it. Move my role higher.`)], ephemeral: true });
       if (config[key].includes(role.id))
         return interaction.reply({ embeds: [embeds.warn(`${role} is already in the ${forBots ? 'bot' : 'people'} list.`)], ephemeral: true });
+
+      // Free servers are capped on total autorole roles (people + bots combined).
+      const total = config.roleIds.length + config.botRoleIds.length;
+      if (!await isPremium(guild.id) && total >= limitFor('autoroleRoles', false))
+        return interaction.reply(upgradeReply('autoroleRoles'));
 
       const updated = { ...config, enabled: true, [key]: [...config[key], role.id] };
       client.autoroles.setConfig(guild.id, updated);

@@ -11,6 +11,7 @@ const { AutoRoleStore } = require('../autorole/store');
 const { ReactionRoleStore } = require('../reactionrole/store');
 const { ApplicationStore } = require('../applications/store');
 const { MemberCounterStore } = require('../membercounter/store');
+const { getPremiumStore } = require('../premium');
 const loadCommands = require('./loadCommands');
 const loadEvents = require('./loadEvents');
 const logger = require('../utils/logger');
@@ -34,6 +35,7 @@ class ExtendedClient extends Client {
     this.reactionroles = new ReactionRoleStore();
     this.applications  = new ApplicationStore();
     this.memberCounters = new MemberCounterStore();
+    this.premium        = getPremiumStore();
 
     // Backwards-compatible aliases so the dashboard layer can read/write through
     // the same store instance without holding its own copy.

@@ -195,6 +195,7 @@ function goto(page) {
   document.querySelector(`[data-page="${page}"]`).classList.add('active');
 
   if (page === 'overview')    loadStatus();
+  if (page === 'premium')     loadPremium();
   if (page === 'settings'    && state.guildId) loadSettings();
   if (page === 'commands')    loadCommands();
   if (page === 'logs'        && state.guildId) loadLogConfig();
@@ -3101,4 +3102,113 @@ async function mcRefresh() {
   const msg = document.getElementById('mc-list-msg');
   try { await api('POST', `/api/guild/${state.guildId}/membercounters/refresh`, {}); setStatus(msg, 'ok', '✅ Refreshing channels now (Discord may delay renames).'); }
   catch (e) { setStatus(msg, 'err', '❌ ' + e.message); }
+}
+
+// ═══════════════════════════════════════
+//  PREMIUM
+// ═══════════════════════════════════════
+let _premium = null;
+
+async function loadPremium() {
+  const body = document.getElementById('premium-body');
+  body.innerHTML = '<p class="muted">Loading…</p>';
+  try {
+    _premium = await api('GET', '/api/premium');
+    renderPremium();
+  } catch (e) {
+    body.innerHTML = `<p class="premium-err">${esc(e.message)}</p>`;
+  }
+}
+
+function premiumTierLabel(p) {
+  if (p.lifetime) return 'Lifetime';
+  const map = { pro: 'Pro', max: 'Max', complimentary: 'Complimentary' };
+  return map[p.tier] || (p.tier ? p.tier : 'Free');
+}
+
+function renderPremium() {
+  const p = _premium;
+  const body = document.getElementById('premium-body');
+
+  // Inactive (free) state — show plans + upgrade CTA.
+  if (!p.active) {
+    const pr = p.pricing || {};
+    body.innerHTML = `
+      <div class="premium-card premium-free">
+        <div class="premium-status"><span class="sdot" style="background:var(--muted)"></span> You're on the <strong>Free</strong> plan.</div>
+        <p class="muted">Upgrade to raise limits across polls, reaction roles, autoroles, social alerts, leveling rewards, member counters and applications — and unlock more across every server you manage.</p>
+        <div class="premium-plans">
+          <div class="premium-plan"><h4>Pro</h4><div class="premium-price">${pr.pro ? pr.pro.monthly + '/mo' : '€4.99/mo'}</div><div class="muted">1 server slot</div></div>
+          <div class="premium-plan"><h4>Max</h4><div class="premium-price">${pr.max ? pr.max.monthly + '/mo' : '€9.99/mo'}</div><div class="muted">3 server slots</div></div>
+          <div class="premium-plan"><h4>Lifetime</h4><div class="premium-price">${pr.lifetime ? pr.lifetime.oneTime : '€89.99'}</div><div class="muted">1 slot, forever</div></div>
+        </div>
+        <a class="btn btn-primary" href="${esc(p.upgradeUrl || '#')}" target="_blank" rel="noopener">${svg('gem')} Upgrade to Premium</a>
+      </div>`;
+    hydrateIcons(body);
+    return;
+  }
+
+  const assignedIds = new Set(p.assigned.map(g => g.id));
+  const free = Math.max(0, p.slotsTotal - p.slotsUsed);
+  const expiry = p.lifetime
+    ? 'Never (lifetime)'
+    : (p.expiresAt ? new Date(p.expiresAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '—');
+
+  const assignedRows = p.assigned.length
+    ? p.assigned.map(g => `
+        <div class="premium-server">
+          <span class="premium-server-name">${g.icon ? `<img src="${esc(g.icon)}" class="premium-server-ico">` : ''}${esc(g.name)}</span>
+          <button class="btn btn-secondary btn-sm" onclick="premiumUnassign('${g.id}')">${svg('x')} Remove</button>
+        </div>`).join('')
+    : '<p class="muted">No servers activated yet. Assign one below.</p>';
+
+  // Servers the user manages that aren't already using one of their slots.
+  const candidates = (p.assignable || []).filter(g => !assignedIds.has(g.id));
+  const assignControl = free > 0
+    ? (candidates.length
+        ? `<div class="premium-assign">
+             <select id="premium-assign-select">
+               ${candidates.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('')}
+             </select>
+             <button class="btn btn-primary btn-sm" onclick="premiumAssign()">${svg('plus')} Activate</button>
+           </div>`
+        : '<p class="muted">Every server you manage is already activated.</p>')
+    : '<p class="muted">All your slots are in use. Remove a server to free one up.</p>';
+
+  body.innerHTML = `
+    <div class="premium-card">
+      <div class="premium-head">
+        <div class="premium-status"><span class="sdot" style="background:var(--green)"></span> <strong>${premiumTierLabel(p)}</strong> · Active</div>
+        <div class="premium-slots">Slots: <strong>${p.slotsUsed} / ${p.slotsTotal}</strong> used</div>
+      </div>
+      <div class="muted premium-expiry">Renews / expires: ${esc(expiry)}</div>
+    </div>
+
+    <div class="premium-card">
+      <h3>Activated servers</h3>
+      <p class="muted">Premium features apply to the servers you activate here, using your ${p.slotsTotal} slot${p.slotsTotal === 1 ? '' : 's'}.</p>
+      <div class="premium-servers">${assignedRows}</div>
+      <hr class="premium-hr">
+      ${assignControl}
+    </div>`;
+  hydrateIcons(body);
+}
+
+async function premiumAssign() {
+  const sel = document.getElementById('premium-assign-select');
+  if (!sel || !sel.value) return;
+  try {
+    const r = await api('POST', '/api/premium/assign', { guildId: sel.value });
+    _premium = r.status;
+    renderPremium();
+  } catch (e) { alert(e.message); }
+}
+
+async function premiumUnassign(guildId) {
+  if (!confirm('Remove premium from this server? Its limits drop back to the free tier.')) return;
+  try {
+    const r = await api('POST', '/api/premium/unassign', { guildId });
+    _premium = r.status;
+    renderPremium();
+  } catch (e) { alert(e.message); }
 }

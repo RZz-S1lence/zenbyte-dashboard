@@ -27,6 +27,10 @@ const {
 } = require('../applications/config');
 const mcService = require('../membercounter/service');
 const { COUNTER_TYPES: MC_COUNTER_TYPES } = require('../membercounter/config');
+const { registerLemonSqueezyWebhook } = require('./webhooks/lemonsqueezy');
+const { getPremiumStore } = require('../premium');
+const { upgradeError, UPGRADE_URL } = require('../premium/messages');
+const { LIMITS, limitFor } = require('../premium/limits');
 
 // Current live value for each counter type, so the dashboard can show a preview.
 function mcPreview(guild) {
@@ -84,6 +88,10 @@ module.exports = function startDashboard(client) {
   // Security headers. CSP is left off because the dashboard relies on inline
   // handlers, inline styles and same-origin socket.io; the other headers still apply.
   app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+
+  // Lemon Squeezy webhook must read the RAW body to verify its signature, so it
+  // is registered before the global JSON body parser below.
+  registerLemonSqueezyWebhook(app);
 
   app.use(express.json({ limit: '1mb' }));
   app.use(express.static(path.join(__dirname, 'public')));
@@ -205,6 +213,68 @@ module.exports = function startDashboard(client) {
   // ── Guilds ─────────────────────────────────────
   app.get('/api/guilds', requireAuth, async (req, res) => {
     res.json(await oauthClient.listAccessibleGuilds(client, req.session));
+  });
+
+  // ── Premium (per-user; manage which servers use the account's slots) ──
+  const premiumStore = getPremiumStore();
+
+  // Effective cap for a gated feature in a guild (free vs premium).
+  const guildLimit = (guildId, feature) => limitFor(feature, premiumStore.isGuildPremium(guildId));
+
+  function premiumStatus(userId, accessible) {
+    const u = premiumStore.getUser(userId);
+    const assignedRows = premiumStore.listServers(userId);
+    const assigned = assignedRows.map(r => {
+      const g = client.guilds.cache.get(r.guild_id);
+      return { id: r.guild_id, name: g?.name || r.guild_id, icon: g?.iconURL?.({ size: 128 }) || null, assignedAt: r.assigned_at };
+    });
+    return {
+      active:     premiumStore.isUserActive(u),
+      tier:       u?.premium_tier || null,
+      source:     u?.premium_source || null,
+      lifetime:   !!u?.lifetime,
+      expiresAt:  u?.expires_at || null,
+      slotsTotal: premiumStore.slotCapacity(u),
+      slotsUsed:  assignedRows.length,
+      assigned,
+      assignable: accessible,
+      limits:     LIMITS,
+      upgradeUrl: UPGRADE_URL,
+      pricing:    require('../premium/tiers').PRICING
+    };
+  }
+
+  app.get('/api/premium', requireAuth, async (req, res) => {
+    const accessible = await oauthClient.listAccessibleGuilds(client, req.session);
+    res.json(premiumStatus(req.session.userId, accessible));
+  });
+
+  app.post('/api/premium/assign', requireAuth, async (req, res) => {
+    const guildId = String(req.body?.guildId || '');
+    if (!/^\d{16,20}$/.test(guildId)) return res.status(400).json({ error: 'Invalid server.' });
+    // The user must actually administer that server (and the bot must be in it).
+    if (!await oauthClient.assertGuildAccess(client, req.session, guildId, { fresh: true }))
+      return res.status(403).json({ error: 'You do not have access to that server.' });
+
+    const result = premiumStore.assignServer(req.session.userId, guildId);
+    if (result.error) {
+      const map = {
+        'no-active-premium': [403, 'You do not have active premium.'],
+        'guild-taken':       [409, 'That server already has a premium slot assigned.'],
+        'no-slots-free':     [400, 'All of your premium slots are in use. Unassign a server first.']
+      };
+      const [code, msg] = map[result.error] || [400, 'Could not assign premium.'];
+      return res.status(code).json({ error: msg });
+    }
+    const accessible = await oauthClient.listAccessibleGuilds(client, req.session);
+    res.json({ success: true, status: premiumStatus(req.session.userId, accessible) });
+  });
+
+  app.post('/api/premium/unassign', requireAuth, async (req, res) => {
+    const guildId = String(req.body?.guildId || '');
+    premiumStore.unassignServer(req.session.userId, guildId);
+    const accessible = await oauthClient.listAccessibleGuilds(client, req.session);
+    res.json({ success: true, status: premiumStatus(req.session.userId, accessible) });
   });
 
   app.get('/api/guild/:id', requireAuth, guildGuard, (req, res) => {
@@ -358,6 +428,11 @@ module.exports = function startDashboard(client) {
     const b = req.body || {};
     if (!guild.channels.cache.get(b.channelId)) return res.status(400).json({ error: 'Pick a valid channel.' });
 
+    if (client.reactionroles.listMenus(guild.id).length >= guildLimit(guild.id, 'reactionPanels'))
+      return res.status(403).json(upgradeError('reactionPanels'));
+    if (buildMappings(b.mappings).length > guildLimit(guild.id, 'reactionMappings'))
+      return res.status(403).json(upgradeError('reactionMappings'));
+
     const managed = b.managed !== false;
     if (!managed) {
       if (!/^\d{16,20}$/.test(b.messageId || '')) return res.status(400).json({ error: 'Provide the existing message ID.' });
@@ -382,6 +457,8 @@ module.exports = function startDashboard(client) {
     const existing = client.reactionroles.getMenu(guild.id, req.params.menuId);
     if (!existing) return res.status(404).json({ error: 'Panel not found' });
     const b = req.body || {};
+    if (buildMappings(b.mappings).length > guildLimit(guild.id, 'reactionMappings'))
+      return res.status(403).json(upgradeError('reactionMappings'));
 
     const menu = client.reactionroles.updateMenu(guild.id, req.params.menuId, {
       mode: b.mode, embed: b.embed, title: b.title, description: b.description, color: b.color,
@@ -463,6 +540,9 @@ module.exports = function startDashboard(client) {
   });
 
   app.put('/api/guild/:id/leveling', requireAuth, guildGuard, (req, res) => {
+    const rewards = Array.isArray(req.body?.roleRewards) ? req.body.roleRewards : null;
+    if (rewards && rewards.length > guildLimit(req.params.id, 'levelingRewards'))
+      return res.status(403).json(upgradeError('levelingRewards'));
     const config = client.levels.setConfig(req.params.id, req.body || {});
     res.json({ success: true, config });
   });
@@ -594,6 +674,10 @@ module.exports = function startDashboard(client) {
 
   app.post('/api/guild/:id/social/creator', requireAuth, guildGuard, async (req, res) => {
     const { platform, account } = req.body || {};
+    const cfg = client.social.getConfig(req.params.id);
+    const total = Object.values(cfg.platforms).reduce((n, p) => n + (p.creators?.length || 0), 0);
+    if (total >= guildLimit(req.params.id, 'socialCreators'))
+      return res.status(403).json(upgradeError('socialCreators'));
     const result = await socialService.addCreator(client, req.params.id, platform, account);
     if (result.error) return res.status(400).json({ error: result.error });
     res.json({ success: true, config: client.social.getConfig(req.params.id) });
@@ -685,6 +769,10 @@ module.exports = function startDashboard(client) {
   });
 
   app.post('/api/guild/:id/applications/forms', requireAuth, guildGuard, (req, res) => {
+    if (client.applications.listForms(req.params.id).length >= guildLimit(req.params.id, 'applicationForms'))
+      return res.status(403).json(upgradeError('applicationForms'));
+    if (Array.isArray(req.body?.questions) && req.body.questions.length > guildLimit(req.params.id, 'applicationQuestions'))
+      return res.status(403).json(upgradeError('applicationQuestions'));
     const form = client.applications.createForm(req.params.id, req.body || {});
     res.json({ success: true, form });
   });
@@ -695,12 +783,16 @@ module.exports = function startDashboard(client) {
   });
 
   app.post('/api/guild/:id/applications/forms/:formId/duplicate', requireAuth, guildGuard, (req, res) => {
+    if (client.applications.listForms(req.params.id).length >= guildLimit(req.params.id, 'applicationForms'))
+      return res.status(403).json(upgradeError('applicationForms'));
     const form = client.applications.duplicateForm(req.params.id, req.params.formId);
     if (!form) return res.status(404).json({ error: 'Form not found' });
     res.json({ success: true, form });
   });
 
   app.put('/api/guild/:id/applications/forms/:formId', requireAuth, guildGuard, (req, res) => {
+    if (Array.isArray(req.body?.questions) && req.body.questions.length > guildLimit(req.params.id, 'applicationQuestions'))
+      return res.status(403).json(upgradeError('applicationQuestions'));
     const form = client.applications.updateForm(req.params.id, req.params.formId, req.body || {});
     if (!form) return res.status(404).json({ error: 'Form not found' });
     res.json({ success: true, form });
@@ -794,6 +886,8 @@ module.exports = function startDashboard(client) {
   });
 
   app.post('/api/guild/:id/membercounters', requireAuth, guildGuard, (req, res) => {
+    if (client.memberCounters.list(req.params.id).length >= guildLimit(req.params.id, 'memberCounters'))
+      return res.status(403).json(upgradeError('memberCounters'));
     const counter = client.memberCounters.create(req.params.id, req.body || {});
     if (!counter) return res.status(400).json({ error: 'Invalid counter — pick a channel and (for role counters) a role.' });
     mcService.updateGuild(client, req.params.id, { force: true }).catch(() => {});

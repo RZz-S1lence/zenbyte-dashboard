@@ -90,6 +90,37 @@ const MIGRATIONS = [
         CREATE INDEX idx_counters_guild ON member_counters (guild_id, position);
       `);
     }
+  },
+  {
+    id: '003_premium',
+    up: d => {
+      d.exec(`
+        -- One row per premium account, keyed by Discord user id. Set by the Lemon
+        -- Squeezy webhook (paid) or the owner ?give-premium command (comped).
+        CREATE TABLE premium_users (
+          user_id         TEXT PRIMARY KEY,        -- Discord user id
+          premium_tier    TEXT,                    -- 'pro' | 'max' | 'lifetime' | 'complimentary' | NULL
+          premium_source  TEXT,                    -- 'lemonsqueezy' | 'owner'
+          subscription_id TEXT,                    -- LS subscription id (maps cancel/expire events back to a user)
+          customer_id     TEXT,                    -- LS customer id
+          expires_at      INTEGER,                 -- ms epoch; NULL when lifetime = 1
+          lifetime        INTEGER NOT NULL DEFAULT 0,
+          extra_slots     INTEGER NOT NULL DEFAULT 0,  -- extra permanent slots bought on top of the base
+          slots           INTEGER NOT NULL DEFAULT 1,  -- base server-slot count (from tier or owner grant)
+          updated_at      INTEGER NOT NULL
+        );
+
+        -- Which guilds a user has activated with their slots. UNIQUE(guild_id) means a
+        -- guild can be covered by at most one slot at a time.
+        CREATE TABLE premium_servers (
+          user_id     TEXT NOT NULL,
+          guild_id    TEXT NOT NULL UNIQUE,
+          assigned_at INTEGER NOT NULL,
+          PRIMARY KEY (user_id, guild_id)
+        );
+        CREATE INDEX idx_premium_servers_guild ON premium_servers (guild_id);
+      `);
+    }
   }
 ];
 

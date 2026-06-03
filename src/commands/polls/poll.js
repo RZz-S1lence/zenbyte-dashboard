@@ -1,6 +1,8 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const embeds = require('../../utils/embeds');
 const polls = require('../../polls/service');
+const { isPremium, limitFor } = require('../../premium');
+const { upgradeReply } = require('../../premium/messages');
 
 // A small button that opens the poll-builder modal. Used for the prefix path
 // (prefix commands cannot open a modal directly, only a real interaction can).
@@ -90,6 +92,14 @@ module.exports = {
     if (action === 'createmodal') {
       if (!polls.canManagePolls(interaction.member, config, client.store))
         return interaction.reply({ embeds: [embeds.error('You need permission to manage polls in this server.')], ephemeral: true });
+
+      // Free servers are capped at the free poll-option limit; premium uses the
+      // server's configured maxOptions (up to 25).
+      if (!await isPremium(interaction.guildId)) {
+        const optCount = interaction.fields.getTextInputValue('opts').split('\n').map(s => s.trim()).filter(Boolean).length;
+        if (optCount > limitFor('pollOptions', false)) return interaction.reply(upgradeReply('pollOptions'));
+      }
+
       const parsed = polls.parseModalSubmit(interaction.fields, config);
       if (parsed.error) return interaction.reply({ embeds: [embeds.error(parsed.error)], ephemeral: true });
 

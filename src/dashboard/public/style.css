@@ -638,3 +638,36 @@ button .ic, .btn .ic, .apps-tab .ic, .mc-act .ic, .cmd-cat-btn .ic { margin-righ
   .ov-hero-actions { width: 100%; }
   .ov-hero-actions .btn { flex: 1; justify-content: center; }
 }
+
+/* ═══ Premium page ═══ */
+.muted { color: var(--muted); font-size: 13.5px; }
+.btn-sm { padding: 6px 12px; font-size: 12.5px; }
+.premium-err { color: var(--red); }
+.premium-card {
+  background: var(--card); border: 1px solid var(--border2); border-radius: 16px;
+  padding: 22px 24px; margin-bottom: 18px; box-shadow: var(--shadow);
+}
+.premium-free { background: linear-gradient(135deg, rgba(124,108,245,.14), rgba(176,124,240,.08)), var(--card); }
+.premium-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.premium-status { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; }
+.premium-slots { font-size: 13.5px; color: var(--text); }
+.premium-expiry { margin-top: 8px; }
+.premium-card h3 { font-size: 16px; font-weight: 700; color: var(--white); margin: 0 0 4px; }
+.premium-hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+.premium-servers { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.premium-server {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--card2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px;
+}
+.premium-server-name { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; font-size: 14px; }
+.premium-server-ico { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; }
+.premium-assign { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.premium-assign select {
+  flex: 1; min-width: 200px; padding: 9px 12px; background: var(--card2);
+  border: 1px solid var(--border); border-radius: 10px; color: var(--text); font-family: var(--font); font-size: 14px;
+}
+.premium-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 18px 0; }
+.premium-plan { background: var(--card2); border: 1px solid var(--border); border-radius: 12px; padding: 16px; text-align: center; }
+.premium-plan h4 { margin: 0 0 6px; font-size: 15px; color: var(--white); }
+.premium-price { font-size: 20px; font-weight: 800; color: var(--accent2); margin-bottom: 4px; }
+.premium-free .btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
