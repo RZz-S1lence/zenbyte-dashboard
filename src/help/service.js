@@ -84,7 +84,7 @@ function homeView(client, viewerId, prefix = DEFAULT_PREFIX) {
   }));
 
   const embed = embeds.custom({
-    title: "🤖 Zen's Robotics · Help",
+    title: "🤖 ZenByte · Help",
     description: 'Pick a category below to see its commands. Every command works as a slash command and with the '
       + `\`${prefix}\` prefix.`,
     color: embeds.COLORS.brand,

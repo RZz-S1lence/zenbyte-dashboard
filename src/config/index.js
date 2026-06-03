@@ -19,7 +19,7 @@ module.exports = {
 
   dashboard: {
     port:          process.env.DASHBOARD_PORT || 3000,
-    sessionSecret: process.env.SESSION_SECRET || 'zens-robotics-session-secret',
+    sessionSecret: process.env.SESSION_SECRET || 'zenbyte-session-secret',
     // Public base URL of the dashboard, used to build the OAuth2 redirect URI.
     url:           process.env.DASHBOARD_URL || null,
     // Invite to the ZenByte support server, shown on the dashboard.

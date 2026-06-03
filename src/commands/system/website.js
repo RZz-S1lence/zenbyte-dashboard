@@ -12,7 +12,7 @@ module.exports = {
   async execute(interaction) {
     await interaction.reply({
       embeds: [embeds.custom({
-        title: "🌐 Zen's Robotics Dashboard",
+        title: "🌐 ZenByte Dashboard",
         description: `**http://localhost:${dashboard.port}**\n\nManage log channels, the ticket system, transcripts, and view bot logs.`,
         color: embeds.COLORS.brand,
         footer: { text: 'The bot must be running for the dashboard to be reachable.' }

@@ -1,7 +1,14 @@
 const tickets = require('./tickets');
 const verification = require('./verification');
+const applications = require('./applications');
 const logger  = require('../utils/logger');
 const embeds  = require('../utils/embeds');
+
+// Namespaces whose components use dynamic customIds (e.g. "app:rv:accept:<id>")
+// are routed to a single handler that parses the rest of the id itself.
+const namespaced = {
+  app: applications.route
+};
 
 // Maps a component customId to its handler. customIds use "namespace:action[:args]".
 const routes = {
@@ -26,6 +33,9 @@ async function route(interaction, client) {
   const namespace = id.split(':')[0];
   const owningCommand = [...client.commands.values()].find(c => c.data.name === namespace && typeof c.handleComponent === 'function');
   if (owningCommand) return owningCommand.handleComponent(interaction, client);
+
+  // Dynamic-id namespaces (applications, …).
+  if (namespaced[namespace]) return namespaced[namespace](interaction, client);
 
   const handler = routes[id];
   if (!handler) return;

@@ -20,6 +20,11 @@ const { MODES: RR_MODES, parseEmoji: rrParseEmoji } = require('../reactionrole/c
 const pollService = require('../polls/service');
 const socialService = require('../social/service');
 const { providerMeta } = require('../social/providers');
+const applicationService = require('../applications/service');
+const {
+  QUESTION_TYPES: APP_QUESTION_TYPES, STATUSES: APP_STATUSES, STATUS_META: APP_STATUS_META,
+  ROLE_STATUSES: APP_ROLE_STATUSES, BUTTON_STYLES: APP_BUTTON_STYLES, DEFAULT_PANEL: APP_DEFAULT_PANEL
+} = require('../applications/config');
 const logger = require('../utils/logger');
 const oauthClient = require('./auth');
 const { requireAuth, requireOwner, requireGuildAccess, clientIp } = require('./middleware');
@@ -634,6 +639,117 @@ module.exports = function startDashboard(client) {
       const lines = fs.readFileSync(logFile, 'utf8').trim().split('\n').slice(-300).reverse();
       res.json({ lines });
     } catch { res.json({ lines: [] }); }
+  });
+
+  // ── Applications ──────────────────────────────
+  // Forms ─ list/create/reorder/update/duplicate/delete
+  app.get('/api/guild/:id/applications/forms', requireAuth, guildGuard, (req, res) => {
+    res.json({
+      forms:  client.applications.listForms(req.params.id),
+      config: client.applications.getConfig(req.params.id),
+      meta:   {
+        questionTypes: APP_QUESTION_TYPES, statuses: APP_STATUSES, statusMeta: APP_STATUS_META,
+        roleStatuses: APP_ROLE_STATUSES, buttonStyles: APP_BUTTON_STYLES, panelDefaults: APP_DEFAULT_PANEL
+      }
+    });
+  });
+
+  app.post('/api/guild/:id/applications/forms', requireAuth, guildGuard, (req, res) => {
+    const form = client.applications.createForm(req.params.id, req.body || {});
+    res.json({ success: true, form });
+  });
+
+  app.put('/api/guild/:id/applications/forms-order', requireAuth, guildGuard, (req, res) => {
+    const order = Array.isArray(req.body?.order) ? req.body.order.filter(x => typeof x === 'string') : [];
+    res.json({ success: true, forms: client.applications.reorderForms(req.params.id, order) });
+  });
+
+  app.post('/api/guild/:id/applications/forms/:formId/duplicate', requireAuth, guildGuard, (req, res) => {
+    const form = client.applications.duplicateForm(req.params.id, req.params.formId);
+    if (!form) return res.status(404).json({ error: 'Form not found' });
+    res.json({ success: true, form });
+  });
+
+  app.put('/api/guild/:id/applications/forms/:formId', requireAuth, guildGuard, (req, res) => {
+    const form = client.applications.updateForm(req.params.id, req.params.formId, req.body || {});
+    if (!form) return res.status(404).json({ error: 'Form not found' });
+    res.json({ success: true, form });
+  });
+
+  app.delete('/api/guild/:id/applications/forms/:formId', requireAuth, guildGuard, (req, res) => {
+    if (!client.applications.deleteForm(req.params.id, req.params.formId))
+      return res.status(404).json({ error: 'Form not found' });
+    res.json({ success: true });
+  });
+
+  // Config
+  app.put('/api/guild/:id/applications/config', requireAuth, guildGuard, (req, res) => {
+    res.json({ success: true, config: client.applications.setConfig(req.params.id, req.body || {}) });
+  });
+
+  // Post / refresh the live applications panel in a channel.
+  app.post('/api/guild/:id/applications/panel', requireAuth, guildGuard, async (req, res) => {
+    const channelId = typeof req.body?.channelId === 'string' ? req.body.channelId : null;
+    const result = await applicationService.publishPanel(client, req.params.id, channelId);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    res.json({ success: true, channelId: result.channelId, config: client.applications.getConfig(req.params.id) });
+  });
+
+  // Export (must be declared before the :appId routes)
+  app.get('/api/guild/:id/applications/export', requireAuth, guildGuard, (req, res) => {
+    const apps = client.applications.listApplications(req.params.id, {
+      status: req.query.status, formId: req.query.formId, search: req.query.search, limit: 200
+    });
+    if (req.query.format === 'json') {
+      res.setHeader('Content-Disposition', `attachment; filename="applications-${req.params.id}.json"`);
+      return res.json(apps.map(a => ({ ...a, actions: undefined })));
+    }
+    const csvCell = v => {
+      const s = String(v ?? '');
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows = [['id', 'form', 'user_tag', 'user_id', 'status', 'created_at', 'answers']];
+    for (const a of apps) {
+      const answers = (a.answers || []).map(x => `${x.label}: ${x.value}`).join(' | ');
+      rows.push([a.id, a.formName, a.userTag, a.userId, a.status, new Date(a.createdAt).toISOString(), answers]);
+    }
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="applications-${req.params.id}.csv"`);
+    res.send(rows.map(r => r.map(csvCell).join(',')).join('\n'));
+  });
+
+  // Applications ─ list (with filters) + counts
+  app.get('/api/guild/:id/applications', requireAuth, guildGuard, (req, res) => {
+    res.json({
+      applications: client.applications.listApplications(req.params.id, {
+        status: req.query.status, formId: req.query.formId, search: req.query.search,
+        limit: req.query.limit, offset: req.query.offset
+      }),
+      counts: client.applications.countByStatus(req.params.id)
+    });
+  });
+
+  // Perform a review action from the dashboard.
+  app.post('/api/guild/:id/applications/:appId/action', requireAuth, guildGuard, async (req, res) => {
+    const action = req.body?.action;
+    if (!(action in applicationService.ACTION_STATUS))
+      return res.status(400).json({ error: 'Unknown action.' });
+    const note = typeof req.body?.note === 'string' ? req.body.note.slice(0, 1500) : null;
+    if ((action === 'deny' || action === 'info') && !note?.trim())
+      return res.status(400).json({ error: 'A message is required for this action.' });
+
+    const updated = await applicationService.applyDecision(client, {
+      guildId: req.params.id, appId: req.params.appId, action, note,
+      reviewer: { id: req.session.userId, tag: req.session.username || 'Dashboard' }
+    });
+    if (!updated) return res.status(404).json({ error: 'Application not found' });
+    res.json({ success: true, application: updated });
+  });
+
+  app.get('/api/guild/:id/applications/:appId', requireAuth, guildGuard, (req, res) => {
+    const app2 = client.applications.getApplication(req.params.id, req.params.appId);
+    if (!app2) return res.status(404).json({ error: 'Application not found' });
+    res.json(app2);
   });
 
   const server = http.createServer(app);

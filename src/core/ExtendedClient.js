@@ -9,6 +9,7 @@ const { PollStore } = require('../polls/store');
 const { SocialStore } = require('../social/store');
 const { AutoRoleStore } = require('../autorole/store');
 const { ReactionRoleStore } = require('../reactionrole/store');
+const { ApplicationStore } = require('../applications/store');
 const loadCommands = require('./loadCommands');
 const loadEvents = require('./loadEvents');
 const logger = require('../utils/logger');
@@ -30,6 +31,7 @@ class ExtendedClient extends Client {
     this.social    = new SocialStore();
     this.autoroles     = new AutoRoleStore();
     this.reactionroles = new ReactionRoleStore();
+    this.applications  = new ApplicationStore();
 
     // Backwards-compatible aliases so the dashboard layer can read/write through
     // the same store instance without holding its own copy.

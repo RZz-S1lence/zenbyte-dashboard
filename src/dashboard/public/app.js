@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════
-   Zen's Robotics Dashboard
+   ZenByte Dashboard
    ════════════════════════════════════════ */
 
 // Global state
@@ -29,7 +29,16 @@ const state = {
   autorole:      null, // current autorole config
   reactionMenus: [],   // reaction-role panels for the selected guild
   reactionModes: [],   // available reaction-role modes
-  links:         null  // { invite, support } bot-invite and support-server links
+  links:         null, // { invite, support } bot-invite and support-server links
+  // Applications
+  appsForms:   [],     // form list for the selected guild
+  appsConfig:  null,   // applications config
+  appsMeta:    null,   // { questionTypes, statuses, statusMeta }
+  appsEditing: null,   // form currently open in the builder (null = list view)
+  appsTabCur:  'forms',// active Applications sub-tab
+  appsSubs:    [],     // loaded submissions
+  appsCounts:  {},     // submission counts by status
+  appsFilter:  { status: '', formId: '', search: '' }
 };
 
 // ── Boot ─────────────────────────────────────────
@@ -118,6 +127,7 @@ function goto(page) {
   if (page === 'leveling'    && state.guildId) loadLeveling();
   if (page === 'polls'       && state.guildId) loadPolls();
   if (page === 'social'      && state.guildId) loadSocial();
+  if (page === 'applications' && state.guildId) loadApplications();
   if (page === 'autorole'    && state.guildId) loadAutorole();
   if (page === 'reactionroles' && state.guildId) loadReactionRoles();
   if (page === 'activity'    && state.guildId) loadActivity();
@@ -365,6 +375,7 @@ async function selectGuild(id) {
   if (activePage === 'autorole')    await loadAutorole();
   if (activePage === 'reactionroles') await loadReactionRoles();
   if (activePage === 'social')      await loadSocial();
+  if (activePage === 'applications') await loadApplications();
   if (activePage === 'transcripts') await loadTranscripts();
 }
 
@@ -2264,4 +2275,458 @@ function renderMarkdown(text) {
     .replace(/__(.*?)__/g, '<u>$1</u>')
     .replace(/~~(.*?)~~/g, '<s>$1</s>')
     .replace(/\n/g, '<br>');
+}
+
+// ═══════════════════════════════════════
+//  APPLICATIONS
+// ═══════════════════════════════════════
+const APP_STATUS_FALLBACK = { label: 'Unknown', emoji: '•', color: 0x99aab5 };
+const QTYPE_LABEL = { short: 'Short Text', paragraph: 'Paragraph', multiple_choice: 'Multiple Choice', dropdown: 'Dropdown' };
+function appStatusMeta(s) { return (state.appsMeta?.statusMeta || {})[s] || APP_STATUS_FALLBACK; }
+function hex6(n) { return '#' + (Number(n) || 0).toString(16).padStart(6, '0'); }
+
+async function loadApplications() {
+  hide('apps-body');
+  if (!state.guildId) { show('apps-no-guild'); return; }
+  hide('apps-no-guild');
+  try {
+    const data = await api('GET', `/api/guild/${state.guildId}/applications/forms`);
+    state.appsForms  = data.forms || [];
+    state.appsConfig = data.config;
+    state.appsMeta   = data.meta;
+  } catch { state.appsForms = []; }
+  state.appsEditing = null;
+  show('apps-body');
+  appsTab(state.appsTabCur || 'forms');
+}
+
+function appsTab(name) {
+  state.appsTabCur = name;
+  document.querySelectorAll('.apps-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  ['forms', 'submissions', 'settings'].forEach(t =>
+    document.getElementById(`apps-tab-${t}`).classList.toggle('hidden', t !== name));
+  if (name === 'forms') renderFormsTab();
+  if (name === 'submissions') { renderSubmissionsShell(); loadSubmissions(); }
+  if (name === 'settings') renderAppsSettings();
+}
+
+// ── Forms tab (list + builder) ────────────────────
+function renderFormsTab() {
+  const box = document.getElementById('apps-tab-forms');
+  if (state.appsEditing) return renderFormBuilder(box);
+
+  const rows = state.appsForms.length ? state.appsForms.map((f, i) => `
+    <div class="apps-form-row" draggable="true" data-i="${i}"
+         ondragstart="appsFormDragStart(event,${i})" ondragover="event.preventDefault()" ondrop="appsFormDrop(event,${i})">
+      <span class="apps-drag" title="Drag to reorder">⋮⋮</span>
+      <div class="apps-form-info">
+        <div class="apps-form-name">${esc(f.name)} ${f.enabled ? '<span class="badge badge-low">Enabled</span>' : '<span class="badge">Disabled</span>'}</div>
+        <div class="hint">${f.questions.length} question${f.questions.length === 1 ? '' : 's'}${f.description ? ` · ${esc(f.description)}` : ''}</div>
+      </div>
+      <div class="apps-form-actions">
+        <label class="cmd-switch" title="${f.enabled ? 'Enabled' : 'Disabled'}">
+          <input type="checkbox" ${f.enabled ? 'checked' : ''} onchange="appsToggleForm('${esc(f.id)}',this.checked)"><span class="cmd-slider"></span>
+        </label>
+        <button class="btn btn-secondary" onclick="appsEditForm('${esc(f.id)}')">Edit</button>
+        <button class="btn btn-secondary" onclick="appsDuplicateForm('${esc(f.id)}')">Duplicate</button>
+        <button class="btn btn-secondary" onclick="appsDeleteForm('${esc(f.id)}')">Delete</button>
+      </div>
+    </div>`).join('') : '<p class="hint" style="padding:16px">No forms yet. Create your first application form.</p>';
+
+  box.innerHTML = `
+    <div class="btn-row" style="margin-bottom:14px"><button class="btn btn-primary" onclick="appsNewForm()">➕ New Form</button></div>
+    <div class="apps-form-list">${rows}</div>`;
+}
+
+let appsFormDragIdx = null;
+function appsFormDragStart(e, i) { appsFormDragIdx = i; e.dataTransfer.effectAllowed = 'move'; }
+function appsFormDrop(e, i) {
+  e.preventDefault();
+  if (appsFormDragIdx === null || appsFormDragIdx === i) return;
+  const arr = state.appsForms;
+  const [m] = arr.splice(appsFormDragIdx, 1);
+  arr.splice(i, 0, m);
+  appsFormDragIdx = null;
+  renderFormsTab();
+  api('PUT', `/api/guild/${state.guildId}/applications/forms-order`, { order: arr.map(f => f.id) }).catch(() => {});
+}
+
+function appsNewForm() { state.appsEditing = { id: null, name: '', description: '', enabled: true, questions: [] }; renderFormsTab(); }
+function appsEditForm(id) { const f = state.appsForms.find(x => x.id === id); if (f) { state.appsEditing = JSON.parse(JSON.stringify(f)); renderFormsTab(); } }
+function appsCancelEdit() { state.appsEditing = null; renderFormsTab(); }
+
+async function appsToggleForm(id, enabled) {
+  try { await api('PUT', `/api/guild/${state.guildId}/applications/forms/${id}`, { enabled }); const f = state.appsForms.find(x => x.id === id); if (f) f.enabled = enabled; }
+  catch {} renderFormsTab();
+}
+async function appsDuplicateForm(id) {
+  try { const r = await api('POST', `/api/guild/${state.guildId}/applications/forms/${id}/duplicate`); state.appsForms.push(r.form); } catch {}
+  renderFormsTab();
+}
+async function appsDeleteForm(id) {
+  if (!confirm('Delete this form? Existing submissions are kept.')) return;
+  try { await api('DELETE', `/api/guild/${state.guildId}/applications/forms/${id}`); state.appsForms = state.appsForms.filter(x => x.id !== id); } catch {}
+  renderFormsTab();
+}
+
+function renderFormBuilder(box) {
+  const f = state.appsEditing;
+  const qhtml = f.questions.map((q, i) => renderQuestionEditor(q, i)).join('') || '<p class="hint">No questions yet. Add one below.</p>';
+  box.innerHTML = `
+    <div class="card">
+      <div class="btn-row" style="justify-content:space-between;align-items:center;margin-bottom:10px">
+        <h3 style="margin:0">${f.id ? 'Edit Form' : 'New Form'}</h3>
+        <button class="btn btn-secondary" onclick="appsCancelEdit()">← Back to list</button>
+      </div>
+      <div class="card-grid">
+        <div class="form-row"><label>Form Name</label>
+          <input type="text" maxlength="100" value="${esc(f.name)}" oninput="state.appsEditing.name=this.value"></div>
+        <div class="form-row"><label>Enabled</label>
+          <label class="cmd-switch"><input type="checkbox" ${f.enabled ? 'checked' : ''} onchange="state.appsEditing.enabled=this.checked"><span class="cmd-slider"></span></label></div>
+      </div>
+      <div class="form-row"><label>Description (optional)</label>
+        <input type="text" maxlength="500" value="${esc(f.description || '')}" oninput="state.appsEditing.description=this.value"></div>
+    </div>
+    <div class="card">
+      <h3>Questions <span class="hint">· drag ⋮⋮ to reorder</span></h3>
+      <div id="apps-q-list">${qhtml}</div>
+      <div class="btn-row" style="margin-top:12px;flex-wrap:wrap">
+        <button class="btn btn-secondary" onclick="appsAddQuestion('short')">+ Short Text</button>
+        <button class="btn btn-secondary" onclick="appsAddQuestion('paragraph')">+ Paragraph</button>
+        <button class="btn btn-secondary" onclick="appsAddQuestion('multiple_choice')">+ Multiple Choice</button>
+        <button class="btn btn-secondary" onclick="appsAddQuestion('dropdown')">+ Dropdown</button>
+      </div>
+    </div>
+    <div class="save-bar dirty">
+      <button class="btn btn-primary" onclick="appsSaveForm()">Save Form</button>
+      <button class="btn btn-secondary" onclick="appsPreviewForm()">👁 Preview</button>
+      <button class="btn btn-secondary" onclick="appsCancelEdit()">Cancel</button>
+      <span id="apps-form-msg" class="save-status"></span>
+    </div>`;
+}
+
+function renderQuestionEditor(q, i) {
+  const isChoice = q.type === 'multiple_choice' || q.type === 'dropdown';
+  return `<div class="apps-q" draggable="true" data-i="${i}"
+      ondragstart="appsQDragStart(event,${i})" ondragover="event.preventDefault()" ondrop="appsQDrop(event,${i})">
+    <div class="apps-q-head">
+      <span class="apps-drag" title="Drag to reorder">⋮⋮</span>
+      <span class="apps-q-type">${QTYPE_LABEL[q.type] || q.type}</span>
+      <label class="apps-q-req"><input type="checkbox" ${q.required ? 'checked' : ''} onchange="appsQEdit(${i},'required',this.checked)"> Required</label>
+      <button class="btn btn-secondary apps-q-del" onclick="appsRemoveQuestion(${i})">✕</button>
+    </div>
+    <input type="text" placeholder="Question / prompt" maxlength="200" value="${esc(q.label)}" oninput="appsQEdit(${i},'label',this.value)">
+    <input type="text" placeholder="Placeholder (optional)" maxlength="100" value="${esc(q.placeholder || '')}" oninput="appsQEdit(${i},'placeholder',this.value)">
+    ${isChoice ? `<textarea placeholder="One option per line" rows="3" oninput="appsQEditOptions(${i},this.value)">${esc((q.options || []).join('\n'))}</textarea>` : ''}
+  </div>`;
+}
+
+function appsQEdit(i, field, val) { if (state.appsEditing?.questions[i]) state.appsEditing.questions[i][field] = val; }
+function appsQEditOptions(i, val) { if (state.appsEditing?.questions[i]) state.appsEditing.questions[i].options = val.split('\n').map(s => s.trim()).filter(Boolean); }
+function appsAddQuestion(type) {
+  const isChoice = type === 'multiple_choice' || type === 'dropdown';
+  state.appsEditing.questions.push({ type, label: '', placeholder: '', required: true, options: isChoice ? [''] : [] });
+  renderFormsTab();
+}
+function appsRemoveQuestion(i) { state.appsEditing.questions.splice(i, 1); renderFormsTab(); }
+let appsQDragIdx = null;
+function appsQDragStart(e, i) { appsQDragIdx = i; e.dataTransfer.effectAllowed = 'move'; }
+function appsQDrop(e, i) {
+  e.preventDefault();
+  if (appsQDragIdx === null || appsQDragIdx === i) return;
+  const a = state.appsEditing.questions;
+  const [m] = a.splice(appsQDragIdx, 1);
+  a.splice(i, 0, m);
+  appsQDragIdx = null;
+  renderFormsTab();
+}
+
+async function appsSaveForm() {
+  const f = state.appsEditing, msg = document.getElementById('apps-form-msg');
+  if (!f.name.trim()) return setStatus(msg, 'err', '❌ The form needs a name.');
+  for (const q of f.questions) {
+    if (!String(q.label || '').trim()) return setStatus(msg, 'err', '❌ Every question needs a prompt.');
+    if ((q.type === 'multiple_choice' || q.type === 'dropdown') && !(q.options || []).filter(Boolean).length)
+      return setStatus(msg, 'err', '❌ Choice questions need at least one option.');
+  }
+  const payload = { name: f.name, description: f.description, enabled: f.enabled, questions: f.questions };
+  try {
+    if (f.id) await api('PUT', `/api/guild/${state.guildId}/applications/forms/${f.id}`, payload);
+    else      await api('POST', `/api/guild/${state.guildId}/applications/forms`, payload);
+    const data = await api('GET', `/api/guild/${state.guildId}/applications/forms`);
+    state.appsForms = data.forms; state.appsConfig = data.config; state.appsMeta = data.meta;
+    state.appsEditing = null;
+    renderFormsTab();
+  } catch (e) { setStatus(msg, 'err', '❌ ' + e.message); }
+}
+
+function appsPreviewForm() {
+  const f = state.appsEditing;
+  const qs = f.questions.map((q, i) => {
+    const req = q.required ? '<span style="color:var(--red)">*</span>' : '';
+    let field = '';
+    if (q.type === 'short') field = `<input type="text" disabled placeholder="${esc(q.placeholder || '')}">`;
+    else if (q.type === 'paragraph') field = `<textarea disabled rows="3" placeholder="${esc(q.placeholder || '')}"></textarea>`;
+    else if (q.type === 'multiple_choice') field = (q.options || []).map(o => `<label class="apps-prev-opt"><input type="radio" disabled> ${esc(o)}</label>`).join('');
+    else if (q.type === 'dropdown') field = `<select disabled><option>Choose…</option>${(q.options || []).map(o => `<option>${esc(o)}</option>`).join('')}</select>`;
+    return `<div class="form-row"><label>${i + 1}. ${esc(q.label || '(no prompt)')} ${req}</label>${field}</div>`;
+  }).join('') || '<p class="hint">No questions yet.</p>';
+  openAppsModal(`<h3>${esc(f.name || 'Untitled Form')}</h3>${f.description ? `<p class="hint">${esc(f.description)}</p>` : ''}<div style="margin-top:12px">${qs}</div>`);
+}
+
+function openAppsModal(html) { document.getElementById('apps-modal-content').innerHTML = html; show('apps-modal'); }
+function closeAppsModal() { hide('apps-modal'); }
+
+// ── Submissions tab ───────────────────────────────
+// Shell (filters) renders once per tab entry so the search box keeps focus;
+// only the chips + results refresh on filter changes.
+function renderSubmissionsShell() {
+  const box = document.getElementById('apps-tab-submissions');
+  const formOpts = `<option value="">All forms</option>` +
+    state.appsForms.map(f => `<option value="${esc(f.id)}" ${state.appsFilter.formId === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('');
+  const exp = fmt => `/api/guild/${state.guildId}/applications/export?format=${fmt}` +
+    (state.appsFilter.status ? `&status=${state.appsFilter.status}` : '') +
+    (state.appsFilter.formId ? `&formId=${state.appsFilter.formId}` : '');
+  box.innerHTML = `
+    <div class="apps-filters">
+      <div class="cmd-chips" id="apps-sub-chips"></div>
+      <div class="btn-row" style="margin-top:10px;flex-wrap:wrap">
+        <select onchange="appsSetForm(this.value)" style="max-width:220px">${formOpts}</select>
+        <input type="text" placeholder="🔍 Search applicant / answers…" value="${esc(state.appsFilter.search)}" oninput="appsSearchDebounced(this.value)" style="flex:1;min-width:180px">
+        <a class="btn btn-secondary" href="${exp('csv')}" target="_blank">⬇ CSV</a>
+        <a class="btn btn-secondary" href="${exp('json')}" target="_blank">⬇ JSON</a>
+      </div>
+    </div>
+    <div class="log-table-wrap" style="margin-top:14px"><table class="log-table">
+      <thead><tr><th>Form</th><th>Applicant</th><th>Status</th><th>Submitted</th></tr></thead>
+      <tbody id="apps-sub-rows"></tbody></table></div>`;
+}
+
+async function loadSubmissions() {
+  const qp = new URLSearchParams();
+  if (state.appsFilter.status) qp.set('status', state.appsFilter.status);
+  if (state.appsFilter.formId) qp.set('formId', state.appsFilter.formId);
+  if (state.appsFilter.search) qp.set('search', state.appsFilter.search);
+  try {
+    const data = await api('GET', `/api/guild/${state.guildId}/applications?${qp}`);
+    state.appsSubs = data.applications; state.appsCounts = data.counts || {};
+  } catch { state.appsSubs = []; }
+  renderSubChips();
+  renderSubRows();
+}
+
+function renderSubChips() {
+  const el = document.getElementById('apps-sub-chips');
+  if (!el) return;
+  const counts = state.appsCounts || {};
+  const statuses = state.appsMeta?.statuses || [];
+  const chip = (val, label, count) =>
+    `<button class="cmd-chip${state.appsFilter.status === val ? ' active' : ''}" onclick="appsSetStatus('${val}')">${label}${count != null ? ` (${count})` : ''}</button>`;
+  el.innerHTML = chip('', 'All', counts.total || 0) +
+    statuses.map(s => chip(s, `${appStatusMeta(s).emoji} ${appStatusMeta(s).label}`, counts[s] || 0)).join('');
+}
+
+function renderSubRows() {
+  const el = document.getElementById('apps-sub-rows');
+  if (!el) return;
+  el.innerHTML = state.appsSubs.length ? state.appsSubs.map(a => {
+    const m = appStatusMeta(a.status);
+    return `<tr style="cursor:pointer" onclick="appsOpen('${esc(a.id)}')">
+      <td>${esc(a.formName)}</td>
+      <td>${esc(a.userTag)}</td>
+      <td><span class="badge" style="background:${hex6(m.color)}26;color:${hex6(m.color)}">${m.emoji} ${m.label}</span></td>
+      <td class="hint">${new Date(a.createdAt).toLocaleString()}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="4" class="hint" style="text-align:center;padding:24px">No applications match.</td></tr>`;
+}
+
+function appsSetStatus(s) { state.appsFilter.status = s; loadSubmissions(); }
+function appsSetForm(id) { state.appsFilter.formId = id; loadSubmissions(); }
+let appsSearchTimer = null;
+function appsSearchDebounced(v) { state.appsFilter.search = v; clearTimeout(appsSearchTimer); appsSearchTimer = setTimeout(loadSubmissions, 350); }
+
+async function appsOpen(id) {
+  let appData;
+  try { appData = await api('GET', `/api/guild/${state.guildId}/applications/${id}`); } catch { return; }
+  const m = appStatusMeta(appData.status);
+  const answers = (appData.answers || []).map(a =>
+    `<div class="form-row"><label>${esc(a.label)}</label><div class="apps-answer">${esc(a.value || '—')}</div></div>`).join('') || '<p class="hint">No answers.</p>';
+  const history = (appData.actions || []).map(ac =>
+    `<div class="apps-action-log"><strong>${esc(ac.reviewerTag || 'System')}</strong> · ${esc(ac.action)}${ac.note ? ` — ${esc(ac.note)}` : ''} <span class="hint">${new Date(ac.createdAt).toLocaleString()}</span></div>`).join('') || '<p class="hint">No actions yet.</p>';
+  openAppsModal(`
+    <h3>${m.emoji} ${esc(appData.formName)}</h3>
+    <p class="hint">Applicant: ${esc(appData.userTag)} (${esc(appData.userId)}) · ${new Date(appData.createdAt).toLocaleString()}</p>
+    <p>Status: <strong style="color:${hex6(m.color)}">${m.label}</strong></p>
+    <div style="margin:12px 0">${answers}</div>
+    <div class="btn-row" style="flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="appsAction('${esc(appData.id)}','accept')">✅ Accept</button>
+      <button class="btn btn-secondary" onclick="appsAction('${esc(appData.id)}','hold')">⏸ Hold</button>
+      <button class="btn btn-secondary" onclick="appsAction('${esc(appData.id)}','deny',true)">❌ Deny</button>
+      <button class="btn btn-secondary" onclick="appsAction('${esc(appData.id)}','info',true)">✉ Request Info</button>
+      <button class="btn btn-secondary" onclick="appsAction('${esc(appData.id)}','note',true)">📝 Add Note</button>
+    </div>
+    <h4 style="margin-top:16px">History</h4>${history}`);
+}
+
+async function appsAction(id, action, needNote) {
+  let note = null;
+  if (needNote) {
+    const prompts = { note: 'Internal note (not sent to the applicant):', deny: 'Reason for denial (sent to the applicant):', info: 'What information is needed? (sent to the applicant):' };
+    note = prompt(prompts[action] || 'Message:');
+    if (note === null) return;
+    if ((action === 'deny' || action === 'info') && !note.trim()) return alert('A message is required for this action.');
+  }
+  try { await api('POST', `/api/guild/${state.guildId}/applications/${id}/action`, { action, note }); }
+  catch (e) { return alert('Failed: ' + e.message); }
+  closeAppsModal();
+  loadSubmissions();
+}
+
+// ── Settings tab ──────────────────────────────────
+async function renderAppsSettings() {
+  await ensureGuildData();
+  const c  = state.appsConfig || {};
+  const sm = state.appsMeta?.statusMeta || {};
+  const roleStatuses = state.appsMeta?.roleStatuses || ['accepted', 'denied', 'hold', 'info_requested'];
+  const styles       = state.appsMeta?.buttonStyles || ['Primary', 'Success', 'Danger', 'Secondary'];
+  const panel = c.panel || {};
+  const pColor = Number.isFinite(panel.color) ? panel.color : 0x5865f2;
+  const colorHex = '#' + pColor.toString(16).padStart(6, '0');
+
+  const roleRows = roleStatuses.map(st => `
+    <div class="form-row">
+      <label>${esc((sm[st]?.emoji || '') + ' ' + (sm[st]?.label || st))}</label>
+      <select id="apps-role-${st}"></select>
+    </div>`).join('');
+
+  const styleOpts = styles.map(s =>
+    `<option value="${s}"${(panel.buttonStyle || 'Primary') === s ? ' selected' : ''}>${s}</option>`).join('');
+
+  const box = document.getElementById('apps-tab-settings');
+  box.innerHTML = `
+    <div class="card">
+      <h3>Channels</h3>
+      <div class="card-grid">
+        <div class="form-row"><label>Pending / Review Channel</label><select id="apps-review-ch"></select>
+          <span class="hint">New submissions land here with the review buttons.</span></div>
+        <div class="form-row"><label>Accepted Channel</label><select id="apps-accepted-ch"></select>
+          <span class="hint">Accepting an application moves it straight here. Leave as <em>None</em> to keep it in the review channel.</span></div>
+        <div class="form-row"><label>Denied Channel</label><select id="apps-denied-ch"></select>
+          <span class="hint">Denying an application moves it straight here.</span></div>
+        <div class="form-row"><label>Log Channel</label><select id="apps-log-ch"></select>
+          <span class="hint">Holds, info-requests and notes are logged here.</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Auto-assign Roles by Status</h3>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:12px">When a decision is made, the applicant gets the matching role (and loses the other status roles). Leave any as <em>None</em> to assign nothing. I need <strong>Manage Roles</strong> and my role must sit above these.</p>
+      <div class="card-grid">${roleRows}</div>
+    </div>
+
+    <div class="card">
+      <h3>Permissions &amp; Roles</h3>
+      <div class="card-grid">
+        <div class="form-row"><label>Reviewer Roles</label><div id="apps-reviewer-roles"></div>
+          <span class="hint">May review via the Discord buttons. Admins &amp; Manage-Server always can.</span></div>
+        <div class="form-row"><label>Form Manager Roles</label><div id="apps-manager-roles"></div>
+          <span class="hint">May manage forms via Discord. Admins always can.</span></div>
+        <div class="form-row"><label>Notify Roles</label><div id="apps-notify-roles"></div>
+          <span class="hint">Pinged in the review channel on each new submission.</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Application Panel</h3>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:12px">Customise the embed &amp; button people click to apply, then post it to a channel.</p>
+      <div class="card-grid">
+        <div class="form-row"><label>Embed Title</label><input id="apps-panel-title" maxlength="256" value="${esc(panel.title || '')}"></div>
+        <div class="form-row"><label>Embed Colour</label><input type="color" id="apps-panel-color" value="${colorHex}"></div>
+      </div>
+      <div class="form-row"><label>Embed Description</label>
+        <textarea id="apps-panel-desc" rows="3" maxlength="2000">${esc(panel.description || '')}</textarea></div>
+      <div class="card-grid">
+        <div class="form-row"><label>Button Label</label><input id="apps-panel-btnlabel" maxlength="80" value="${esc(panel.buttonLabel || '')}"></div>
+        <div class="form-row"><label>Button Emoji</label><input id="apps-panel-btnemoji" maxlength="64" value="${esc(panel.buttonEmoji || '')}" placeholder="📝 or a custom emoji"></div>
+        <div class="form-row"><label>Button Style</label><select id="apps-panel-btnstyle">${styleOpts}</select></div>
+      </div>
+      <span class="hint">With multiple enabled forms the panel shows a dropdown instead of a single button (label/style apply to single-form panels).</span>
+      <div class="card-grid" style="margin-top:14px">
+        <div class="form-row"><label>Post Panel To</label><select id="apps-panel-ch"></select></div>
+        <div class="form-row" style="align-self:end">
+          <button class="btn btn-secondary" onclick="appsPostPanel()">📨 Post / Update Panel</button></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Behaviour</h3>
+      <div class="card-grid">
+        <div class="form-row"><label>DM applicants on status changes</label>
+          <label class="cmd-switch"><input type="checkbox" id="apps-dm" ${c.dmNotifications !== false ? 'checked' : ''}><span class="cmd-slider"></span></label></div>
+        <div class="form-row"><label>Re-apply cooldown (minutes, 0 = unlimited)</label>
+          <input type="number" id="apps-cooldown" min="0" value="${c.cooldownMinutes || 0}"></div>
+      </div>
+    </div>
+
+    <div class="save-bar"><button class="btn btn-primary" onclick="appsSaveSettings()">Save Settings</button>
+      <span id="apps-settings-msg" class="save-status"></span></div>`;
+
+  fillSelect('apps-review-ch',   state.guildData.textChannels, c.reviewChannelId,   n => `#${n.name}`);
+  fillSelect('apps-accepted-ch', state.guildData.textChannels, c.acceptedChannelId, n => `#${n.name}`);
+  fillSelect('apps-denied-ch',   state.guildData.textChannels, c.deniedChannelId,   n => `#${n.name}`);
+  fillSelect('apps-log-ch',      state.guildData.textChannels, c.logChannelId,      n => `#${n.name}`);
+  fillSelect('apps-panel-ch',    state.guildData.textChannels, c.panelChannelId,    n => `#${n.name}`);
+
+  const sr = c.statusRoleIds || {};
+  roleStatuses.forEach(st => fillSelect(`apps-role-${st}`, roleItems(), sr[st] || '', r => r.label));
+
+  msInit('apps-reviewer-roles', roleItems(), c.reviewerRoleIds || []);
+  msInit('apps-manager-roles',  roleItems(), c.managerRoleIds  || []);
+  msInit('apps-notify-roles',   roleItems(), c.notifyRoleIds   || []);
+}
+
+function appsSettingsPayload() {
+  const roleStatuses = state.appsMeta?.roleStatuses || ['accepted', 'denied', 'hold', 'info_requested'];
+  const statusRoleIds = {};
+  roleStatuses.forEach(st => { statusRoleIds[st] = document.getElementById(`apps-role-${st}`).value || null; });
+  return {
+    reviewChannelId:   document.getElementById('apps-review-ch').value || null,
+    acceptedChannelId: document.getElementById('apps-accepted-ch').value || null,
+    deniedChannelId:   document.getElementById('apps-denied-ch').value || null,
+    logChannelId:      document.getElementById('apps-log-ch').value || null,
+    panelChannelId:    document.getElementById('apps-panel-ch').value || null,
+    statusRoleIds,
+    reviewerRoleIds: msValues('apps-reviewer-roles'),
+    managerRoleIds:  msValues('apps-manager-roles'),
+    notifyRoleIds:   msValues('apps-notify-roles'),
+    dmNotifications: document.getElementById('apps-dm').checked,
+    cooldownMinutes: parseInt(document.getElementById('apps-cooldown').value, 10) || 0,
+    panel: {
+      title:       document.getElementById('apps-panel-title').value,
+      description: document.getElementById('apps-panel-desc').value,
+      color:       document.getElementById('apps-panel-color').value,
+      buttonLabel: document.getElementById('apps-panel-btnlabel').value,
+      buttonEmoji: document.getElementById('apps-panel-btnemoji').value,
+      buttonStyle: document.getElementById('apps-panel-btnstyle').value
+    }
+  };
+}
+
+async function appsSaveSettings() {
+  const msg = document.getElementById('apps-settings-msg');
+  try { const r = await api('PUT', `/api/guild/${state.guildId}/applications/config`, appsSettingsPayload()); state.appsConfig = r.config; setStatus(msg, 'ok', '✅ Saved!'); }
+  catch (e) { setStatus(msg, 'err', '❌ ' + e.message); }
+}
+
+// Saves current settings first (so the panel reflects unsaved edits), then posts.
+async function appsPostPanel() {
+  const msg = document.getElementById('apps-settings-msg');
+  const channelId = document.getElementById('apps-panel-ch').value || null;
+  if (!channelId) return setStatus(msg, 'err', '❌ Pick a channel to post the panel to.');
+  try {
+    await api('PUT', `/api/guild/${state.guildId}/applications/config`, appsSettingsPayload());
+    const r = await api('POST', `/api/guild/${state.guildId}/applications/panel`, { channelId });
+    state.appsConfig = r.config;
+    setStatus(msg, 'ok', '✅ Panel posted!');
+  } catch (e) { setStatus(msg, 'err', '❌ ' + e.message); }
 }

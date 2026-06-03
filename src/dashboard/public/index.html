@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Zen's Robotics Dashboard</title>
+  <title>ZenByte Dashboard</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,7 +13,7 @@
   <div class="login-card">
     <div class="login-brand">
       <img id="login-avatar" class="login-bot-avatar hidden" src="" alt="">
-      <h1>Zen's Robotics</h1>
+      <h1>ZenByte</h1>
       <p>Bot Dashboard</p>
     </div>
 
@@ -61,7 +61,7 @@
 
     <div class="sidebar-header">
       <img id="sidebar-bot-avatar" class="sidebar-bot-avatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'%3E%3Ccircle cx='18' cy='18' r='18' fill='%235865F2'/%3E%3C/svg%3E" alt="">
-      <span>Zen's Robotics</span>
+      <span>ZenByte</span>
     </div>
 
     <!-- Guild selector -->
@@ -87,6 +87,9 @@
       <a class="nav-item" data-page="activity" onclick="goto('activity')"><span class="icon">📈</span> Activity</a>
       <a class="nav-item" data-page="polls" onclick="goto('polls')"><span class="icon">🗳️</span> Polls</a>
       <a class="nav-item" data-page="social" onclick="goto('social')"><span class="icon">📡</span> Social Alerts</a>
+
+      <div class="nav-section">Applications</div>
+      <a class="nav-item" data-page="applications" onclick="goto('applications')"><span class="icon">📝</span> Applications</a>
 
       <div class="nav-section">Roles</div>
       <a class="nav-item" data-page="autorole" onclick="goto('autorole')"><span class="icon">🎭</span> Autoroles</a>
@@ -155,6 +158,33 @@
         <span id="cmd-count" class="cmd-count"></span>
       </div>
       <div id="commands-body"></div>
+    </div>
+
+    <!-- ─── APPLICATIONS ─── -->
+    <div id="page-applications" class="page">
+      <div class="page-header">
+        <h2>Applications</h2>
+        <p>Build application forms, review submissions, and choose where everything is posted.</p>
+      </div>
+      <div id="apps-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="apps-body" class="hidden">
+        <div class="apps-tabs">
+          <button class="apps-tab active" data-tab="forms" onclick="appsTab('forms')">📋 Forms</button>
+          <button class="apps-tab" data-tab="submissions" onclick="appsTab('submissions')">📨 Submissions</button>
+          <button class="apps-tab" data-tab="settings" onclick="appsTab('settings')">⚙️ Settings</button>
+        </div>
+        <div id="apps-tab-forms" class="apps-tab-body"></div>
+        <div id="apps-tab-submissions" class="apps-tab-body hidden"></div>
+        <div id="apps-tab-settings" class="apps-tab-body hidden"></div>
+      </div>
+    </div>
+
+    <!-- Generic Applications modal (form preview / submission detail) -->
+    <div id="apps-modal" class="apps-modal hidden" onclick="if(event.target===this)closeAppsModal()">
+      <div class="apps-modal-card">
+        <button class="apps-modal-close" onclick="closeAppsModal()" aria-label="Close">✕</button>
+        <div id="apps-modal-content"></div>
+      </div>
     </div>
 
     <!-- ─── SETTINGS ─── -->

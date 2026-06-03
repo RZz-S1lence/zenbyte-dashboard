@@ -12,6 +12,7 @@
   "type": "commonjs",
   "dependencies": {
     "@napi-rs/canvas": "^1.0.0",
+    "better-sqlite3": "^12.10.0",
     "cloudflared": "^0.7.1",
     "discord.js": "^14.26.4",
     "dotenv": "^17.4.2",

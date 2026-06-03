@@ -21,5 +21,11 @@ transcripts/
 *.bak
 *.tmp
 
+# ── SQLite database (runtime data, contains user submissions) ──
+data/
+*.db
+*.db-shm
+*.db-wal
+
 # Local Claude Code settings
 .claude/settings.local.json

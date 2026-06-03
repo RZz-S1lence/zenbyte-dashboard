@@ -488,3 +488,34 @@ textarea { resize: vertical; min-height: 70px; width: 100%; }
 .chat-typing { height: 18px; padding: 0 20px; color: var(--accent2); font-size: 12px; font-style: italic; }
 .chat-input-row { display: flex; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--border); }
 .chat-input-row input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); padding: 11px 14px; font-size: 14px; }
+
+/* ═══════════ APPLICATIONS ═══════════ */
+.apps-tabs { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+.apps-tab { background: var(--card); border: 1px solid var(--border); color: var(--muted); padding: 9px 16px; border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; font-weight: 600; transition: all .15s; }
+.apps-tab:hover { color: var(--text); border-color: var(--border2); }
+.apps-tab.active { background: var(--grad); color: #fff; border-color: transparent; }
+
+.apps-form-list { display: flex; flex-direction: column; gap: 10px; }
+.apps-form-row { display: flex; align-items: center; gap: 12px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
+.apps-form-row:hover { border-color: var(--border2); }
+.apps-form-info { flex: 1; min-width: 0; }
+.apps-form-name { font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.apps-form-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.apps-drag { cursor: grab; color: var(--muted); font-size: 16px; user-select: none; letter-spacing: -2px; }
+
+.apps-q { background: var(--card2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
+.apps-q-head { display: flex; align-items: center; gap: 10px; }
+.apps-q-type { font-size: 12px; font-weight: 700; color: var(--accent2); text-transform: uppercase; letter-spacing: .5px; }
+.apps-q-req { margin-left: auto; font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+.apps-q-del { padding: 3px 10px; }
+.apps-q input, .apps-q textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); padding: 9px 12px; font-size: 14px; }
+
+.apps-filters .cmd-chips { flex-wrap: wrap; }
+.apps-answer { background: var(--card2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 12px; white-space: pre-wrap; word-break: break-word; }
+.apps-action-log { padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+.apps-prev-opt { display: flex; align-items: center; gap: 7px; padding: 3px 0; color: var(--text); }
+
+.apps-modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 200; padding: 20px; }
+.apps-modal-card { background: var(--card); border: 1px solid var(--border2); border-radius: var(--radius); padding: 24px; max-width: 640px; width: 100%; max-height: 85vh; overflow-y: auto; position: relative; box-shadow: var(--shadow-lg); }
+.apps-modal-close { position: absolute; top: 14px; right: 14px; background: var(--card3); border: none; color: var(--muted); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 14px; }
+.apps-modal-close:hover { color: var(--text); }
