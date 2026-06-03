@@ -430,6 +430,14 @@ module.exports = function startDashboard(client) {
     res.json({ success: true, disabled });
   });
 
+  // Bulk enable/disable (e.g. a whole category, or the current filtered view).
+  app.put('/api/guild/:id/command-toggles/bulk', requireAuth, guildGuard, (req, res) => {
+    const names = Array.isArray(req.body?.names) ? req.body.names.filter(n => client.commands.has(n)) : [];
+    if (!names.length) return res.status(400).json({ error: 'No valid commands provided.' });
+    const disabled = client.store.setCommandsEnabled(req.params.id, names, !!req.body.enabled);
+    res.json({ success: true, disabled });
+  });
+
   // ── General settings (per guild) ──────────────
   app.get('/api/guild/:id/prefix', requireAuth, guildGuard, (req, res) => {
     res.json({ prefix: client.store.getPrefix(req.params.id), defaultPrefix: require('../config').prefix });

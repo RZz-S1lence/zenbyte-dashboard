@@ -127,8 +127,13 @@ class Store {
   }
 
   setCommandEnabled(guildId, name, enabled) {
+    return this.setCommandsEnabled(guildId, [name], enabled);
+  }
+
+  // Enable/disable several commands at once with a single save.
+  setCommandsEnabled(guildId, names, enabled) {
     const set = new Set(this.getDisabledCommands(guildId));
-    if (enabled) set.delete(name); else set.add(name);
+    for (const name of names) { if (enabled) set.delete(name); else set.add(name); }
     if (set.size) this.commandToggles.set(guildId, [...set]);
     else this.commandToggles.delete(guildId);
     saveJson(FILES.commandToggles, Object.fromEntries(this.commandToggles));

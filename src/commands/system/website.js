@@ -10,10 +10,12 @@ module.exports = {
     .setDescription('Get the link to the dashboard'),
 
   async execute(interaction) {
+    // Prefer the configured public URL (DASHBOARD_URL); fall back to the live domain.
+    const url = (dashboard.url || 'https://zenbyte-dashboard.de').replace(/\/+$/, '');
     await interaction.reply({
       embeds: [embeds.custom({
         title: "🌐 ZenByte Dashboard",
-        description: `**http://localhost:${dashboard.port}**\n\nManage log channels, the ticket system, transcripts, and view bot logs.`,
+        description: `**${url}**\n\nManage log channels, the ticket system, transcripts, and view bot logs.`,
         color: embeds.COLORS.brand,
         footer: { text: 'The bot must be running for the dashboard to be reachable.' }
       })],

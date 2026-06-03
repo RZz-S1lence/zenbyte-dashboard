@@ -1,5 +1,7 @@
+const { AttachmentBuilder } = require('discord.js');
 const { levelFromXp, levelProgress, totalXpForLevel } = require('./formula');
 const { weekKey, monthKey } = require('./store');
+const { renderRankCard } = require('./rankcard');
 
 const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
@@ -47,6 +49,25 @@ async function applyRewards(member, cfg, level) {
   }
 }
 
+// Renders the level-up rank card image, when enabled. Returns a files array for
+// message payloads, or [] on any failure (announcement still goes out as text).
+async function announceFiles(client, guild, member, cfg) {
+  if (!cfg.announce.card) return [];
+  try {
+    const info = rankOf(client, guild, member.id);
+    const buffer = await renderRankCard({
+      username:  member.user.username,
+      avatarUrl: member.user.displayAvatarURL({ extension: 'png', size: 128 }),
+      level:     info.level,
+      rank:      info.rank,
+      current:   info.current,
+      required:  info.required,
+      accent:    cfg.rankCard.accent
+    });
+    return [new AttachmentBuilder(buffer, { name: 'levelup.png' })];
+  } catch { return []; }
+}
+
 async function announce(client, guild, member, level, cfg, currentChannel) {
   if (cfg.announce.mode === 'off') return;
   const text = cfg.announce.message
@@ -55,10 +76,12 @@ async function announce(client, guild, member, level, cfg, currentChannel) {
     .replaceAll('{level}', String(level))
     .replaceAll('{server}', guild.name);
 
-  if (cfg.announce.mode === 'dm') return void member.send(text).catch(() => {});
+  const files = await announceFiles(client, guild, member, cfg);
+
+  if (cfg.announce.mode === 'dm') return void member.send({ content: text, files }).catch(() => {});
   const channel = cfg.announce.mode === 'current' ? currentChannel : guild.channels.cache.get(cfg.announce.channelId);
   if (channel?.isTextBased?.())
-    await channel.send({ content: text, allowedMentions: { users: [member.id] } }).catch(() => {});
+    await channel.send({ content: text, files, allowedMentions: { users: [member.id] } }).catch(() => {});
 }
 
 // Core XP grant. Applies level-ups, rewards and announcements. `amount` may be

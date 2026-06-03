@@ -387,6 +387,18 @@ textarea { resize: vertical; min-height: 70px; width: 100%; }
 .cmd-chip.active { background: var(--grad); color: #fff; border-color: transparent; box-shadow: 0 6px 16px rgba(124,108,245,.35); }
 .cmd-toggle-hint { color: var(--muted); font-size: 12px; margin-bottom: 16px; }
 .cmd-head-right { display: flex; align-items: center; gap: 10px; }
+
+/* Commands: status chips + bulk toolbar + per-category actions */
+.cmd-status-chips { margin-top: -6px; }
+.cmd-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
+.cmd-stats { color: var(--muted); font-size: 13px; font-weight: 600; }
+.cmd-bulk { display: flex; gap: 8px; }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.cmd-cat-actions { margin-left: auto; display: flex; gap: 6px; text-transform: none; letter-spacing: 0; }
+.cmd-cat-btn { background: transparent; border: 1px solid var(--border2); color: var(--muted); border-radius: 7px;
+  padding: 3px 9px; font-size: 11px; cursor: pointer; transition: .15s; }
+.cmd-cat-btn:hover { color: var(--text); border-color: var(--accent, var(--border2)); }
 .cmd-card.cmd-disabled { opacity: .55; }
 .cmd-card.cmd-disabled .cmd-name { text-decoration: line-through; }
 .cmd-switch { position: relative; display: inline-block; width: 38px; height: 22px; flex-shrink: 0; }
@@ -519,3 +531,54 @@ textarea { resize: vertical; min-height: 70px; width: 100%; }
 .apps-modal-card { background: var(--card); border: 1px solid var(--border2); border-radius: var(--radius); padding: 24px; max-width: 640px; width: 100%; max-height: 85vh; overflow-y: auto; position: relative; box-shadow: var(--shadow-lg); }
 .apps-modal-close { position: absolute; top: 14px; right: 14px; background: var(--card3); border: none; color: var(--muted); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 14px; }
 .apps-modal-close:hover { color: var(--text); }
+
+/* ═══ Member Counters ═══ */
+.mc-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 6px; }
+.mc-head-info { color: var(--muted); font-size: 14px; }
+.mc-head-info strong { color: var(--text); }
+.mc-head-actions { display: flex; gap: 8px; }
+.mc-list-msg { display: block; min-height: 18px; margin-bottom: 10px; }
+
+/* Counter grid + cards */
+.mc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.mc-card { background: var(--card); border: 1px solid var(--border2); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; transition: border-color .15s, transform .15s; }
+.mc-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.mc-card.mc-off { opacity: .6; }
+.mc-card-top { display: flex; align-items: center; justify-content: space-between; }
+.mc-type-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text); background: var(--grad-soft); border: 1px solid var(--border2); padding: 4px 10px; border-radius: 999px; }
+.mc-card-sub { font-size: 12px; color: var(--muted); }
+.mc-card-actions { display: flex; gap: 8px; margin-top: 2px; }
+.mc-act { flex: 1; background: var(--card3); border: 1px solid var(--border2); color: var(--text); border-radius: 8px; padding: 7px; font-size: 12.5px; cursor: pointer; transition: .15s; }
+.mc-act:hover { border-color: var(--accent); }
+.mc-act-danger:hover { border-color: var(--red); color: var(--red); }
+
+/* Discord-style channel pill */
+.mc-pill { display: flex; align-items: center; gap: 8px; background: var(--bg2); border: 1px solid var(--border2); border-radius: 8px; padding: 9px 12px; font-weight: 600; color: var(--text); overflow: hidden; }
+.mc-pill-dot { opacity: .7; flex-shrink: 0; }
+.mc-pill-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc-pill-lg { font-size: 17px; padding: 13px 16px; }
+
+/* Empty state */
+.mc-empty { text-align: center; padding: 46px 20px; background: var(--card); border: 1px dashed var(--border2); border-radius: 14px; }
+.mc-empty-ico { font-size: 44px; margin-bottom: 8px; }
+.mc-empty h4 { margin: 0 0 6px; font-size: 17px; }
+.mc-empty p { color: var(--muted); font-size: 13.5px; max-width: 380px; margin: 0 auto 18px; }
+
+/* Editor */
+.mc-editor-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.mc-editor-head h3 { margin: 0; }
+.mc-x { background: var(--card3); border: none; color: var(--muted); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 14px; }
+.mc-x:hover { color: var(--text); }
+.mc-preview-wrap { background: var(--grad-soft); border: 1px solid var(--border2); border-radius: 12px; padding: 14px 16px; margin-bottom: 20px; }
+.mc-preview-label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin-bottom: 8px; }
+.mc-step { display: block; font-size: 13px; font-weight: 600; color: var(--text); margin: 4px 0 10px; }
+.mc-fields { margin-top: 18px; }
+.mc-enable-row { display: flex; align-items: center; gap: 10px; margin: 16px 0 4px; }
+
+/* Type picker */
+.mc-type-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
+.mc-type { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 8px; background: var(--card2); border: 1.5px solid var(--border2); border-radius: 12px; cursor: pointer; transition: .15s; color: var(--text); }
+.mc-type:hover { border-color: var(--accent); transform: translateY(-2px); }
+.mc-type.active { border-color: var(--accent); background: var(--grad-soft); box-shadow: 0 4px 14px rgba(124,108,245,.25); }
+.mc-type-ico { font-size: 24px; }
+.mc-type-label { font-size: 12px; font-weight: 600; text-align: center; }

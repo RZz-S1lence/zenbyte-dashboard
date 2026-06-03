@@ -13,6 +13,7 @@ const state = {
   commands:    [],   // cached command list from /api/commands
   cmdDisabled: new Set(), // disabled command names for the selected guild
   cmdCategory: 'all',     // commands page category filter
+  cmdStatus:   'all',     // commands page status filter (all|enabled|disabled)
   security:     null, // current anti-nuke config
   securityMeta: null, // { protections, punishments }
   leveling:     null, // current leveling config
@@ -204,6 +205,7 @@ async function loadCommands() {
 }
 
 function setCmdCategory(cat) { state.cmdCategory = cat; renderCommands(); }
+function setCmdStatus(status) { state.cmdStatus = status; renderCommands(); }
 
 async function toggleCommand(name, enable) {
   if (!state.guildId) return;
@@ -214,6 +216,25 @@ async function toggleCommand(name, enable) {
     if (enable) state.cmdDisabled.delete(name); else state.cmdDisabled.add(name);
   }
   renderCommands();
+}
+
+// Enable/disable many commands at once (a category, or everything in view).
+async function bulkToggleCommands(names, enable) {
+  if (!state.guildId || !names.length) return;
+  try {
+    const { disabled } = await api('PUT', `/api/guild/${state.guildId}/command-toggles/bulk`, { names, enabled: enable });
+    state.cmdDisabled = new Set(disabled);
+  } catch {
+    for (const n of names) { if (enable) state.cmdDisabled.delete(n); else state.cmdDisabled.add(n); }
+  }
+  renderCommands();
+}
+
+// Names of the commands currently shown (after category + status + search filters).
+function visibleCommandNames() { return (state.cmdFiltered || []).map(c => c.name); }
+function toggleCategoryCommands(cat, enable) {
+  const names = state.commands.filter(c => (c.category || 'General') === cat).map(c => c.name);
+  bulkToggleCommands(names, enable);
 }
 
 function permBadges(cmd) {
@@ -234,38 +255,72 @@ function renderCommands() {
   const body  = document.getElementById('commands-body');
   const query = (document.getElementById('cmd-search').value || '').toLowerCase().trim();
   const active = state.cmdCategory || 'all';
+  const status = state.cmdStatus || 'all';
+  const hasGuild = !!state.guildId;
+  const isDisabled = c => state.cmdDisabled?.has(c.name);
 
   const categories = [...new Set(state.commands.map(c => c.category || 'General'))].sort();
   const chips = ['all', ...categories].map(cat =>
     `<button class="cmd-chip${active === cat ? ' active' : ''}" onclick="setCmdCategory('${esc(cat)}')">${cat === 'all' ? 'All' : esc(cat)}</button>`
   ).join('');
 
+  // Status filter (only meaningful when a server is selected).
+  const statusChips = hasGuild ? `<div class="cmd-chips cmd-status-chips">
+    ${['all', 'enabled', 'disabled'].map(s =>
+      `<button class="cmd-chip${status === s ? ' active' : ''}" onclick="setCmdStatus('${s}')">${s[0].toUpperCase() + s.slice(1)}</button>`).join('')}
+  </div>` : '';
+
   const filtered = state.commands.filter(c => {
     const cat = c.category || 'General';
     if (active !== 'all' && cat !== active) return false;
+    if (hasGuild && status === 'enabled'  && isDisabled(c)) return false;
+    if (hasGuild && status === 'disabled' && !isDisabled(c)) return false;
     return !query || c.name.toLowerCase().includes(query) ||
       (c.description || '').toLowerCase().includes(query) || cat.toLowerCase().includes(query);
   });
+  state.cmdFiltered = filtered; // used by the bulk "in view" actions
 
   document.getElementById('cmd-count').textContent =
     `${filtered.length} command${filtered.length === 1 ? '' : 's'}`;
 
-  const hint = state.guildId
+  // Stats + bulk actions for the current view.
+  let toolbar = '';
+  if (hasGuild) {
+    const totalDisabled = state.commands.filter(isDisabled).length;
+    const enabledCount = state.commands.length - totalDisabled;
+    const viewNames = filtered.map(c => c.name);
+    toolbar = `<div class="cmd-toolbar">
+      <span class="cmd-stats">✅ ${enabledCount} enabled · ⛔ ${totalDisabled} disabled</span>
+      <span class="cmd-bulk">
+        <button class="btn btn-secondary btn-sm" ${viewNames.length ? '' : 'disabled'}
+          onclick='bulkToggleCommands(${JSON.stringify(viewNames)}, true)'>Enable all shown</button>
+        <button class="btn btn-secondary btn-sm" ${viewNames.length ? '' : 'disabled'}
+          onclick='bulkToggleCommands(${JSON.stringify(viewNames)}, false)'>Disable all shown</button>
+      </span>
+    </div>`;
+  }
+
+  const hint = hasGuild
     ? '<p class="cmd-toggle-hint">Toggle a command to enable or disable it in the selected server.</p>'
     : '<p class="cmd-toggle-hint">← Select a server to enable/disable commands.</p>';
 
   const groups = {};
   for (const c of filtered) (groups[c.category || 'General'] = groups[c.category || 'General'] || []).push(c);
 
+  const catActions = cat => hasGuild ? `<span class="cmd-cat-actions">
+      <button class="cmd-cat-btn" onclick="toggleCategoryCommands('${esc(cat)}', true)">Enable all</button>
+      <button class="cmd-cat-btn" onclick="toggleCategoryCommands('${esc(cat)}', false)">Disable all</button>
+    </span>` : '';
+
   const list = !filtered.length
     ? '<p style="color:var(--muted);padding:20px">No commands match your filter.</p>'
     : Object.keys(groups).sort().map(cat => `
         <div class="cmd-category">
-          <h3 class="cmd-cat-title">${esc(cat)} <span class="cmd-cat-count">${groups[cat].length}</span></h3>
+          <h3 class="cmd-cat-title">${esc(cat)} <span class="cmd-cat-count">${groups[cat].length}</span>${catActions(cat)}</h3>
           <div class="cmd-grid">${groups[cat].map(renderCommandCard).join('')}</div>
         </div>`).join('');
 
-  body.innerHTML = `<div class="cmd-chips">${chips}</div>${hint}${list}`;
+  body.innerHTML = `<div class="cmd-chips">${chips}</div>${statusChips}${toolbar}${hint}${list}`;
 }
 
 function renderCommandCard(cmd) {
@@ -1466,6 +1521,8 @@ function renderLeveling() {
       </div>
       <div class="form-row"><label>Message</label><textarea id="lv-ann-msg">${esc(c.announce.message)}</textarea>
         <span class="hint">Placeholders: {user} {username} {level} {server}</span></div>
+      <div class="form-row"><label class="sec-switch"><input type="checkbox" id="lv-ann-card" ${chk(c.announce.card)}><span>Attach the rank card image</span></label>
+        <span class="hint">Posts the member's rank card alongside the level-up message (works for channel &amp; DM modes).</span></div>
     </div>
 
     <div class="card">
@@ -1560,7 +1617,7 @@ function collectLeveling() {
   c.multiplier = numv('lv-multiplier', 1);
   c.maxLevel = numv('lv-maxlevel', 0);
   c.announce = { mode: document.getElementById('lv-ann-mode').value, channelId: document.getElementById('lv-ann-channel').value || null,
-                 message: document.getElementById('lv-ann-msg').value };
+                 message: document.getElementById('lv-ann-msg').value, card: boolv('lv-ann-card') };
   c.stackRewards = boolv('lv-stack');
   c.removeRewardsOnReset = boolv('lv-removereset');
   c.leaderboard = { weeklyEnabled: boolv('lv-lb-weekly'), monthlyEnabled: boolv('lv-lb-monthly') };
@@ -2757,6 +2814,8 @@ async function loadMemberCounters() {
   renderMemberCounters();
 }
 
+const MC_ICONS = { all: '👥', humans: '🧑', bots: '🤖', boosters: '🚀', role: '📛', channels: '📚', roles: '🎭' };
+
 function mcChannelOptions(selected) {
   const gd = state.guildData || {};
   const grp = (label, arr, prefix) => (arr && arr.length)
@@ -2765,9 +2824,6 @@ function mcChannelOptions(selected) {
     + grp('Voice channels', gd.voiceChannels, '🔊 ')
     + grp('Categories', gd.categories, '📁 ')
     + grp('Text channels', gd.textChannels, '# ');
-}
-function mcTypeOptions(selected) {
-  return state.mcTypes.map(t => `<option value="${t.key}"${t.key === selected ? ' selected' : ''}>${esc(t.label)}</option>`).join('');
 }
 function mcRoleOptions(selected) {
   return `<option value="">Select a role…</option>` +
@@ -2789,80 +2845,142 @@ function mcLiveValue(c) {
   if (c.lastValue != null) return Number(c.lastValue).toLocaleString();
   return null;
 }
+function mcRoleName(roleId) { return (state.guildData?.roles || []).find(r => r.id === roleId)?.name || 'Role'; }
 
-function mcEditorCard() {
-  const c = mcEditingId ? state.mcCounters.find(x => x.id === mcEditingId) : null;
+// Renders a template the way Discord will show it, using live/sample values.
+function mcRender(type, template, roleId, liveCount) {
+  const meta = state.mcTypes.find(t => t.key === type) || {};
+  const tpl = (template || '').trim() || meta.defaultTemplate || '{count}';
+  let count = liveCount;
+  if (count == null) count = (state.mcPreview || {})[type];
+  count = (count == null) ? (meta.needsRole ? '12' : '0') : Number(count).toLocaleString();
+  const roleName = meta.needsRole ? mcRoleName(roleId) : '';
+  return tpl.replace(/\{count\}/gi, count).replace(/\{role\}/gi, roleName).replace(/\{server\}/gi, state.guildData?.name || 'Server').slice(0, 100);
+}
+
+// ── List view ─────────────────────────────────────
+function renderMemberCounters() {
+  document.getElementById('mc-body').innerHTML = mcEditingId ? mcEditorHtml() : mcListHtml();
+  if (mcEditingId) mcUpdatePreview();
+}
+
+function mcListHtml() {
+  const head = `<div class="mc-head">
+      <div class="mc-head-info"><strong>${state.mcCounters.length}</strong> counter${state.mcCounters.length === 1 ? '' : 's'} configured</div>
+      <div class="mc-head-actions">
+        ${state.mcCounters.length ? `<button class="btn btn-secondary" onclick="mcRefresh()">🔄 Refresh now</button>` : ''}
+        <button class="btn btn-primary" onclick="mcAdd()">➕ Add Counter</button>
+      </div>
+    </div>
+    <div id="mc-list-msg" class="save-status mc-list-msg"></div>`;
+
+  if (!state.mcCounters.length) return head + `
+    <div class="mc-empty">
+      <div class="mc-empty-ico">🔢</div>
+      <h4>No counters yet</h4>
+      <p>Show live server stats — members, boosters, role counts — right in your channel list.</p>
+      <button class="btn btn-primary" onclick="mcAdd()">➕ Add your first counter</button>
+    </div>`;
+
+  const cards = state.mcCounters.map(c => {
+    const meta = state.mcTypes.find(t => t.key === c.type) || {};
+    const name = mcRender(c.type, c.template, c.roleId, c.lastValue);
+    return `<div class="mc-card${c.enabled ? '' : ' mc-off'}">
+      <div class="mc-card-top">
+        <span class="mc-type-badge">${MC_ICONS[c.type] || '🔢'} ${esc(meta.label || c.type)}</span>
+        <label class="cmd-switch" title="${c.enabled ? 'Enabled' : 'Disabled'}">
+          <input type="checkbox" ${c.enabled ? 'checked' : ''} onchange="mcToggle('${esc(c.id)}', this.checked)"><span class="cmd-slider"></span>
+        </label>
+      </div>
+      <div class="mc-pill"><span class="mc-pill-dot">🔊</span><span class="mc-pill-name">${esc(name)}</span></div>
+      <div class="mc-card-sub">renames ${esc(mcChannelName(c.channelId))}</div>
+      <div class="mc-card-actions">
+        <button class="mc-act" onclick="mcEdit('${esc(c.id)}')">✏️ Edit</button>
+        <button class="mc-act mc-act-danger" onclick="mcDelete('${esc(c.id)}')">🗑️ Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  return head + `<div class="mc-grid">${cards}</div>`;
+}
+
+// ── Editor ────────────────────────────────────────
+function mcEditorHtml() {
+  const editing = mcEditingId && mcEditingId !== 'new';
+  const c = editing ? state.mcCounters.find(x => x.id === mcEditingId) : null;
   const type = c?.type || (state.mcTypes[0]?.key || 'all');
   const meta = state.mcTypes.find(t => t.key === type) || {};
+
+  const typeCards = state.mcTypes.map(t => `
+    <button type="button" class="mc-type${t.key === type ? ' active' : ''}" data-type="${t.key}" onclick="mcSelectType('${t.key}')">
+      <span class="mc-type-ico">${MC_ICONS[t.key] || '🔢'}</span>
+      <span class="mc-type-label">${esc(t.label)}</span>
+    </button>`).join('');
+
   return `
-    <div class="card">
-      <h3>${c ? '✏️ Edit Counter' : '➕ Add a Counter'}</h3>
-      <div class="card-grid">
-        <div class="form-row"><label>Channel</label><select id="mc-f-channel">${mcChannelOptions(c?.channelId)}</select>
-          <span class="hint">A voice channel or category looks best. I need <strong>Manage Channels</strong> on it.</span></div>
-        <div class="form-row"><label>Counter Type</label><select id="mc-f-type" onchange="mcTypeChanged()">${mcTypeOptions(type)}</select></div>
-        <div class="form-row${meta.needsRole ? '' : ' hidden'}" id="mc-f-role-row"><label>Role</label><select id="mc-f-role">${mcRoleOptions(c?.roleId)}</select></div>
+    <div class="card mc-editor">
+      <div class="mc-editor-head">
+        <h3>${editing ? '✏️ Edit Counter' : '➕ New Counter'}</h3>
+        <button class="mc-x" onclick="mcCancelEdit()" title="Back to list">✕</button>
       </div>
-      <div class="form-row"><label>Channel Name Template</label>
-        <input id="mc-f-template" maxlength="100" value="${esc(c?.template || '')}" placeholder="${esc(meta.defaultTemplate || '{count}')}">
-        <span class="hint">Placeholders: <code>{count}</code>, <code>{role}</code>, <code>{server}</code>. <span id="mc-f-preview"></span></span></div>
-      <div class="form-row"><label class="cmd-switch"><input type="checkbox" id="mc-f-enabled" ${c ? (c.enabled ? 'checked' : '') : 'checked'}><span class="cmd-slider"></span></label> <span style="margin-left:8px">Enabled</span></div>
+
+      <div class="mc-preview-wrap">
+        <span class="mc-preview-label">Preview — how the channel will look</span>
+        <div class="mc-pill mc-pill-lg"><span class="mc-pill-dot">🔊</span><span class="mc-pill-name" id="mc-preview-pill"></span></div>
+      </div>
+
+      <input type="hidden" id="mc-f-type" value="${type}">
+
+      <label class="mc-step">1 · What should it count?</label>
+      <div class="mc-type-grid">${typeCards}</div>
+
+      <div class="card-grid mc-fields">
+        <div class="form-row"><label>2 · Channel to rename</label>
+          <select id="mc-f-channel" onchange="mcUpdatePreview()">${mcChannelOptions(c?.channelId)}</select>
+          <span class="hint">Voice channels &amp; categories look best. The bot needs <strong>Manage Channels</strong> here.</span></div>
+        <div class="form-row${meta.needsRole ? '' : ' hidden'}" id="mc-f-role-row"><label>Role to track</label>
+          <select id="mc-f-role" onchange="mcUpdatePreview()">${mcRoleOptions(c?.roleId)}</select></div>
+      </div>
+
+      <div class="form-row"><label>3 · Name template</label>
+        <input id="mc-f-template" maxlength="100" value="${esc(c?.template || '')}" placeholder="${esc(meta.defaultTemplate || '{count}')}" oninput="mcUpdatePreview()">
+        <span class="hint">Placeholders: <code>{count}</code> · <code>{role}</code> · <code>{server}</code></span></div>
+
+      <div class="mc-enable-row">
+        <label class="cmd-switch"><input type="checkbox" id="mc-f-enabled" ${c ? (c.enabled ? 'checked' : '') : 'checked'}><span class="cmd-slider"></span></label>
+        <span>Enabled</span>
+      </div>
+
       <div class="save-bar">
-        <button class="btn btn-primary" onclick="mcSave()">${c ? 'Save Changes' : 'Add Counter'}</button>
-        ${c ? `<button class="btn btn-secondary" onclick="mcCancelEdit()">Cancel</button>` : ''}
+        <button class="btn btn-primary" onclick="mcSave()">${editing ? 'Save Changes' : 'Create Counter'}</button>
+        <button class="btn btn-secondary" onclick="mcCancelEdit()">Cancel</button>
         <span id="mc-editor-msg" class="save-status"></span>
       </div>
     </div>`;
 }
 
-function mcListHtml() {
-  if (!state.mcCounters.length)
-    return `<div class="card"><p class="hint">No counters yet — add one above. Channels update automatically every few minutes and on member join/leave.</p></div>`;
-  const rows = state.mcCounters.map(c => {
-    const meta = state.mcTypes.find(t => t.key === c.type) || {};
-    const live = mcLiveValue(c);
-    return `<div class="apps-form-row">
-      <div class="apps-form-info">
-        <div class="apps-form-name">${esc(mcChannelName(c.channelId))} ${c.enabled ? '<span class="badge badge-low">Enabled</span>' : '<span class="badge">Disabled</span>'}</div>
-        <div class="hint">${esc(meta.label || c.type)} · <code>${esc(c.template)}</code>${live !== null ? ` · now: <strong>${live}</strong>` : ''}</div>
-      </div>
-      <div class="apps-form-actions">
-        <button class="btn btn-secondary" onclick="mcToggle('${esc(c.id)}',${c.enabled ? 'false' : 'true'})">${c.enabled ? 'Disable' : 'Enable'}</button>
-        <button class="btn btn-secondary" onclick="mcEdit('${esc(c.id)}')">Edit</button>
-        <button class="btn btn-secondary" onclick="mcDelete('${esc(c.id)}')">Delete</button>
-      </div>
-    </div>`;
-  }).join('');
-  return `<div class="card">
-    <h3>Your Counters</h3>
-    <div class="apps-form-list">${rows}</div>
-    <div style="margin-top:14px"><button class="btn btn-secondary" onclick="mcRefresh()">🔄 Refresh now</button>
-      <span id="mc-list-msg" class="save-status"></span></div>
-  </div>`;
-}
-
-function renderMemberCounters() {
-  document.getElementById('mc-body').innerHTML = mcEditorCard() + mcListHtml();
-  mcTypeChanged();
-}
-
-function mcTypeChanged() {
-  const sel = document.getElementById('mc-f-type');
-  if (!sel) return;
-  const meta = state.mcTypes.find(t => t.key === sel.value) || {};
+function mcSelectType(key) {
+  document.getElementById('mc-f-type').value = key;
+  document.querySelectorAll('.mc-type').forEach(b => b.classList.toggle('active', b.dataset.type === key));
+  const meta = state.mcTypes.find(t => t.key === key) || {};
   document.getElementById('mc-f-role-row').classList.toggle('hidden', !meta.needsRole);
   const tpl = document.getElementById('mc-f-template');
   if (tpl) tpl.placeholder = meta.defaultTemplate || '{count}';
-  const prev = document.getElementById('mc-f-preview');
-  if (prev) {
-    const v = (state.mcPreview || {})[sel.value];
-    prev.textContent = (v !== undefined && v !== null) ? `Current value: ${Number(v).toLocaleString()}`
-      : (meta.needsRole ? 'Current value depends on the chosen role.' : '');
-  }
+  mcUpdatePreview();
+}
+
+function mcUpdatePreview() {
+  const pill = document.getElementById('mc-preview-pill');
+  if (!pill) return;
+  const type = document.getElementById('mc-f-type').value;
+  const tpl  = document.getElementById('mc-f-template').value;
+  const roleEl = document.getElementById('mc-f-role');
+  pill.textContent = mcRender(type, tpl, roleEl ? roleEl.value : null, null);
 }
 
 async function mcSave() {
   const msg = document.getElementById('mc-editor-msg');
+  const editing = mcEditingId && mcEditingId !== 'new';
   const roleEl = document.getElementById('mc-f-role');
   const payload = {
     channelId: document.getElementById('mc-f-channel').value || null,
@@ -2875,13 +2993,14 @@ async function mcSave() {
   const meta = state.mcTypes.find(t => t.key === payload.type) || {};
   if (meta.needsRole && !payload.roleId) return setStatus(msg, 'err', '❌ Pick a role for this counter type.');
   try {
-    if (mcEditingId) await api('PUT', `/api/guild/${state.guildId}/membercounters/${mcEditingId}`, payload);
+    if (editing) await api('PUT', `/api/guild/${state.guildId}/membercounters/${mcEditingId}`, payload);
     else await api('POST', `/api/guild/${state.guildId}/membercounters`, payload);
     mcEditingId = null;
     await loadMemberCounters();
   } catch (e) { setStatus(msg, 'err', '❌ ' + e.message); }
 }
 
+function mcAdd() { mcEditingId = 'new'; renderMemberCounters(); }
 function mcEdit(id) { mcEditingId = id; renderMemberCounters(); document.getElementById('mc-body').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 function mcCancelEdit() { mcEditingId = null; renderMemberCounters(); }
 

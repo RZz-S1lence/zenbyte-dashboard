@@ -10,7 +10,7 @@ function defaultConfig() {
     formula:  { curve: 'mee6', baseXp: 100, factor: 1.2 },
     maxLevel: 0,
     multiplier: 1,
-    announce: { mode: 'channel', channelId: null, message: 'GG {user}, you just reached **level {level}**! 🎉' },
+    announce: { mode: 'channel', channelId: null, message: 'GG {user}, you just reached **level {level}**! 🎉', card: false },
     roleRewards: [],
     stackRewards: true,
     removeRewardsOnReset: true,
@@ -70,7 +70,8 @@ function mergeConfig(stored = {}) {
     announce: {
       mode:      ANNOUNCE_MODES.includes(s.announce?.mode) ? s.announce.mode : d.announce.mode,
       channelId: /^\d{16,20}$/.test(s.announce?.channelId) ? s.announce.channelId : null,
-      message:   typeof s.announce?.message === 'string' && s.announce.message.trim() ? s.announce.message.slice(0, 1000) : d.announce.message
+      message:   typeof s.announce?.message === 'string' && s.announce.message.trim() ? s.announce.message.slice(0, 1000) : d.announce.message,
+      card:      bool(s.announce?.card, d.announce.card)
     },
     roleRewards:          rewardList(s.roleRewards),
     stackRewards:         bool(s.stackRewards, d.stackRewards),
