@@ -164,8 +164,11 @@ module.exports = function startDashboard(client) {
     res.json({
       ready:     client.isReady(),
       tag:       client.user?.tag || 'Not connected',
-      avatarUrl: client.user?.displayAvatarURL({ size: 64 }) || null,
+      avatarUrl: client.user?.displayAvatarURL({ size: 128 }) || null,
       guilds:    client.guilds.cache.size,
+      members:   client.guilds.cache.reduce((sum, g) => sum + (g.memberCount || 0), 0),
+      commands:  client.commands.size,
+      ping:      client.ws.ping >= 0 ? Math.round(client.ws.ping) : null,
       uptime:    `${h}h ${m}m ${s}s`
     });
   });

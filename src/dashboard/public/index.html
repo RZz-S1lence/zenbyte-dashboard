@@ -126,26 +126,37 @@
 
     <!-- ─── OVERVIEW ─── -->
     <div id="page-overview" class="page active">
-      <div class="page-header">
-        <h2>Overview</h2>
-        <p>Real-time bot status</p>
+      <div class="ov-hero">
+        <img id="ov-avatar" class="ov-hero-avatar" src="" alt="">
+        <div class="ov-hero-info">
+          <div class="ov-status" id="ov-status"><span class="ov-dot"></span> Connecting…</div>
+          <h2 id="ov-name">ZenByte</h2>
+          <p>Your all-in-one dashboard for moderation, leveling, tickets and more.</p>
+        </div>
+        <div class="ov-hero-actions">
+          <a id="ov-invite" class="btn btn-primary" href="#" target="_blank" rel="noopener">➕ Invite Bot</a>
+          <a id="ov-support" class="btn btn-secondary" href="#" target="_blank" rel="noopener">💬 Support</a>
+        </div>
       </div>
+
       <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-label">Status</div>
-          <div class="stat-value" id="stat-status">…</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Bot Tag</div>
-          <div class="stat-value" id="stat-tag" style="font-size:15px">…</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Servers</div>
-          <div class="stat-value" id="stat-guilds">…</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Uptime</div>
-          <div class="stat-value" id="stat-uptime" style="font-size:15px">…</div>
+        <div class="stat-card"><div class="stat-ico">🛰️</div><div class="stat-label">Status</div><div class="stat-value" id="stat-status">…</div></div>
+        <div class="stat-card"><div class="stat-ico">🏠</div><div class="stat-label">Servers</div><div class="stat-value" id="stat-guilds">…</div></div>
+        <div class="stat-card"><div class="stat-ico">👥</div><div class="stat-label">Members</div><div class="stat-value" id="stat-members">…</div></div>
+        <div class="stat-card"><div class="stat-ico">⚡</div><div class="stat-label">Commands</div><div class="stat-value" id="stat-commands">…</div></div>
+        <div class="stat-card"><div class="stat-ico">📡</div><div class="stat-label">Ping</div><div class="stat-value" id="stat-ping">…</div></div>
+        <div class="stat-card"><div class="stat-ico">⏱️</div><div class="stat-label">Uptime</div><div class="stat-value" id="stat-uptime" style="font-size:18px">…</div></div>
+      </div>
+
+      <div class="ov-quick">
+        <h3 class="ov-quick-title">Quick Actions</h3>
+        <div class="ov-quick-grid">
+          <button class="ov-quick-card" onclick="goto('applications')"><span class="ov-q-ico">📝</span> Applications</button>
+          <button class="ov-quick-card" onclick="goto('membercounters')"><span class="ov-q-ico">🔢</span> Member Counters</button>
+          <button class="ov-quick-card" onclick="goto('leveling')"><span class="ov-q-ico">⭐</span> Leveling</button>
+          <button class="ov-quick-card" onclick="goto('tickets')"><span class="ov-q-ico">🎫</span> Tickets</button>
+          <button class="ov-quick-card" onclick="goto('commands')"><span class="ov-q-ico">⌨️</span> Commands</button>
+          <button class="ov-quick-card" onclick="goto('security')"><span class="ov-q-ico">🛡️</span> Anti-Nuke</button>
         </div>
       </div>
     </div>
@@ -694,6 +705,6 @@
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
-<script src="app.js"></script>
+<script src="app.js">
 </body>
 </html>

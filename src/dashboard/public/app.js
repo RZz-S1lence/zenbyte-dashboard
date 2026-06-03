@@ -62,6 +62,8 @@ function applyLinks(links) {
   set('sidebar-support', links.support);
   set('addbot-support', links.support);
   set('addbot-invite', links.invite);
+  set('ov-support', links.support);
+  set('ov-invite', links.invite);
 }
 
 const AUTH_ERRORS = {
@@ -168,12 +170,22 @@ if (_main) { _main.addEventListener('input', markDirty); _main.addEventListener(
 async function loadStatus() {
   try {
     const s = await api('GET', '/api/status');
-    document.getElementById('stat-status').textContent = s.ready ? '🟢 Online' : '🔴 Offline';
-    document.getElementById('stat-tag').textContent    = s.tag;
-    document.getElementById('stat-guilds').textContent = s.guilds;
-    document.getElementById('stat-uptime').textContent = s.uptime;
+    const setTxt = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+
+    setTxt('stat-status',   s.ready ? '🟢 Online' : '🔴 Offline');
+    setTxt('stat-guilds',   s.guilds);
+    setTxt('stat-members',  (s.members ?? 0).toLocaleString());
+    setTxt('stat-commands', s.commands ?? '—');
+    setTxt('stat-ping',     s.ping != null ? `${s.ping} ms` : '—');
+    setTxt('stat-uptime',   s.uptime);
+
+    setTxt('ov-name', s.tag);
+    const st = document.getElementById('ov-status');
+    if (st) st.innerHTML = `<span class="ov-dot${s.ready ? '' : ' off'}"></span> ${s.ready ? 'Online' : 'Offline'}`;
+
     if (s.avatarUrl) {
       document.getElementById('sidebar-bot-avatar').src = s.avatarUrl;
+      const ov = document.getElementById('ov-avatar'); if (ov) ov.src = s.avatarUrl;
       const ab = document.getElementById('addbot-avatar');
       if (ab) { ab.src = s.avatarUrl; ab.classList.remove('hidden'); }
     }
@@ -289,7 +301,7 @@ function renderCommands() {
     const totalDisabled = state.commands.filter(isDisabled).length;
     const enabledCount = state.commands.length - totalDisabled;
     const viewNames = filtered.map(c => c.name);
-    toolbar = `<div class="cmd-toolbar">
+    toolbar = `<div class="cmd-bulkbar">
       <span class="cmd-stats">✅ ${enabledCount} enabled · ⛔ ${totalDisabled} disabled</span>
       <span class="cmd-bulk">
         <button class="btn btn-secondary btn-sm" ${viewNames.length ? '' : 'disabled'}
