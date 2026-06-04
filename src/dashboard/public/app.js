@@ -3273,7 +3273,16 @@ function renderPremium() {
   const p = _premium;
   const body = document.getElementById('premium-body');
 
-  // Inactive (free) state — show plans + upgrade CTA.
+  const bl = p.buyLinks || {};
+  const planCard = (title, price, sub, link) => `
+    <div class="premium-plan">
+      <h4>${title}</h4>
+      <div class="premium-price">${price}</div>
+      <div class="muted">${sub}</div>
+      ${link ? `<a class="btn btn-primary btn-sm premium-buy" href="${esc(link)}" target="_blank" rel="noopener">Buy</a>` : ''}
+    </div>`;
+
+  // Inactive (free) state — show plans, each with its own Buy button.
   if (!p.active) {
     const pr = p.pricing || {};
     body.innerHTML = premiumProfileCard(p) + `
@@ -3281,11 +3290,12 @@ function renderPremium() {
         <div class="premium-status"><span class="sdot" style="background:var(--muted)"></span> You're on the <strong>Free</strong> plan.</div>
         <p class="muted">Upgrade to raise limits across polls, reaction roles, autoroles, social alerts, leveling rewards, member counters and applications — and unlock more across every server you manage.</p>
         <div class="premium-plans">
-          <div class="premium-plan"><h4>Pro</h4><div class="premium-price">${pr.pro ? pr.pro.monthly + '/mo' : '€4.99/mo'}</div><div class="muted">1 server slot</div></div>
-          <div class="premium-plan"><h4>Max</h4><div class="premium-price">${pr.max ? pr.max.monthly + '/mo' : '€9.99/mo'}</div><div class="muted">3 server slots</div></div>
-          <div class="premium-plan"><h4>Lifetime</h4><div class="premium-price">${pr.lifetime ? pr.lifetime.oneTime : '€89.99'}</div><div class="muted">1 slot, forever</div></div>
+          ${planCard('Pro', pr.pro ? pr.pro.monthly + '/mo' : '€4.99/mo', '1 server slot', bl.pro || p.upgradeUrl)}
+          ${planCard('Max', pr.max ? pr.max.monthly + '/mo' : '€9.99/mo', '3 server slots', bl.max || p.upgradeUrl)}
+          ${planCard('Lifetime', pr.lifetime ? pr.lifetime.oneTime : '€89.99', '1 slot, forever', bl.lifetime || p.upgradeUrl)}
         </div>
-        <a class="btn btn-primary" href="${esc(p.upgradeUrl || '#')}" target="_blank" rel="noopener">${svg('gem')} Upgrade to Premium</a>
+        <p class="premium-buy-hint muted">After purchase you'll receive a license key — activate it with <code>/activate-premium</code> in the ZenByte server.</p>
+        ${p.upgradeUrl ? `<a class="premium-store-link" href="${esc(p.upgradeUrl)}" target="_blank" rel="noopener">Browse all plans on the store →</a>` : ''}
       </div>`;
     hydrateIcons(body);
     return;
@@ -3318,6 +3328,21 @@ function renderPremium() {
         : '<p class="muted">Every server you manage is already activated.</p>')
     : '<p class="muted">All your slots are in use. Remove a server to free one up.</p>';
 
+  // Lifetime holders can buy additional permanent slots.
+  const extraPrice = (p.pricing && p.pricing.lifetime && p.pricing.lifetime.extraSlot) || '€24.99';
+  const extraSlotCard = (p.lifetime && bl.extraSlot)
+    ? `<div class="premium-card premium-extra">
+         <div class="premium-extra-info">
+           <h3>Need more slots?</h3>
+           <p class="muted">Add a permanent extra server slot to your Lifetime plan. After buying, activate the key with <code>/activate-premium</code>.</p>
+         </div>
+         <div class="premium-extra-buy">
+           <div class="premium-price">${esc(extraPrice)}</div>
+           <a class="btn btn-primary btn-sm" href="${esc(bl.extraSlot)}" target="_blank" rel="noopener">${svg('plus')} Buy slot</a>
+         </div>
+       </div>`
+    : '';
+
   body.innerHTML = premiumProfileCard(p) + `
     <div class="premium-card">
       <div class="premium-head">
@@ -3333,7 +3358,8 @@ function renderPremium() {
       <div class="premium-servers">${assignedRows}</div>
       <hr class="premium-hr">
       ${assignControl}
-    </div>`;
+    </div>
+    ${extraSlotCard}`;
   hydrateIcons(body);
 }
 

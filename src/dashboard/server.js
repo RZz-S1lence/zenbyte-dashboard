@@ -27,7 +27,6 @@ const {
 } = require('../applications/config');
 const mcService = require('../membercounter/service');
 const { COUNTER_TYPES: MC_COUNTER_TYPES } = require('../membercounter/config');
-const { registerLemonSqueezyWebhook } = require('./webhooks/lemonsqueezy');
 const { getPremiumStore } = require('../premium');
 const { upgradeError, UPGRADE_URL } = require('../premium/messages');
 const { LIMITS, limitFor } = require('../premium/limits');
@@ -89,13 +88,22 @@ module.exports = function startDashboard(client) {
   // handlers, inline styles and same-origin socket.io; the other headers still apply.
   app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 
-  // Lemon Squeezy webhook must read the RAW body to verify its signature, so it
-  // is registered before the global JSON body parser below.
-  registerLemonSqueezyWebhook(app);
-
   app.use(express.json({ limit: '1mb' }));
   app.use(express.static(path.join(__dirname, 'public')));
   app.use(sessionMiddleware);
+
+  // ── Public legal pages (no login — must be reachable by Paddle reviewers) ──
+  const legalPages = {
+    '/terms': 'terms.html',
+    '/terms-of-service': 'terms.html',
+    '/tos': 'terms.html',
+    '/privacy-policy': 'privacy-policy.html',
+    '/privacy': 'privacy-policy.html',
+    '/refund-policy': 'refund-policy.html',
+    '/refunds': 'refund-policy.html'
+  };
+  for (const [route, file] of Object.entries(legalPages))
+    app.get(route, (_req, res) => res.sendFile(path.join(__dirname, 'public', file)));
 
   // Rate limiting: a tight limit on auth, a looser one on the API.
   app.use('/auth', rateLimit({ windowMs: 15 * 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false }));
@@ -254,7 +262,20 @@ module.exports = function startDashboard(client) {
       assignable: accessible,
       limits:     LIMITS,
       upgradeUrl: UPGRADE_URL,
-      pricing:    require('../premium/tiers').PRICING
+      pricing:    require('../premium/tiers').PRICING,
+      buyLinks:   premiumBuyLinks()
+    };
+  }
+
+  // Direct Gumroad product links, built from PREMIUM_URL + each product permalink.
+  function premiumBuyLinks() {
+    const base = (process.env.PREMIUM_URL || '').replace(/\/+$/, '');
+    const buy = pl => (base && pl) ? `${base}/l/${pl}` : null;
+    return {
+      pro:       buy(process.env.GUMROAD_PERMALINK_PRO),
+      max:       buy(process.env.GUMROAD_PERMALINK_MAX),
+      lifetime:  buy(process.env.GUMROAD_PERMALINK_LIFETIME),
+      extraSlot: buy(process.env.GUMROAD_PERMALINK_EXTRA_SLOT)
     };
   }
 

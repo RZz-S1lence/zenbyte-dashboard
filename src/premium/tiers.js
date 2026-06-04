@@ -1,4 +1,4 @@
-// ── Tier definitions & Lemon Squeezy product mapping ──
+// ── Tier definitions & Gumroad product mapping ──
 // Base server-slot count per tier. Lifetime adds any purchased extra_slots on top.
 const TIER_SLOTS = {
   pro:           1,
@@ -14,26 +14,22 @@ const PRICING = {
   lifetime: { oneTime: '€89.99', slots: 1, extraSlot: '€24.99' }
 };
 
-// Maps a Lemon Squeezy variant id → what it grants. Fill these in from your
-// Lemon Squeezy dashboard (Products → each variant has a numeric id). The
-// placeholders below are read from env so you don't hardcode store ids here.
-//   kind: 'subscription' sets premium_tier + expires_at from the webhook dates.
-//   kind: 'lifetime'     sets lifetime = 1 (no expiry).
-//   kind: 'extra_slot'   increments extra_slots by 1 per order.
-const VARIANT_MAP = {
-  [process.env.LS_VARIANT_PRO_MONTHLY  || '[LS_VARIANT_PRO_MONTHLY]']:  { kind: 'subscription', tier: 'pro',      slots: 1 },
-  [process.env.LS_VARIANT_PRO_YEARLY   || '[LS_VARIANT_PRO_YEARLY]']:   { kind: 'subscription', tier: 'pro',      slots: 1 },
-  [process.env.LS_VARIANT_MAX_MONTHLY  || '[LS_VARIANT_MAX_MONTHLY]']:  { kind: 'subscription', tier: 'max',      slots: 3 },
-  [process.env.LS_VARIANT_MAX_YEARLY   || '[LS_VARIANT_MAX_YEARLY]']:   { kind: 'subscription', tier: 'max',      slots: 3 },
-  [process.env.LS_VARIANT_LIFETIME     || '[LS_VARIANT_LIFETIME]']:     { kind: 'lifetime',     tier: 'lifetime', slots: 1 },
-  [process.env.LS_VARIANT_EXTRA_SLOT   || '[LS_VARIANT_EXTRA_SLOT]']:   { kind: 'extra_slot' },
-  // Optional throwaway test product (e.g. a €1 product). Behaves like Pro: 1 slot.
-  // Leave LS_VARIANT_TEST unset in production so nothing maps to it.
-  [process.env.LS_VARIANT_TEST         || '[LS_VARIANT_TEST]']:         { kind: 'subscription', tier: 'pro', slots: 1 }
-};
+// Maps a Gumroad product (by its permalink — the slug in gumroad.com/l/<permalink>)
+// to what it grants. Permalinks come from env so store ids aren't hardcoded.
+//   kind: 'subscription' → premium_tier + a rolling expiry (refreshed by the sweep).
+//   kind: 'lifetime'     → lifetime = 1, never expires.
+//   kind: 'extra_slot'   → one extra permanent slot (Lifetime accounts only).
+// Monthly vs yearly is just the variant inside a product; the permalink alone
+// identifies the tier, so both variants of "Pro" map here to pro.
+const GUMROAD_PRODUCTS = [
+  { permalink: process.env.GUMROAD_PERMALINK_PRO,        kind: 'subscription', tier: 'pro',      slots: 1 },
+  { permalink: process.env.GUMROAD_PERMALINK_MAX,        kind: 'subscription', tier: 'max',      slots: 3 },
+  { permalink: process.env.GUMROAD_PERMALINK_LIFETIME,   kind: 'lifetime',     tier: 'lifetime', slots: 1 },
+  { permalink: process.env.GUMROAD_PERMALINK_EXTRA_SLOT, kind: 'extra_slot' }
+].filter(p => p.permalink);
 
-function variantInfo(variantId) {
-  return VARIANT_MAP[String(variantId)] || null;
+function productByPermalink(permalink) {
+  return GUMROAD_PRODUCTS.find(p => p.permalink === permalink) || null;
 }
 
-module.exports = { TIER_SLOTS, PRICING, VARIANT_MAP, variantInfo };
+module.exports = { TIER_SLOTS, PRICING, GUMROAD_PRODUCTS, productByPermalink };

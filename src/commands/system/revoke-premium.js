@@ -19,8 +19,9 @@ module.exports = {
     if (!store.getUser(user.id))
       return interaction.reply({ embeds: [embeds.warn(`**${user.tag}** has no premium record.`)], ephemeral: true });
 
-    // Expire immediately rather than deleting, so any assigned servers simply lapse.
-    store.expireUser(user.id, Date.now());
+    // Fully revoke (clears lifetime + disables their licenses) rather than deleting,
+    // so any assigned servers simply lapse and can be restored later if needed.
+    store.revokeUser(user.id);
     logger.warn(`Premium revoked from ${user.tag} (${user.id}) by ${interaction.user.tag}.`);
 
     return interaction.reply({

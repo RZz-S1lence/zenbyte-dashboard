@@ -92,6 +92,10 @@ html, body {
 .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,108,245,.18); }
 .auth-error { color: var(--red); font-size: 13px; min-height: 18px; text-align: center; margin-top: 12px; }
 .login-blurb { color: var(--muted); font-size: 13px; text-align: center; line-height: 1.5; margin-bottom: 22px; }
+.login-legal { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 20px; font-size: 12px; }
+.login-legal a { color: var(--muted); font-weight: 500; text-decoration: none; transition: color .15s; }
+.login-legal a:hover { color: var(--text); }
+.login-legal span { color: var(--muted); opacity: .4; }
 .btn-discord {
   display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
   padding: 13px; background: #5865f2; color: #fff; border: none; border-radius: var(--radius-sm);
@@ -671,6 +675,21 @@ button .ic, .btn .ic, .apps-tab .ic, .mc-act .ic, .cmd-cat-btn .ic { margin-righ
 .premium-plan h4 { margin: 0 0 6px; font-size: 15px; color: var(--white); }
 .premium-price { font-size: 20px; font-weight: 800; color: var(--accent2); margin-bottom: 4px; }
 .premium-free .btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+
+/* Per-plan Buy buttons + store link */
+.premium-plan { display: flex; flex-direction: column; }
+.premium-buy { margin-top: 12px; text-decoration: none; justify-content: center; }
+.premium-buy-hint { font-size: 12.5px; margin: 4px 0 10px; }
+.premium-store-link { display: inline-block; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; }
+.premium-store-link:hover { color: var(--white); }
+
+/* Additional-slot card (Lifetime users) */
+.premium-extra { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+.premium-extra-info { flex: 1 1 260px; }
+.premium-extra-info h3 { margin: 0 0 4px; }
+.premium-extra-buy { display: flex; align-items: center; gap: 14px; }
+.premium-extra-buy .premium-price { margin: 0; }
+.premium-extra-buy .btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
 
 /* Inline "Premium" chip + locked add-buttons (shown next to gated features) */
 .premium-chip {

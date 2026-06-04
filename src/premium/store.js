@@ -18,7 +18,7 @@ class PremiumStore {
                         premium_tier=@premium_tier, premium_source=@premium_source, subscription_id=@subscription_id,
                         customer_id=@customer_id, expires_at=@expires_at, lifetime=@lifetime,
                         extra_slots=@extra_slots, slots=@slots, updated_at=@updated_at`),
-      setExpiry:   q('UPDATE premium_users SET expires_at=@expires_at, premium_tier=@premium_tier, updated_at=@updated_at WHERE user_id=@user_id'),
+      setExpiry:   q('UPDATE premium_users SET expires_at=@expires_at, premium_tier=@premium_tier, lifetime=0, updated_at=@updated_at WHERE user_id=@user_id'),
       deleteUser:  q('DELETE FROM premium_users WHERE user_id = ?'),
 
       listServers: q('SELECT guild_id, assigned_at FROM premium_servers WHERE user_id = ? ORDER BY assigned_at ASC'),
@@ -43,7 +43,12 @@ class PremiumStore {
                          user_id=@user_id, instance_id=@instance_id, variant_id=@variant_id, kind=@kind,
                          tier=@tier, status=@status, last_check=@last_check`),
       setLicStatus: q('UPDATE premium_licenses SET status=@status, last_check=@last_check WHERE license_key=@license_key'),
-      deleteLicense:q('DELETE FROM premium_licenses WHERE license_key = ?')
+      deleteLicense:q('DELETE FROM premium_licenses WHERE license_key = ?'),
+
+      // ── Owner-minted local keys ──
+      getIssued:    q('SELECT * FROM issued_keys WHERE license_key = ?'),
+      createIssued: q('INSERT INTO issued_keys (license_key, kind, tier, created_at, created_by) VALUES (@license_key, @kind, @tier, @created_at, @created_by)'),
+      redeemIssued: q('UPDATE issued_keys SET redeemed_by=@redeemed_by, redeemed_at=@redeemed_at WHERE license_key=@license_key')
     };
   }
 
@@ -99,13 +104,22 @@ class PremiumStore {
     return this.upsertUser(userId, { extra_slots: (u?.extra_slots || 0) + n });
   }
 
-  // Let a subscription lapse by setting its expiry (does not delete the row, so
-  // re-subscribing keeps history and assigned servers).
+  // Deactivate an account by expiring it now and clearing the lifetime flag, so
+  // both subscriptions and lifetime grants become inactive. Keeps the row (and any
+  // assigned servers) so a later re-subscribe/re-grant restores history.
   expireUser(userId, expiresAt = Date.now()) {
     const u = this.getUser(userId);
     if (!u) return null;
     this.s.setExpiry.run({ user_id: String(userId), expires_at: expiresAt, premium_tier: u.premium_tier, updated_at: Date.now() });
     return this.getUser(userId);
+  }
+
+  // Owner override: fully revoke a user's premium regardless of source. Marks all
+  // their licenses 'revoked' (so the sweep can't revive them and they can't be
+  // re-activated) and deactivates the account, including lifetime.
+  revokeUser(userId) {
+    for (const l of this.getLicensesByUser(userId)) this.setLicenseStatus(l.license_key, 'revoked');
+    return this.expireUser(userId, Date.now());
   }
 
   removeUser(userId) { this.s.deleteUser.run(String(userId)); }
@@ -151,6 +165,19 @@ class PremiumStore {
 
   removeLicense(key) { this.s.deleteLicense.run(String(key)); }
 
+  // ── Owner-minted local keys ──
+  getIssuedKey(key) { return key ? (this.s.getIssued.get(String(key)) || null) : null; }
+  createIssuedKey({ license_key, kind, tier, created_by }) {
+    this.s.createIssued.run({
+      license_key: String(license_key), kind, tier: tier ?? null,
+      created_at: Date.now(), created_by: created_by ? String(created_by) : null
+    });
+    return this.getIssuedKey(license_key);
+  }
+  redeemIssuedKey(key, userId) {
+    this.s.redeemIssued.run({ license_key: String(key), redeemed_by: String(userId), redeemed_at: Date.now() });
+  }
+
   // Rebuild a user's premium_users row from their currently-active licenses. Owner
   // grants (premium_source 'owner') are left untouched — only LS-derived premium is
   // recomputed here. A lifetime license wins; otherwise the best active subscription
@@ -166,7 +193,7 @@ class PremiumStore {
 
     if (lifetime) {
       return this.upsertUser(userId, {
-        premium_tier: 'lifetime', premium_source: 'lemonsqueezy',
+        premium_tier: 'lifetime', premium_source: 'gumroad',
         slots: TIER_SLOTS.lifetime, lifetime: 1, expires_at: null, extra_slots: extraSlots
       });
     }
@@ -174,7 +201,7 @@ class PremiumStore {
       const best = subs.find(l => l.tier === 'max') || subs[0];
       // Extra slots are a Lifetime-only add-on, so subscriptions never gain them.
       return this.upsertUser(userId, {
-        premium_tier: best.tier, premium_source: 'lemonsqueezy',
+        premium_tier: best.tier, premium_source: 'gumroad',
         slots: TIER_SLOTS[best.tier] || 1, lifetime: 0,
         expires_at: Date.now() + SUB_WINDOW, extra_slots: 0
       });
@@ -182,7 +209,7 @@ class PremiumStore {
 
     // No active base license. If the user's premium came from LS, lapse it now.
     // Extra-slot-only holders keep their (currently unusable) slots recorded.
-    if (existing && existing.premium_source === 'lemonsqueezy') {
+    if (existing && existing.premium_source === 'gumroad') {
       this.upsertUser(userId, { extra_slots: extraSlots });
       return this.expireUser(userId, Date.now());
     }

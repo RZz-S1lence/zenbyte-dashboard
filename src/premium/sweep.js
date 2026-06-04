@@ -1,11 +1,11 @@
 const logger = require('../utils/logger');
 const { getPremiumStore } = require('./index');
-const { validateLicense } = require('./lemonsqueezy');
+const { verifyById, purchaseState } = require('./gumroad');
 
-// Re-validates every stored license against Lemon Squeezy. Catches lapsed
-// subscriptions and refunded/disabled orders, and refreshes the rolling expiry
-// window for active subscriptions. Network blips are ignored (the license is left
-// as-is) so a flaky connection never wrongly strips someone's premium.
+// Re-verifies every stored license against Gumroad. Catches refunds, chargebacks
+// and lapsed/cancelled subscriptions, and keeps active ones fresh. Network blips
+// are ignored (the license is left as-is) so a flaky connection never wrongly
+// strips someone's premium.
 async function revalidate() {
   const store = getPremiumStore();
   const licenses = store.listLicenses();
@@ -13,19 +13,23 @@ async function revalidate() {
 
   const affected = new Set();
   for (const lic of licenses) {
-    let v;
-    try { v = await validateLicense(lic.license_key, lic.instance_id); }
+    if (lic.status === 'revoked') continue;   // owner-revoked: never revive
+    const productId = lic.variant_id;   // Gumroad product_id stored at activation (null for local keys)
+    if (!productId) continue;
+
+    let resp;
+    try { resp = await verifyById(productId, lic.license_key); }
     catch { continue; }
 
-    const status = v?.license_key?.status;
-    const dead = !v || v.valid === false || status === 'expired' || status === 'disabled';
+    const s = purchaseState(resp);
+    const dead = !s.found || s.dead;
 
     if (dead) {
       if (lic.status !== 'inactive') { store.setLicenseStatus(lic.license_key, 'inactive'); affected.add(lic.user_id); }
-    } else if (status === 'active') {
-      // Always refresh subscriptions (pushes their rolling window forward); flip
-      // any key that had previously gone inactive back on.
+    } else {
       store.setLicenseStatus(lic.license_key, 'active');
+      // Refresh subscriptions every pass (rolling window); revive anything that
+      // had previously gone inactive.
       if (lic.kind === 'subscription' || lic.status !== 'active') affected.add(lic.user_id);
     }
   }
