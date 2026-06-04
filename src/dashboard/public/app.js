@@ -103,6 +103,35 @@ function svg(name, extra = '') {
 // A small filled status dot (green/yellow/red) — replaces 🟢 🟡 🔴.
 function dot(color) { return `<span class="sdot" style="background:${color}"></span>`; }
 
+// A small "Premium" chip (gem icon + label) shown next to gated features so
+// users see a feature needs premium up front, not at submit time.
+function premiumChip(label = 'Premium') {
+  return `<span class="premium-chip" title="Premium feature">${svg('gem')}${label}</span>`;
+}
+
+// Generic gate for a counted list feature in the current guild. `feature` is a
+// key from the limits map (e.g. 'memberCounters'). Returns the effective cap,
+// whether we're at it, and a ready-to-render limit hint with a Premium chip.
+function premiumGate(feature, count) {
+  const lim = state.guildData?.limits?.[feature];
+  const isPrem = !!state.guildData?.premium;
+  if (!lim) return { atCap: false, isPrem, cap: Infinity, hint: '' };
+  const cap = isPrem ? lim.premium : lim.free;
+  const hint = isPrem
+    ? `<span class="hint">${premiumChip()} up to ${lim.premium}.</span>`
+    : `<span class="hint">Free: up to <b>${lim.free}</b> · ${premiumChip()} up to <b>${lim.premium}</b>.</span>`;
+  return { atCap: count >= cap, isPrem, cap, hint, free: lim.free, premium: lim.premium };
+}
+
+// A locked "add" button (dashed Premium style) that nudges instead of adding.
+function premiumLockedBtn(label, feature) {
+  return `<button class="btn btn-secondary btn-locked" title="Premium feature" onclick="premiumNudge('${feature}')">${svg('gem')} ${label} · Premium</button>`;
+}
+function premiumNudge(feature) {
+  const lim = state.guildData?.limits?.[feature] || {};
+  alert(`This is a Premium feature.\n\nFree servers allow up to ${lim.free}; Premium allows up to ${lim.premium}.\n\nOpen the Premium tab in the sidebar to upgrade and activate this server.`);
+}
+
 // Fills any static element marked <... data-icon="name"> with its SVG. Lets the
 // HTML stay emoji-free without inlining big SVG blobs everywhere.
 function hydrateIcons(root = document) {
@@ -1076,6 +1105,9 @@ async function loadSocial() {
   show('social-body');
 }
 
+function socialTotalCreators() {
+  return Object.values(state.socialConfig.platforms).reduce((n, p) => n + (p.creators?.length || 0), 0);
+}
 function socCreatorsHtml(pid) {
   const list = state.socialConfig.platforms[pid].creators;
   if (!list.length) return '<span class="hint">No creators followed yet.</span>';
@@ -1086,7 +1118,7 @@ function renderSocial() {
   const cards = state.socialProviders.map(p => {
     const pc = state.socialConfig.platforms[p.id];
     const warn = p.needsAuth && !p.configured
-      ? `<div class="soc-warn">${svg('warn')} Add <code>TWITCH_CLIENT_ID</code> and <code>TWITCH_CLIENT_SECRET</code> to the bot's <code>.env</code> file to enable ${esc(p.label)}. See <code>.env.example</code> for steps.</div>`
+      ? `<div class="soc-warn">${svg('warn')} ${esc(p.label)} alerts aren't available yet. The bot owner needs to enable ${esc(p.label)} integration before these notifications can be used.</div>`
       : '';
     return `<div class="card">
       <div class="soc-head">
@@ -1113,7 +1145,13 @@ function renderSocial() {
     </div>`;
   }).join('');
 
-  document.getElementById('social-body').innerHTML = cards + `
+  const total = socialTotalCreators();
+  const gate = premiumGate('socialCreators', total);
+  const header = `<div class="card" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span>Following <strong>${total}</strong> creator${total === 1 ? '' : 's'} across all platforms.</span> ${gate.hint}
+    </div>`;
+
+  document.getElementById('social-body').innerHTML = header + cards + `
     <div class="save-bar"><button class="btn btn-primary" onclick="saveSocial()">Save Settings</button>
       <span id="social-save-msg" class="save-status"></span></div>`;
 
@@ -1144,6 +1182,11 @@ async function socialAdd(pid) {
   const account = input.value.trim();
   const msg = document.getElementById(`soc-${pid}-msg`);
   if (!account) return;
+  const gate = premiumGate('socialCreators', socialTotalCreators());
+  if (gate.atCap) {
+    if (!gate.isPrem) return premiumNudge('socialCreators');
+    msg.textContent = `Limit reached (${gate.cap}).`; return;
+  }
   msg.textContent = 'Adding…';
   try {
     const r = await api('POST', `/api/guild/${state.guildId}/social/creator`, { platform: pid, account });
@@ -1186,6 +1229,15 @@ async function loadPolls() {
 const POLL_STATUS = { active: `${dot('var(--green)')}Active`, scheduled: `${svg('clock')} Scheduled`, ended: `${svg('lock')} Ended`, cancelled: `${svg('ban')} Cancelled` };
 function channelName(id) { const c = (state.guildData?.textChannels || []).find(x => x.id === id); return c ? c.name : id; }
 
+// Effective option cap for the current guild (free vs premium, bounded by the
+// server's own maxOptions setting). Drives the builder so free users see the
+// limit up front instead of being rejected at "Create & Post".
+function pollOptMax() {
+  const lim = state.guildData?.limits?.pollOptions || { free: 4, premium: 25 };
+  const cap = state.guildData?.premium ? lim.premium : lim.free;
+  return Math.min(cap, state.pollConfig?.maxOptions || 25);
+}
+
 function pollOptionRows() {
   return state.pollOptions.map((v, i) => `
     <div class="lv-row">
@@ -1193,9 +1245,32 @@ function pollOptionRows() {
       <button class="btn btn-secondary lv-del" onclick="pollDelOption(${i})">${svg('x')}</button>
     </div>`).join('');
 }
+
+// Rows + the add button + a limit hint, re-rendered together so the button can
+// flip to a locked "Premium" state once a free server hits its option cap.
+function pollOptionsArea() {
+  const lim = state.guildData?.limits?.pollOptions || { free: 4, premium: 25 };
+  const isPrem = !!state.guildData?.premium;
+  const atCap  = state.pollOptions.length >= pollOptMax();
+  const addBtn = (!isPrem && atCap)
+    ? `<button class="btn btn-secondary btn-locked" onclick="pollPremiumNudge()" title="Premium feature">${svg('gem')} Add Option · Premium</button>`
+    : `<button class="btn btn-secondary" onclick="pollAddOption()" ${atCap ? 'disabled' : ''}>+ Add Option</button>`;
+  const hint = isPrem
+    ? `<span class="hint">${premiumChip()} up to ${lim.premium} options.</span>`
+    : `<span class="hint">Free: up to <b>${lim.free}</b> options · ${premiumChip()} up to <b>${lim.premium}</b>.</span>`;
+  return `<div id="poll-options">${pollOptionRows()}</div>
+    <div class="poll-opt-actions" style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">${addBtn}${hint}</div>`;
+}
+function renderPollOptions() { const el = document.getElementById('poll-options-area'); if (el) el.innerHTML = pollOptionsArea(); }
+
 function pollSyncOptions() { state.pollOptions = [...document.querySelectorAll('.poll-opt')].map(i => i.value); }
-function pollAddOption() { pollSyncOptions(); if (state.pollOptions.length < 25) state.pollOptions.push(''); document.getElementById('poll-options').innerHTML = pollOptionRows(); }
-function pollDelOption(i) { pollSyncOptions(); state.pollOptions.splice(i, 1); while (state.pollOptions.length < 2) state.pollOptions.push(''); document.getElementById('poll-options').innerHTML = pollOptionRows(); }
+function pollAddOption() { pollSyncOptions(); if (state.pollOptions.length < pollOptMax()) state.pollOptions.push(''); renderPollOptions(); }
+function pollDelOption(i) { pollSyncOptions(); state.pollOptions.splice(i, 1); while (state.pollOptions.length < 2) state.pollOptions.push(''); renderPollOptions(); }
+function pollPremiumNudge() {
+  const lim = state.guildData?.limits?.pollOptions || { free: 4, premium: 25 };
+  const el = document.getElementById('poll-create-msg');
+  if (el) setStatus(el, 'err', `Free servers allow up to ${lim.free} poll options. Upgrade to Premium for up to ${lim.premium}.`);
+}
 
 function pollListCard(title, list, actionable) {
   if (!list.length) return '';
@@ -1229,8 +1304,7 @@ function renderPolls() {
         <div class="form-row"><label>Channel</label><select id="poll-channel"></select></div>
         <div class="form-row"><label>Question</label><input type="text" id="poll-question" maxlength="256" placeholder="What should we play next?"></div>
       </div>
-      <div class="form-row"><label>Options</label><div id="poll-options">${pollOptionRows()}</div>
-        <button class="btn btn-secondary" style="margin-top:8px" onclick="pollAddOption()">+ Add Option</button></div>
+      <div class="form-row"><label>Options</label><div id="poll-options-area">${pollOptionsArea()}</div></div>
       <div class="card-grid">
         <label class="sec-switch"><input type="checkbox" id="poll-multi"><span>Allow multiple choices</span></label>
         <div class="form-row"><label>Max choices (0 = all)</label><input type="number" id="poll-maxchoices" min="0" value="0"></div>
@@ -1611,7 +1685,13 @@ function renderLeveling() {
       <h3>Role Rewards</h3>
       <p class="hint" style="margin-bottom:12px">Grant roles at levels. Multiple rewards per level allowed.</p>
       <div id="lv-rewards">${rewardRows}</div>
-      <button class="btn btn-secondary" style="margin-top:10px" onclick="lvAdd('roleRewards')">+ Add Reward</button>
+      <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        ${(() => { const g = premiumGate('levelingRewards', c.roleRewards.length);
+          return (g.atCap && !g.isPrem)
+            ? premiumLockedBtn('Add Reward', 'levelingRewards')
+            : `<button class="btn btn-secondary" onclick="lvAdd('roleRewards')">+ Add Reward</button>`; })()}
+        ${premiumGate('levelingRewards', c.roleRewards.length).hint}
+      </div>
       <div style="margin-top:14px">
         <label class="sec-switch"><input type="checkbox" id="lv-stack" ${chk(c.stackRewards)}><span>Stack rewards (keep lower-level reward roles)</span></label>
         <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="lv-removereset" ${chk(c.removeRewardsOnReset)}><span>Remove reward roles when a member is reset</span></label>
@@ -1682,7 +1762,14 @@ const lvDefaults = {
   roleBoosts:    () => ({ id: state.guildData?.roles?.[0]?.id || '', multiplier: 2 })
 };
 
-function lvAdd(key) { collectLeveling(); state.leveling[key].push(lvDefaults[key]()); renderLeveling(); }
+function lvAdd(key) {
+  collectLeveling();
+  if (key === 'roleRewards') {
+    const gate = premiumGate('levelingRewards', state.leveling.roleRewards.length);
+    if (gate.atCap) { if (!gate.isPrem) premiumNudge('levelingRewards'); return; }
+  }
+  state.leveling[key].push(lvDefaults[key]()); renderLeveling();
+}
 function lvDel(key, i) { collectLeveling(); state.leveling[key].splice(i, 1); renderLeveling(); }
 
 const numv = (id, d) => { const n = Number(document.getElementById(id).value); return Number.isFinite(n) ? n : d; };
@@ -1950,6 +2037,10 @@ async function loadAutorole() {
   document.getElementById('ar-enabled').checked = !!config.enabled;
   msInit('ar-roles', roleItems(), config.roleIds);
   msInit('ar-bot-roles', roleItems(), config.botRoleIds);
+  const used = (config.roleIds?.length || 0) + (config.botRoleIds?.length || 0);
+  const gate = premiumGate('autoroleRoles', used);
+  document.getElementById('ar-limit-hint').innerHTML =
+    `Roles given on join (people + bots combined): <strong>${used}</strong> &nbsp; ${gate.hint}`;
   show('autorole-body'); show('autorole-save-bar');
 }
 
@@ -1996,7 +2087,14 @@ function rrMapRow(menuId, m) {
     </div>`;
 }
 function rrDelMap(btn) { btn.closest('.rr-map-row')?.remove(); markDirty(); }
+function rrMapHint() { return premiumGate('reactionMappings', 0).hint; }
 function rrAddMap(containerId) {
+  const gate = premiumGate('reactionMappings', document.querySelectorAll(`#${containerId} .rr-map-row`).length);
+  if (gate.atCap) {
+    if (gate.isPrem) alert(`Maximum of ${gate.cap} roles per panel reached.`);
+    else premiumNudge('reactionMappings');
+    return;
+  }
   document.getElementById(containerId).insertAdjacentHTML('beforeend', rrMapRow(containerId.replace(/^rr-|-maps$/g, '')));
 }
 function rrCollectMaps(containerId) {
@@ -2028,8 +2126,10 @@ function rrMenuCard(menu) {
       ${managedFields}
       <div class="form-row"><label>Emoji → Role pairs</label>
         <div id="rr-${menu.id}-maps">${rows}</div>
-        <button class="btn btn-secondary" style="margin-top:8px" onclick="rrAddMap('rr-${menu.id}-maps')">+ Add pair</button>
-        <span class="hint" style="display:block;margin-top:6px">Use a normal emoji (😀) or a custom one from this server (type <code>:name:</code> and pick it, then copy it here).</span>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-secondary" onclick="rrAddMap('rr-${menu.id}-maps')">+ Add pair</button>${rrMapHint()}
+        </div>
+        <span class="hint" style="display:block;margin-top:6px">Use a normal emoji or a custom one from this server (type <code>:name:</code> and pick it, then copy it here).</span>
       </div>
       <div class="save-bar" style="position:static;margin-top:4px">
         <button class="btn btn-primary" onclick="rrSave('${menu.id}')">Save Panel</button>
@@ -2041,9 +2141,13 @@ function rrMenuCard(menu) {
 
 function renderReactionRoles() {
   const existing = state.reactionMenus.map(rrMenuCard).join('');
+  const panelGate = premiumGate('reactionPanels', state.reactionMenus.length);
+  const createBtn = panelGate.atCap && !panelGate.isPrem
+    ? premiumLockedBtn('Create Panel', 'reactionPanels')
+    : `<button class="btn btn-primary" onclick="rrCreate()">Create Panel</button>`;
   document.getElementById('rr-body').innerHTML = `
     <div class="card">
-      <h3>Create a Panel</h3>
+      <h3>Create a Panel &nbsp; ${panelGate.hint}</h3>
       <div class="card-grid">
         <div class="form-row"><label>Channel</label><select id="rr-new-channel">${lvChannelOpts('')}</select></div>
         <div class="form-row"><label>Mode</label><select id="rr-new-mode">${rrModeOpts('normal')}</select></div>
@@ -2069,10 +2173,12 @@ function renderReactionRoles() {
       </div>
       <div class="form-row"><label>Emoji → Role pairs</label>
         <div id="rr-new-maps">${rrMapRow('new')}</div>
-        <button class="btn btn-secondary" style="margin-top:8px" onclick="rrAddMap('rr-new-maps')">+ Add pair</button>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-secondary" onclick="rrAddMap('rr-new-maps')">+ Add pair</button>${rrMapHint()}
+        </div>
       </div>
       <div class="save-bar" style="position:static;margin-top:4px">
-        <button class="btn btn-primary" onclick="rrCreate()">Create Panel</button>
+        ${createBtn}
         <span id="rr-new-msg" class="save-status"></span>
       </div>
     </div>
@@ -2481,8 +2587,12 @@ function renderFormsTab() {
       </div>
     </div>`).join('') : '<p class="hint" style="padding:16px">No forms yet. Create your first application form.</p>';
 
+  const gate = premiumGate('applicationForms', state.appsForms.length);
+  const newBtn = gate.atCap && !gate.isPrem
+    ? premiumLockedBtn('New Form', 'applicationForms')
+    : `<button class="btn btn-primary" onclick="appsNewForm()">${svg('plus')} New Form</button>`;
   box.innerHTML = `
-    <div class="btn-row" style="margin-bottom:14px"><button class="btn btn-primary" onclick="appsNewForm()">${svg('plus')} New Form</button></div>
+    <div class="btn-row" style="margin-bottom:14px;align-items:center">${newBtn} ${gate.hint}</div>
     <div class="apps-form-list">${rows}</div>`;
 }
 
@@ -2499,7 +2609,11 @@ function appsFormDrop(e, i) {
   api('PUT', `/api/guild/${state.guildId}/applications/forms-order`, { order: arr.map(f => f.id) }).catch(() => {});
 }
 
-function appsNewForm() { state.appsEditing = { id: null, name: '', description: '', enabled: true, questions: [] }; renderFormsTab(); }
+function appsNewForm() {
+  const gate = premiumGate('applicationForms', state.appsForms.length);
+  if (gate.atCap) { if (!gate.isPrem) premiumNudge('applicationForms'); return; }
+  state.appsEditing = { id: null, name: '', description: '', enabled: true, questions: [] }; renderFormsTab();
+}
 function appsEditForm(id) { const f = state.appsForms.find(x => x.id === id); if (f) { state.appsEditing = JSON.parse(JSON.stringify(f)); renderFormsTab(); } }
 function appsCancelEdit() { state.appsEditing = null; renderFormsTab(); }
 
@@ -2508,6 +2622,8 @@ async function appsToggleForm(id, enabled) {
   catch {} renderFormsTab();
 }
 async function appsDuplicateForm(id) {
+  const gate = premiumGate('applicationForms', state.appsForms.length);
+  if (gate.atCap) { if (!gate.isPrem) premiumNudge('applicationForms'); return; }
   try { const r = await api('POST', `/api/guild/${state.guildId}/applications/forms/${id}/duplicate`); state.appsForms.push(r.form); } catch {}
   renderFormsTab();
 }
@@ -2538,12 +2654,16 @@ function renderFormBuilder(box) {
     <div class="card">
       <h3>Questions <span class="hint">· drag ⋮⋮ to reorder</span></h3>
       <div id="apps-q-list">${qhtml}</div>
-      <div class="btn-row" style="margin-top:12px;flex-wrap:wrap">
-        <button class="btn btn-secondary" onclick="appsAddQuestion('short')">+ Short Text</button>
-        <button class="btn btn-secondary" onclick="appsAddQuestion('paragraph')">+ Paragraph</button>
-        <button class="btn btn-secondary" onclick="appsAddQuestion('multiple_choice')">+ Multiple Choice</button>
-        <button class="btn btn-secondary" onclick="appsAddQuestion('dropdown')">+ Dropdown</button>
-      </div>
+      ${(() => {
+        const g = premiumGate('applicationQuestions', f.questions.length);
+        const buttons = (g.atCap && !g.isPrem)
+          ? premiumLockedBtn('Add Question', 'applicationQuestions')
+          : `<button class="btn btn-secondary" onclick="appsAddQuestion('short')">+ Short Text</button>
+             <button class="btn btn-secondary" onclick="appsAddQuestion('paragraph')">+ Paragraph</button>
+             <button class="btn btn-secondary" onclick="appsAddQuestion('multiple_choice')">+ Multiple Choice</button>
+             <button class="btn btn-secondary" onclick="appsAddQuestion('dropdown')">+ Dropdown</button>`;
+        return `<div class="btn-row" style="margin-top:12px;flex-wrap:wrap;align-items:center">${buttons} ${g.hint}</div>`;
+      })()}
     </div>
     <div class="save-bar dirty">
       <button class="btn btn-primary" onclick="appsSaveForm()">Save Form</button>
@@ -2572,6 +2692,8 @@ function renderQuestionEditor(q, i) {
 function appsQEdit(i, field, val) { if (state.appsEditing?.questions[i]) state.appsEditing.questions[i][field] = val; }
 function appsQEditOptions(i, val) { if (state.appsEditing?.questions[i]) state.appsEditing.questions[i].options = val.split('\n').map(s => s.trim()).filter(Boolean); }
 function appsAddQuestion(type) {
+  const gate = premiumGate('applicationQuestions', state.appsEditing.questions.length);
+  if (gate.atCap) { if (!gate.isPrem) premiumNudge('applicationQuestions'); return; }
   const isChoice = type === 'multiple_choice' || type === 'dropdown';
   state.appsEditing.questions.push({ type, label: '', placeholder: '', required: true, options: isChoice ? [''] : [] });
   renderFormsTab();
@@ -2950,11 +3072,15 @@ function renderMemberCounters() {
 }
 
 function mcListHtml() {
+  const gate = premiumGate('memberCounters', state.mcCounters.length);
+  const addBtn = gate.atCap && !gate.isPrem
+    ? premiumLockedBtn('Add Counter', 'memberCounters')
+    : `<button class="btn btn-primary" onclick="mcAdd()">${svg('plus')} Add Counter</button>`;
   const head = `<div class="mc-head">
-      <div class="mc-head-info"><strong>${state.mcCounters.length}</strong> counter${state.mcCounters.length === 1 ? '' : 's'} configured</div>
+      <div class="mc-head-info"><strong>${state.mcCounters.length}</strong> counter${state.mcCounters.length === 1 ? '' : 's'} configured &nbsp; ${gate.hint}</div>
       <div class="mc-head-actions">
         ${state.mcCounters.length ? `<button class="btn btn-secondary" onclick="mcRefresh()">${svg('refresh')} Refresh now</button>` : ''}
-        <button class="btn btn-primary" onclick="mcAdd()">${svg('plus')} Add Counter</button>
+        ${addBtn}
       </div>
     </div>
     <div id="mc-list-msg" class="save-status mc-list-msg"></div>`;
@@ -3094,7 +3220,7 @@ async function mcToggle(id, enable) {
   catch (e) { alert(e.message); }
 }
 async function mcDelete(id) {
-  if (!confirm('Delete this counter? The channel stays — it just stops auto-updating.')) return;
+  if (!confirm('Delete this counter? This will also delete its Discord channel/category. This cannot be undone.')) return;
   try { await api('DELETE', `/api/guild/${state.guildId}/membercounters/${id}`); await loadMemberCounters(); }
   catch (e) { alert(e.message); }
 }
@@ -3126,6 +3252,23 @@ function premiumTierLabel(p) {
   return map[p.tier] || (p.tier ? p.tier : 'Free');
 }
 
+// Account card: avatar, Discord display name, @username, user ID and current plan.
+function premiumProfileCard(p) {
+  const pf = p.profile || {};
+  const plan = p.active ? premiumChip(premiumTierLabel(p)) : '<span class="hint">Free</span>';
+  return `<div class="card premium-profile">
+      ${pf.avatar ? `<img src="${esc(pf.avatar)}" class="premium-profile-avatar" alt="">` : ''}
+      <div class="premium-profile-info">
+        <div class="premium-profile-name">${esc(pf.displayName || '')}</div>
+        <div class="hint">@${esc(pf.handle || '')}</div>
+        <div class="premium-profile-meta">
+          <span>User ID: <code>${esc(pf.id || '')}</code></span>
+          <span>Plan: ${plan}</span>
+        </div>
+      </div>
+    </div>`;
+}
+
 function renderPremium() {
   const p = _premium;
   const body = document.getElementById('premium-body');
@@ -3133,7 +3276,7 @@ function renderPremium() {
   // Inactive (free) state — show plans + upgrade CTA.
   if (!p.active) {
     const pr = p.pricing || {};
-    body.innerHTML = `
+    body.innerHTML = premiumProfileCard(p) + `
       <div class="premium-card premium-free">
         <div class="premium-status"><span class="sdot" style="background:var(--muted)"></span> You're on the <strong>Free</strong> plan.</div>
         <p class="muted">Upgrade to raise limits across polls, reaction roles, autoroles, social alerts, leveling rewards, member counters and applications — and unlock more across every server you manage.</p>
@@ -3175,7 +3318,7 @@ function renderPremium() {
         : '<p class="muted">Every server you manage is already activated.</p>')
     : '<p class="muted">All your slots are in use. Remove a server to free one up.</p>';
 
-  body.innerHTML = `
+  body.innerHTML = premiumProfileCard(p) + `
     <div class="premium-card">
       <div class="premium-head">
         <div class="premium-status"><span class="sdot" style="background:var(--green)"></span> <strong>${premiumTierLabel(p)}</strong> · Active</div>

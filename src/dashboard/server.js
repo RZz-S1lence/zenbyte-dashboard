@@ -135,7 +135,9 @@ module.exports = function startDashboard(client) {
       const guilds = await oauthClient.fetchUserGuilds(token.access_token);
 
       req.session.userId        = user.id;
-      req.session.username      = user.global_name || user.username;
+      req.session.username      = user.global_name || user.username;  // display label used across the app
+      req.session.handle        = user.username;                      // the @username handle
+      req.session.displayName   = user.global_name || user.username;  // Discord display name
       req.session.avatar        = avatarUrl(user);
       req.session.adminGuildIds = guilds.filter(oauthClient.hasAdminInOAuthGuild).map(g => g.id);
 
@@ -221,6 +223,18 @@ module.exports = function startDashboard(client) {
   // Effective cap for a gated feature in a guild (free vs premium).
   const guildLimit = (guildId, feature) => limitFor(feature, premiumStore.isGuildPremium(guildId));
 
+  // Decides what to send when a write would exceed a feature cap. `attempted` is
+  // the resulting item count. A free guild over the free cap gets the upgrade
+  // nudge; a premium guild over the premium hard cap gets a plain "limit reached".
+  // Returns { status, body } to send, or null when it's allowed.
+  const limitBlock = (guildId, feature, attempted) => {
+    const prem = premiumStore.isGuildPremium(guildId);
+    const cap = limitFor(feature, prem);
+    if (attempted <= cap) return null;
+    if (prem) return { status: 400, body: { error: `Limit reached — this server can have at most ${cap} ${LIMITS[feature].label}.`, limitReached: true } };
+    return { status: 403, body: upgradeError(feature) };
+  };
+
   function premiumStatus(userId, accessible) {
     const u = premiumStore.getUser(userId);
     const assignedRows = premiumStore.listServers(userId);
@@ -246,7 +260,14 @@ module.exports = function startDashboard(client) {
 
   app.get('/api/premium', requireAuth, async (req, res) => {
     const accessible = await oauthClient.listAccessibleGuilds(client, req.session);
-    res.json(premiumStatus(req.session.userId, accessible));
+    const status = premiumStatus(req.session.userId, accessible);
+    status.profile = {
+      id:          req.session.userId,
+      handle:      req.session.handle || req.session.username,   // @username
+      displayName: req.session.displayName || req.session.username, // Discord display name
+      avatar:      req.session.avatar
+    };
+    res.json(status);
   });
 
   app.post('/api/premium/assign', requireAuth, async (req, res) => {
@@ -301,7 +322,11 @@ module.exports = function startDashboard(client) {
       .map(r => ({ id: r.id, name: r.name }))
       .sort((a, b) => b.rawPosition - a.rawPosition);
 
-    res.json({ id: guild.id, name: guild.name, textChannels, voiceChannels, categories, roles });
+    res.json({
+      id: guild.id, name: guild.name, textChannels, voiceChannels, categories, roles,
+      premium: premiumStore.isGuildPremium(guild.id),  // lets the UI show limits/badges upfront
+      limits:  LIMITS
+    });
   });
 
   // ── Log channels ───────────────────────────────
@@ -403,7 +428,12 @@ module.exports = function startDashboard(client) {
 
   app.put('/api/guild/:id/autorole', requireAuth, guildGuard, (req, res) => {
     if (!client.guilds.cache.has(req.params.id)) return res.status(404).json({ error: 'Guild not found' });
-    const config = client.autoroles.setConfig(req.params.id, req.body || {});
+    // Free servers are capped on total autorole roles (people + bots combined).
+    const b = req.body || {};
+    const total = (Array.isArray(b.roleIds) ? b.roleIds.length : 0) + (Array.isArray(b.botRoleIds) ? b.botRoleIds.length : 0);
+    const blk = limitBlock(req.params.id, 'autoroleRoles', total);
+    if (blk) return res.status(blk.status).json(blk.body);
+    const config = client.autoroles.setConfig(req.params.id, b);
     res.json({ success: true, config });
   });
 
@@ -428,10 +458,10 @@ module.exports = function startDashboard(client) {
     const b = req.body || {};
     if (!guild.channels.cache.get(b.channelId)) return res.status(400).json({ error: 'Pick a valid channel.' });
 
-    if (client.reactionroles.listMenus(guild.id).length >= guildLimit(guild.id, 'reactionPanels'))
-      return res.status(403).json(upgradeError('reactionPanels'));
-    if (buildMappings(b.mappings).length > guildLimit(guild.id, 'reactionMappings'))
-      return res.status(403).json(upgradeError('reactionMappings'));
+    const panelBlk = limitBlock(guild.id, 'reactionPanels', client.reactionroles.listMenus(guild.id).length + 1);
+    if (panelBlk) return res.status(panelBlk.status).json(panelBlk.body);
+    const mapBlk = limitBlock(guild.id, 'reactionMappings', buildMappings(b.mappings).length);
+    if (mapBlk) return res.status(mapBlk.status).json(mapBlk.body);
 
     const managed = b.managed !== false;
     if (!managed) {
@@ -457,8 +487,8 @@ module.exports = function startDashboard(client) {
     const existing = client.reactionroles.getMenu(guild.id, req.params.menuId);
     if (!existing) return res.status(404).json({ error: 'Panel not found' });
     const b = req.body || {};
-    if (buildMappings(b.mappings).length > guildLimit(guild.id, 'reactionMappings'))
-      return res.status(403).json(upgradeError('reactionMappings'));
+    const mapBlk = limitBlock(guild.id, 'reactionMappings', buildMappings(b.mappings).length);
+    if (mapBlk) return res.status(mapBlk.status).json(mapBlk.body);
 
     const menu = client.reactionroles.updateMenu(guild.id, req.params.menuId, {
       mode: b.mode, embed: b.embed, title: b.title, description: b.description, color: b.color,
@@ -541,8 +571,10 @@ module.exports = function startDashboard(client) {
 
   app.put('/api/guild/:id/leveling', requireAuth, guildGuard, (req, res) => {
     const rewards = Array.isArray(req.body?.roleRewards) ? req.body.roleRewards : null;
-    if (rewards && rewards.length > guildLimit(req.params.id, 'levelingRewards'))
-      return res.status(403).json(upgradeError('levelingRewards'));
+    if (rewards) {
+      const blk = limitBlock(req.params.id, 'levelingRewards', rewards.length);
+      if (blk) return res.status(blk.status).json(blk.body);
+    }
     const config = client.levels.setConfig(req.params.id, req.body || {});
     res.json({ success: true, config });
   });
@@ -623,6 +655,8 @@ module.exports = function startDashboard(client) {
     const options = Array.isArray(b.options) ? b.options.map(s => String(s).trim()).filter(Boolean) : [];
     if (!b.question || options.length < 2) return res.status(400).json({ error: 'A poll needs a question and at least two options.' });
     const config = client.polls.getConfig(guild.id);
+    const pollBlk = limitBlock(guild.id, 'pollOptions', options.length);
+    if (pollBlk) return res.status(pollBlk.status).json(pollBlk.body);
     if (options.length > config.maxOptions) return res.status(400).json({ error: `At most ${config.maxOptions} options.` });
 
     try {
@@ -676,8 +710,8 @@ module.exports = function startDashboard(client) {
     const { platform, account } = req.body || {};
     const cfg = client.social.getConfig(req.params.id);
     const total = Object.values(cfg.platforms).reduce((n, p) => n + (p.creators?.length || 0), 0);
-    if (total >= guildLimit(req.params.id, 'socialCreators'))
-      return res.status(403).json(upgradeError('socialCreators'));
+    const blk = limitBlock(req.params.id, 'socialCreators', total + 1);
+    if (blk) return res.status(blk.status).json(blk.body);
     const result = await socialService.addCreator(client, req.params.id, platform, account);
     if (result.error) return res.status(400).json({ error: result.error });
     res.json({ success: true, config: client.social.getConfig(req.params.id) });
@@ -769,10 +803,12 @@ module.exports = function startDashboard(client) {
   });
 
   app.post('/api/guild/:id/applications/forms', requireAuth, guildGuard, (req, res) => {
-    if (client.applications.listForms(req.params.id).length >= guildLimit(req.params.id, 'applicationForms'))
-      return res.status(403).json(upgradeError('applicationForms'));
-    if (Array.isArray(req.body?.questions) && req.body.questions.length > guildLimit(req.params.id, 'applicationQuestions'))
-      return res.status(403).json(upgradeError('applicationQuestions'));
+    const formBlk = limitBlock(req.params.id, 'applicationForms', client.applications.listForms(req.params.id).length + 1);
+    if (formBlk) return res.status(formBlk.status).json(formBlk.body);
+    if (Array.isArray(req.body?.questions)) {
+      const qBlk = limitBlock(req.params.id, 'applicationQuestions', req.body.questions.length);
+      if (qBlk) return res.status(qBlk.status).json(qBlk.body);
+    }
     const form = client.applications.createForm(req.params.id, req.body || {});
     res.json({ success: true, form });
   });
@@ -783,16 +819,18 @@ module.exports = function startDashboard(client) {
   });
 
   app.post('/api/guild/:id/applications/forms/:formId/duplicate', requireAuth, guildGuard, (req, res) => {
-    if (client.applications.listForms(req.params.id).length >= guildLimit(req.params.id, 'applicationForms'))
-      return res.status(403).json(upgradeError('applicationForms'));
+    const dupBlk = limitBlock(req.params.id, 'applicationForms', client.applications.listForms(req.params.id).length + 1);
+    if (dupBlk) return res.status(dupBlk.status).json(dupBlk.body);
     const form = client.applications.duplicateForm(req.params.id, req.params.formId);
     if (!form) return res.status(404).json({ error: 'Form not found' });
     res.json({ success: true, form });
   });
 
   app.put('/api/guild/:id/applications/forms/:formId', requireAuth, guildGuard, (req, res) => {
-    if (Array.isArray(req.body?.questions) && req.body.questions.length > guildLimit(req.params.id, 'applicationQuestions'))
-      return res.status(403).json(upgradeError('applicationQuestions'));
+    if (Array.isArray(req.body?.questions)) {
+      const qBlk = limitBlock(req.params.id, 'applicationQuestions', req.body.questions.length);
+      if (qBlk) return res.status(qBlk.status).json(qBlk.body);
+    }
     const form = client.applications.updateForm(req.params.id, req.params.formId, req.body || {});
     if (!form) return res.status(404).json({ error: 'Form not found' });
     res.json({ success: true, form });
@@ -886,8 +924,8 @@ module.exports = function startDashboard(client) {
   });
 
   app.post('/api/guild/:id/membercounters', requireAuth, guildGuard, (req, res) => {
-    if (client.memberCounters.list(req.params.id).length >= guildLimit(req.params.id, 'memberCounters'))
-      return res.status(403).json(upgradeError('memberCounters'));
+    const blk = limitBlock(req.params.id, 'memberCounters', client.memberCounters.list(req.params.id).length + 1);
+    if (blk) return res.status(blk.status).json(blk.body);
     const counter = client.memberCounters.create(req.params.id, req.body || {});
     if (!counter) return res.status(400).json({ error: 'Invalid counter — pick a channel and (for role counters) a role.' });
     mcService.updateGuild(client, req.params.id, { force: true }).catch(() => {});
@@ -906,10 +944,22 @@ module.exports = function startDashboard(client) {
     res.json({ success: true, counter });
   });
 
-  app.delete('/api/guild/:id/membercounters/:counterId', requireAuth, guildGuard, (req, res) => {
-    if (!client.memberCounters.delete(req.params.id, req.params.counterId))
-      return res.status(404).json({ error: 'Counter not found' });
-    res.json({ success: true });
+  app.delete('/api/guild/:id/membercounters/:counterId', requireAuth, guildGuard, async (req, res) => {
+    // Look the counter up first so we know which channel it was displaying in.
+    const counter = client.memberCounters.get(req.params.id, req.params.counterId);
+    if (!counter) return res.status(404).json({ error: 'Counter not found' });
+    client.memberCounters.delete(req.params.id, req.params.counterId);
+
+    // Also delete the Discord channel/category the counter was using.
+    let channelDeleted = false;
+    const guild = client.guilds.cache.get(req.params.id);
+    const channel = guild?.channels.cache.get(counter.channelId);
+    if (channel) {
+      await channel.delete('Member counter removed from dashboard')
+        .then(() => { channelDeleted = true; })
+        .catch(e => logger.error(`Counter channel delete failed (${counter.channelId}): ${e.message}`));
+    }
+    res.json({ success: true, channelDeleted });
   });
 
   // Force an immediate refresh of all counter channels (bypasses the cooldown).

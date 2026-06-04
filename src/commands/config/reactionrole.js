@@ -62,8 +62,12 @@ module.exports = {
 
     // Creating a new panel (managed or attached) counts against the panel limit.
     if (sub === 'create' || sub === 'attach') {
-      if (!await isPremium(guild.id) && client.reactionroles.listMenus(guild.id).length >= limitFor('reactionPanels', false))
-        return interaction.reply(upgradeReply('reactionPanels'));
+      const prem = await isPremium(guild.id);
+      const panelCap = limitFor('reactionPanels', prem);
+      if (client.reactionroles.listMenus(guild.id).length >= panelCap)
+        return interaction.reply(prem
+          ? { embeds: [embeds.error(`This server has reached the maximum of ${panelCap} reaction-role panels.`)], ephemeral: true }
+          : upgradeReply('reactionPanels'));
     }
 
     if (sub === 'create') {

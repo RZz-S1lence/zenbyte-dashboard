@@ -671,3 +671,24 @@ button .ic, .btn .ic, .apps-tab .ic, .mc-act .ic, .cmd-cat-btn .ic { margin-righ
 .premium-plan h4 { margin: 0 0 6px; font-size: 15px; color: var(--white); }
 .premium-price { font-size: 20px; font-weight: 800; color: var(--accent2); margin-bottom: 4px; }
 .premium-free .btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+
+/* Inline "Premium" chip + locked add-buttons (shown next to gated features) */
+.premium-chip {
+  display: inline-flex; align-items: center; gap: 4px; vertical-align: -0.18em;
+  padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: .2px;
+  background: var(--grad-soft); color: var(--accent2); border: 1px solid rgba(124,108,245,.35);
+}
+.premium-chip .ic { width: 12px; height: 12px; }
+.btn-locked {
+  background: var(--grad-soft) !important; color: var(--accent2) !important;
+  border: 1px dashed rgba(124,108,245,.5) !important; display: inline-flex; align-items: center; gap: 6px;
+}
+.btn-locked:hover { border-color: var(--accent) !important; }
+
+/* Premium account / profile card */
+.premium-profile { display: flex; align-items: center; gap: 16px; }
+.premium-profile-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; flex-shrink: 0; box-shadow: 0 0 0 2px var(--border2); }
+.premium-profile-info { min-width: 0; }
+.premium-profile-name { font-size: 17px; font-weight: 700; color: var(--white); }
+.premium-profile-meta { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; margin-top: 8px; font-size: 13px; color: var(--text); }
+.premium-profile-meta code { background: var(--card2); padding: 2px 6px; border-radius: 5px; }

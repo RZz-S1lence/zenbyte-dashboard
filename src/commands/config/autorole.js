@@ -68,10 +68,13 @@ module.exports = {
       if (config[key].includes(role.id))
         return interaction.reply({ embeds: [embeds.warn(`${role} is already in the ${forBots ? 'bot' : 'people'} list.`)], ephemeral: true });
 
-      // Free servers are capped on total autorole roles (people + bots combined).
-      const total = config.roleIds.length + config.botRoleIds.length;
-      if (!await isPremium(guild.id) && total >= limitFor('autoroleRoles', false))
-        return interaction.reply(upgradeReply('autoroleRoles'));
+      // Capped on total autorole roles (people + bots combined).
+      const prem = await isPremium(guild.id);
+      const roleCap = limitFor('autoroleRoles', prem);
+      if (config.roleIds.length + config.botRoleIds.length >= roleCap)
+        return interaction.reply(prem
+          ? { embeds: [embeds.error(`This server has reached the maximum of ${roleCap} autorole roles.`)], ephemeral: true }
+          : upgradeReply('autoroleRoles'));
 
       const updated = { ...config, enabled: true, [key]: [...config[key], role.id] };
       client.autoroles.setConfig(guild.id, updated);
