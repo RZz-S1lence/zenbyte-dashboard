@@ -30,7 +30,20 @@ class PremiumStore {
       activeForGuild: q(`SELECT u.* FROM premium_servers ps
                          JOIN premium_users u ON u.user_id = ps.user_id
                          WHERE ps.guild_id = ? AND (u.lifetime = 1 OR (u.expires_at IS NOT NULL AND u.expires_at > ?))
-                         LIMIT 1`)
+                         LIMIT 1`),
+
+      // ── License keys (Lemon Squeezy) ──
+      getLicense:   q('SELECT * FROM premium_licenses WHERE license_key = ?'),
+      licByUser:    q('SELECT * FROM premium_licenses WHERE user_id = ? ORDER BY activated_at ASC'),
+      allLicenses:  q('SELECT * FROM premium_licenses'),
+      upsertLicense:q(`INSERT INTO premium_licenses
+                         (license_key, user_id, instance_id, variant_id, kind, tier, status, activated_at, last_check)
+                       VALUES (@license_key, @user_id, @instance_id, @variant_id, @kind, @tier, @status, @activated_at, @last_check)
+                       ON CONFLICT(license_key) DO UPDATE SET
+                         user_id=@user_id, instance_id=@instance_id, variant_id=@variant_id, kind=@kind,
+                         tier=@tier, status=@status, last_check=@last_check`),
+      setLicStatus: q('UPDATE premium_licenses SET status=@status, last_check=@last_check WHERE license_key=@license_key'),
+      deleteLicense:q('DELETE FROM premium_licenses WHERE license_key = ?')
     };
   }
 
@@ -110,6 +123,70 @@ class PremiumStore {
 
   unassignServer(userId, guildId) {
     return this.s.unassign.run(String(userId), String(guildId)).changes > 0;
+  }
+
+  // ── License keys ──
+  getLicense(key) { return key ? (this.s.getLicense.get(String(key)) || null) : null; }
+  getLicensesByUser(userId) { return this.s.licByUser.all(String(userId)); }
+  listLicenses() { return this.s.allLicenses.all(); }
+
+  upsertLicense(fields) {
+    this.s.upsertLicense.run({
+      license_key:  String(fields.license_key),
+      user_id:      String(fields.user_id),
+      instance_id:  fields.instance_id ?? null,
+      variant_id:   fields.variant_id != null ? String(fields.variant_id) : null,
+      kind:         fields.kind ?? null,
+      tier:         fields.tier ?? null,
+      status:       fields.status ?? 'active',
+      activated_at: fields.activated_at ?? Date.now(),
+      last_check:   fields.last_check ?? Date.now()
+    });
+    return this.getLicense(fields.license_key);
+  }
+
+  setLicenseStatus(key, status, lastCheck = Date.now()) {
+    this.s.setLicStatus.run({ license_key: String(key), status, last_check: lastCheck });
+  }
+
+  removeLicense(key) { this.s.deleteLicense.run(String(key)); }
+
+  // Rebuild a user's premium_users row from their currently-active licenses. Owner
+  // grants (premium_source 'owner') are left untouched — only LS-derived premium is
+  // recomputed here. A lifetime license wins; otherwise the best active subscription
+  // sets the tier; extra-slot licenses add permanent slots on top.
+  recomputeFromLicenses(userId) {
+    const SUB_WINDOW = 35 * 24 * 60 * 60 * 1000; // rolling safety net, refreshed each sweep
+    const active = this.getLicensesByUser(userId).filter(l => l.status === 'active');
+    const existing = this.getUser(userId);
+
+    const extraSlots = active.filter(l => l.kind === 'extra_slot').length;
+    const lifetime   = active.find(l => l.kind === 'lifetime');
+    const subs       = active.filter(l => l.kind === 'subscription');
+
+    if (lifetime) {
+      return this.upsertUser(userId, {
+        premium_tier: 'lifetime', premium_source: 'lemonsqueezy',
+        slots: TIER_SLOTS.lifetime, lifetime: 1, expires_at: null, extra_slots: extraSlots
+      });
+    }
+    if (subs.length) {
+      const best = subs.find(l => l.tier === 'max') || subs[0];
+      // Extra slots are a Lifetime-only add-on, so subscriptions never gain them.
+      return this.upsertUser(userId, {
+        premium_tier: best.tier, premium_source: 'lemonsqueezy',
+        slots: TIER_SLOTS[best.tier] || 1, lifetime: 0,
+        expires_at: Date.now() + SUB_WINDOW, extra_slots: 0
+      });
+    }
+
+    // No active base license. If the user's premium came from LS, lapse it now.
+    // Extra-slot-only holders keep their (currently unusable) slots recorded.
+    if (existing && existing.premium_source === 'lemonsqueezy') {
+      this.upsertUser(userId, { extra_slots: extraSlots });
+      return this.expireUser(userId, Date.now());
+    }
+    return existing;
   }
 }
 

@@ -8,6 +8,7 @@ const polls = require('../polls/service');
 const social = require('../social/service');
 const memberCounter = require('../membercounter/service');
 const ticketHandler = require('../handlers/tickets');
+const premiumSweep = require('../premium/sweep');
 const logger = require('../utils/logger');
 
 const ROOT = path.join(__dirname, '..', '..');
@@ -44,6 +45,11 @@ module.exports = {
 
     // Live member counters: warm-up pass + periodic refresh (rate-limit aware).
     memberCounter.start(client);
+
+    // Premium license re-validation: catch lapsed subscriptions / refunds every 6h.
+    setTimeout(() => premiumSweep.revalidate().catch(() => {}), 20000);
+    const premiumTimer = setInterval(() => premiumSweep.revalidate().catch(() => {}), 6 * 60 * 60 * 1000);
+    premiumTimer.unref?.();
 
     const tempFile = path.join(ROOT, 'restart-data.json');
     if (!fs.existsSync(tempFile)) return;

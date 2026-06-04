@@ -26,7 +26,10 @@ const VARIANT_MAP = {
   [process.env.LS_VARIANT_MAX_MONTHLY  || '[LS_VARIANT_MAX_MONTHLY]']:  { kind: 'subscription', tier: 'max',      slots: 3 },
   [process.env.LS_VARIANT_MAX_YEARLY   || '[LS_VARIANT_MAX_YEARLY]']:   { kind: 'subscription', tier: 'max',      slots: 3 },
   [process.env.LS_VARIANT_LIFETIME     || '[LS_VARIANT_LIFETIME]']:     { kind: 'lifetime',     tier: 'lifetime', slots: 1 },
-  [process.env.LS_VARIANT_EXTRA_SLOT   || '[LS_VARIANT_EXTRA_SLOT]']:   { kind: 'extra_slot' }
+  [process.env.LS_VARIANT_EXTRA_SLOT   || '[LS_VARIANT_EXTRA_SLOT]']:   { kind: 'extra_slot' },
+  // Optional throwaway test product (e.g. a €1 product). Behaves like Pro: 1 slot.
+  // Leave LS_VARIANT_TEST unset in production so nothing maps to it.
+  [process.env.LS_VARIANT_TEST         || '[LS_VARIANT_TEST]']:         { kind: 'subscription', tier: 'pro', slots: 1 }
 };
 
 function variantInfo(variantId) {

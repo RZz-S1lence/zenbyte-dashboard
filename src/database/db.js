@@ -121,6 +121,28 @@ const MIGRATIONS = [
         CREATE INDEX idx_premium_servers_guild ON premium_servers (guild_id);
       `);
     }
+  },
+  {
+    id: '004_premium_licenses',
+    up: d => {
+      d.exec(`
+        -- One row per activated Lemon Squeezy license key. A user may hold several
+        -- (e.g. a subscription key plus extra-slot keys). The daily sweep re-validates
+        -- each key and flips 'status' when a subscription lapses or an order is refunded.
+        CREATE TABLE premium_licenses (
+          license_key  TEXT PRIMARY KEY,
+          user_id      TEXT NOT NULL,            -- Discord user who activated it
+          instance_id  TEXT,                     -- LS activation instance id (for deactivate)
+          variant_id   TEXT,                     -- LS variant id the key came from
+          kind         TEXT,                     -- 'subscription' | 'lifetime' | 'extra_slot'
+          tier         TEXT,                     -- 'pro' | 'max' | 'lifetime' | NULL
+          status       TEXT NOT NULL DEFAULT 'active',  -- last known: 'active' | 'inactive'
+          activated_at INTEGER NOT NULL,
+          last_check   INTEGER
+        );
+        CREATE INDEX idx_premium_licenses_user ON premium_licenses (user_id);
+      `);
+    }
   }
 ];
 
