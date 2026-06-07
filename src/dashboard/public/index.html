@@ -96,6 +96,7 @@
       <a class="nav-item" data-page="activity" onclick="goto('activity')"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span> Activity</a>
       <a class="nav-item" data-page="polls" onclick="goto('polls')"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="20" x2="6" y2="14"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="10"/></svg></span> Polls</a>
       <a class="nav-item" data-page="social" onclick="goto('social')"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg></span> Social Alerts</a>
+      <a class="nav-item" data-page="autoresponses" onclick="goto('autoresponses')"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8"/><path d="M8 13h5"/></svg></span> Auto Responses</a>
 
       <div class="nav-section">Applications</div>
       <a class="nav-item" data-page="applications" onclick="goto('applications')"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6"/><path d="M9 16h6"/></svg></span> Applications</a>
@@ -384,12 +385,12 @@
         </div>
 
         <div class="card">
-          <h3>Open Form</h3>
+          <h3>Default Open Form</h3>
           <label class="sec-switch"><input type="checkbox" id="t-form-enabled">
             <span>Ask questions in a pop-up form when a ticket is opened</span></label>
           <div id="t-form-fields" style="margin-top:14px"></div>
           <button class="btn btn-secondary" style="margin-top:6px" onclick="addFormField()">+ Add Question</button>
-          <span class="hint" style="display:block;margin-top:8px">Up to 5 questions (Discord modal limit). Answers appear in the ticket.</span>
+          <span class="hint" style="display:block;margin-top:8px">Up to 5 questions (Discord modal limit). This form is used by the panel posted with the /ticketsetup command. For multiple panels with their own forms, use the Ticket Forms and Ticket Panels sections below.</span>
         </div>
 
         <div class="card">
@@ -410,6 +411,9 @@
           <span class="save-hint">Unsaved changes</span>
           <span id="ticket-save-msg" class="save-status"></span>
         </div>
+
+        <div id="t-forms-section"></div>
+        <div id="t-panels-section"></div>
       </div>
     </div>
 
@@ -609,6 +613,16 @@
       </div>
       <div id="rr-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
       <div id="rr-body" class="hidden"></div>
+    </div>
+
+    <!-- ─── AUTO RESPONSES ─── -->
+    <div id="page-autoresponses" class="page">
+      <div class="page-header">
+        <h2>Auto Responses</h2>
+        <p>Reply automatically when a message matches a trigger. Pick how the trigger is matched, then answer with plain text or a rich embed built right here.</p>
+      </div>
+      <div id="arsp-no-guild" class="no-guild-msg">Select a server from the sidebar to get started.</div>
+      <div id="arsp-body" class="hidden"></div>
     </div>
 
     <!-- ─── SOCIAL ALERTS ─── -->

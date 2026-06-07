@@ -10,7 +10,8 @@ const { attachChat } = require('./chat');
 const { PermissionsBitField } = require('discord.js');
 
 const LOG_TYPES = require('../config/logTypes');
-const { normalizeTicketConfig } = require('../utils/tickets');
+const { normalizeTicketConfig, normalizeTicketForm, normalizeTicketPanel } = require('../utils/tickets');
+const ticketsHandler = require('../handlers/tickets');
 const { PROTECTIONS, PUNISHMENTS, mergeConfig } = require('../security/protections');
 const { CURVES, ANNOUNCE_MODES } = require('../leveling/config');
 const { SIGNALS: ALT_SIGNALS, SENSITIVITY_PRESETS, ACTIONS: ALT_ACTIONS } = require('../altdetect/config');
@@ -192,12 +193,16 @@ module.exports = function startDashboard(client) {
   });
 
   // ── Commands (built dynamically from the loaded command modules) ──
+  const OWNER_ID = require('../config').ownerId;
   app.get('/api/commands', requireAuth, (req, res) => {
     const permName = bit => {
       for (const [name, value] of Object.entries(PermissionsBitField.Flags)) if (value === bit) return name;
       return String(bit);
     };
-    const list = [...client.commands.values()].map(cmd => {
+    // Owner-only commands are never disclosed to anyone but the owner — not in the
+    // listing, not via the toggle UI, not anywhere the dashboard can reach.
+    const isOwner = req.session?.userId === OWNER_ID;
+    const list = [...client.commands.values()].filter(cmd => isOwner || !cmd.ownerOnly).map(cmd => {
       const json = cmd.data.toJSON();
       return {
         name:          json.name,
@@ -239,7 +244,7 @@ module.exports = function startDashboard(client) {
     const prem = premiumStore.isGuildPremium(guildId);
     const cap = limitFor(feature, prem);
     if (attempted <= cap) return null;
-    if (prem) return { status: 400, body: { error: `Limit reached — this server can have at most ${cap} ${LIMITS[feature].label}.`, limitReached: true } };
+    if (prem) return { status: 400, body: { error: `Limit reached. This server can have at most ${cap} ${LIMITS[feature].label}.`, limitReached: true } };
     return { status: 403, body: upgradeError(feature) };
   };
 
@@ -380,6 +385,120 @@ module.exports = function startDashboard(client) {
     const updated = normalizeTicketConfig({ ...current, ...req.body });
     client.tickets.set(req.params.id, updated);
     client.saveTickets();
+    res.json({ success: true, config: updated });
+  });
+
+  // ── Ticket forms (named, reusable open-form question sets) ──
+  const saveTicketCfg = (guildId, cfg) => {
+    const updated = normalizeTicketConfig(cfg);
+    client.tickets.set(guildId, updated);
+    client.saveTickets();
+    return updated;
+  };
+
+  app.post('/api/guild/:id/ticket-forms', requireAuth, guildGuard, (req, res) => {
+    const cfg = client.tickets.get(req.params.id) || {};
+    const forms = Array.isArray(cfg.forms) ? cfg.forms : [];
+    const blk = limitBlock(req.params.id, 'ticketForms', forms.length + 1);
+    if (blk) return res.status(blk.status).json(blk.body);
+    const form = normalizeTicketForm(req.body || {});
+    const updated = saveTicketCfg(req.params.id, { ...cfg, forms: [...forms, form] });
+    res.json({ success: true, form, config: updated });
+  });
+
+  app.put('/api/guild/:id/ticket-forms/:formId', requireAuth, guildGuard, (req, res) => {
+    const cfg = client.tickets.get(req.params.id) || {};
+    const forms = Array.isArray(cfg.forms) ? [...cfg.forms] : [];
+    const idx = forms.findIndex(f => f.id === req.params.formId);
+    if (idx === -1) return res.status(404).json({ error: 'Form not found.' });
+    forms[idx] = normalizeTicketForm({ ...forms[idx], ...req.body, id: req.params.formId });
+    const updated = saveTicketCfg(req.params.id, { ...cfg, forms });
+    res.json({ success: true, form: forms[idx], config: updated });
+  });
+
+  app.delete('/api/guild/:id/ticket-forms/:formId', requireAuth, guildGuard, (req, res) => {
+    const cfg = client.tickets.get(req.params.id) || {};
+    const forms = (cfg.forms || []).filter(f => f.id !== req.params.formId);
+    if (forms.length === (cfg.forms || []).length) return res.status(404).json({ error: 'Form not found.' });
+    // normalizeTicketConfig clears any panel.formId that pointed at the deleted form.
+    const updated = saveTicketCfg(req.params.id, { ...cfg, forms });
+    res.json({ success: true, config: updated });
+  });
+
+  // ── Ticket panels (each chooses which form it shows) ──
+  app.post('/api/guild/:id/ticket-panels', requireAuth, guildGuard, async (req, res) => {
+    const cfg = client.tickets.get(req.params.id) || {};
+    const panels = Array.isArray(cfg.panels) ? cfg.panels : [];
+    const blk = limitBlock(req.params.id, 'ticketPanels', panels.length + 1);
+    if (blk) return res.status(blk.status).json(blk.body);
+    const panel = normalizeTicketPanel(req.body || {});
+    let updated = saveTicketCfg(req.params.id, { ...cfg, panels: [...panels, panel] });
+
+    let published = false;
+    let stored = updated.panels.find(p => p.id === panel.id);
+    if (req.body?.publish && stored.channelId) {
+      const result = await ticketsHandler.publishPanel(client, req.params.id, stored);
+      if (!result.ok) return res.status(400).json({ error: result.error });
+      stored.messageId = result.messageId;
+      updated = saveTicketCfg(req.params.id, updated);
+      stored = updated.panels.find(p => p.id === panel.id);
+      published = true;
+    }
+    res.json({ success: true, panel: stored, config: updated, published });
+  });
+
+  app.put('/api/guild/:id/ticket-panels/:panelId', requireAuth, guildGuard, async (req, res) => {
+    const cfg = client.tickets.get(req.params.id) || {};
+    const panels = Array.isArray(cfg.panels) ? [...cfg.panels] : [];
+    const idx = panels.findIndex(p => p.id === req.params.panelId);
+    if (idx === -1) return res.status(404).json({ error: 'Panel not found.' });
+    panels[idx] = normalizeTicketPanel({ ...panels[idx], ...req.body, id: req.params.panelId });
+    let updated = saveTicketCfg(req.params.id, { ...cfg, panels });
+    let stored = updated.panels.find(p => p.id === req.params.panelId);
+
+    // Re-publish when explicitly asked, or to keep an already-posted panel in sync.
+    let published = false;
+    if ((req.body?.publish || stored.messageId) && stored.channelId) {
+      const result = await ticketsHandler.publishPanel(client, req.params.id, stored);
+      if (result.ok) {
+        stored.messageId = result.messageId;
+        updated = saveTicketCfg(req.params.id, updated);
+        stored = updated.panels.find(p => p.id === req.params.panelId);
+        published = true;
+      } else if (req.body?.publish) {
+        return res.status(400).json({ error: result.error });
+      }
+    }
+    res.json({ success: true, panel: stored, config: updated, published });
+  });
+
+  app.post('/api/guild/:id/ticket-panels/:panelId/publish', requireAuth, guildGuard, async (req, res) => {
+    const cfg = client.tickets.get(req.params.id) || {};
+    const panels = Array.isArray(cfg.panels) ? [...cfg.panels] : [];
+    const idx = panels.findIndex(p => p.id === req.params.panelId);
+    if (idx === -1) return res.status(404).json({ error: 'Panel not found.' });
+    if (req.body?.channelId) panels[idx] = normalizeTicketPanel({ ...panels[idx], channelId: req.body.channelId });
+    let updated = saveTicketCfg(req.params.id, { ...cfg, panels });
+    let stored = updated.panels.find(p => p.id === req.params.panelId);
+    const result = await ticketsHandler.publishPanel(client, req.params.id, stored);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    stored.messageId = result.messageId;
+    updated = saveTicketCfg(req.params.id, updated);
+    res.json({ success: true, panel: updated.panels.find(p => p.id === req.params.panelId), config: updated });
+  });
+
+  app.delete('/api/guild/:id/ticket-panels/:panelId', requireAuth, guildGuard, async (req, res) => {
+    const cfg = client.tickets.get(req.params.id) || {};
+    const panel = (cfg.panels || []).find(p => p.id === req.params.panelId);
+    if (!panel) return res.status(404).json({ error: 'Panel not found.' });
+    const updated = saveTicketCfg(req.params.id, { ...cfg, panels: (cfg.panels || []).filter(p => p.id !== req.params.panelId) });
+    // Best effort: remove the panel's own message.
+    if (panel.channelId && panel.messageId) {
+      const guild = client.guilds.cache.get(req.params.id);
+      const ch = guild?.channels.cache.get(panel.channelId);
+      const msg = ch && await ch.messages.fetch(panel.messageId).catch(() => null);
+      if (msg && msg.author?.id === client.user.id) await msg.delete().catch(() => {});
+    }
     res.json({ success: true, config: updated });
   });
 
@@ -535,6 +654,40 @@ module.exports = function startDashboard(client) {
     res.json({ success: true });
   });
 
+  // ── Auto responses ────────────────────────────
+  const autoResponseConfig = require('../autoresponse/config');
+
+  app.get('/api/guild/:id/autoresponses', requireAuth, guildGuard, (req, res) => {
+    res.json({
+      rules:  client.autoresponses.list(req.params.id),
+      meta:   { matchModes: autoResponseConfig.MATCH_MODES, responseTypes: autoResponseConfig.RESPONSE_TYPES }
+    });
+  });
+
+  app.post('/api/guild/:id/autoresponses', requireAuth, guildGuard, (req, res) => {
+    const blk = limitBlock(req.params.id, 'autoResponses', client.autoresponses.list(req.params.id).length + 1);
+    if (blk) return res.status(blk.status).json(blk.body);
+    const rule = autoResponseConfig.normalizeRule(req.body || {});
+    const valid = autoResponseConfig.validateRule(rule);
+    if (!valid.ok) return res.status(400).json({ error: valid.error });
+    res.json({ success: true, rule: client.autoresponses.create(req.params.id, rule) });
+  });
+
+  app.put('/api/guild/:id/autoresponses/:ruleId', requireAuth, guildGuard, (req, res) => {
+    const existing = client.autoresponses.get(req.params.id, req.params.ruleId);
+    if (!existing) return res.status(404).json({ error: 'Auto response not found.' });
+    const merged = autoResponseConfig.normalizeRule({ ...existing, ...req.body, id: existing.id });
+    const valid = autoResponseConfig.validateRule(merged);
+    if (!valid.ok) return res.status(400).json({ error: valid.error });
+    res.json({ success: true, rule: client.autoresponses.update(req.params.id, req.params.ruleId, merged) });
+  });
+
+  app.delete('/api/guild/:id/autoresponses/:ruleId', requireAuth, guildGuard, (req, res) => {
+    if (!client.autoresponses.delete(req.params.id, req.params.ruleId))
+      return res.status(404).json({ error: 'Auto response not found.' });
+    res.json({ success: true });
+  });
+
   // ── Moderators (mod users + roles) ────────────
   app.get('/api/guild/:id/moderators', requireAuth, guildGuard, (req, res) => {
     const m = client.store.moderators.get(req.params.id) || { users: [], roles: [] };
@@ -554,16 +707,20 @@ module.exports = function startDashboard(client) {
     res.json({ disabled: client.store.getDisabledCommands(req.params.id) });
   });
 
+  // A command is togglable only if it exists and is not owner-only (owner commands
+  // are global utilities and must stay invisible/untouchable to guild admins).
+  const togglable = name => client.commands.has(name) && !client.commands.get(name).ownerOnly;
+
   app.put('/api/guild/:id/command-toggles', requireAuth, guildGuard, (req, res) => {
     const { name, enabled } = req.body || {};
-    if (!name || !client.commands.has(name)) return res.status(400).json({ error: 'Unknown command.' });
+    if (!name || !togglable(name)) return res.status(400).json({ error: 'Unknown command.' });
     const disabled = client.store.setCommandEnabled(req.params.id, name, !!enabled);
     res.json({ success: true, disabled });
   });
 
   // Bulk enable/disable (e.g. a whole category, or the current filtered view).
   app.put('/api/guild/:id/command-toggles/bulk', requireAuth, guildGuard, (req, res) => {
-    const names = Array.isArray(req.body?.names) ? req.body.names.filter(n => client.commands.has(n)) : [];
+    const names = Array.isArray(req.body?.names) ? req.body.names.filter(togglable) : [];
     if (!names.length) return res.status(400).json({ error: 'No valid commands provided.' });
     const disabled = client.store.setCommandsEnabled(req.params.id, names, !!req.body.enabled);
     res.json({ success: true, disabled });
@@ -676,9 +833,12 @@ module.exports = function startDashboard(client) {
     const options = Array.isArray(b.options) ? b.options.map(s => String(s).trim()).filter(Boolean) : [];
     if (!b.question || options.length < 2) return res.status(400).json({ error: 'A poll needs a question and at least two options.' });
     const config = client.polls.getConfig(guild.id);
+    // Tier ceiling first (free over free limit -> upgrade nudge, premium over its
+    // ceiling -> plain limit-reached), then the admin's soft cap within that.
     const pollBlk = limitBlock(guild.id, 'pollOptions', options.length);
     if (pollBlk) return res.status(pollBlk.status).json(pollBlk.body);
-    if (options.length > config.maxOptions) return res.status(400).json({ error: `At most ${config.maxOptions} options.` });
+    const effectiveMax = pollService.effectiveMaxOptions(config, premiumStore.isGuildPremium(guild.id));
+    if (options.length > effectiveMax) return res.status(400).json({ error: `At most ${effectiveMax} options per poll.` });
 
     try {
       const poll = await pollService.createPoll(client, {
@@ -795,6 +955,16 @@ module.exports = function startDashboard(client) {
     if (!fs.existsSync(file)) return res.status(404).json({ error: 'Not found' });
     try { res.json(JSON.parse(fs.readFileSync(file, 'utf8'))); }
     catch { res.status(500).json({ error: 'Failed to read transcript' }); }
+  });
+
+  // ── Integrations: live Twitch credential check ──
+  // Owner only: it performs a network round-trip to Twitch and reports whether the
+  // configured Client ID / Secret actually authenticate, so the owner can confirm
+  // setup without guessing. Presence is also surfaced per-provider via /social.
+  app.get('/api/integrations/twitch', requireAuth, requireOwner, async (_req, res) => {
+    const twitch = require('../social/providers/twitch');
+    const result = await twitch.validate().catch(e => ({ ok: false, error: e.message }));
+    res.json({ configured: twitch.isConfigured(), ...result });
   });
 
   // ── Bot log files (owner only, may contain sensitive system info) ──

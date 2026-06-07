@@ -8,7 +8,7 @@ const {
   PRIORITY_COLORS, getModRoleIds, fetchAllMessages, saveJsonTranscript, buildTextTranscript
 } = require('../utils/tickets');
 
-// Pending form submissions: "guildId:userId" -> { type, ts }
+// Pending form submissions: "guildId:userId" -> { type, panelId, ts }
 const pendingForms = new Map();
 const formKey = i => `${i.guildId}:${i.user.id}`;
 
@@ -16,9 +16,29 @@ function getConfig(client, guildId) {
   return client.store.tickets.get(guildId) || {};
 }
 
-function buildFormModal(config) {
-  const modal = new ModalBuilder().setCustomId('ticket:form').setTitle('Open a Ticket');
-  config.form.fields.slice(0, 5).forEach((f, i) => {
+// Resolves which form fields and ticket types apply when opening from a panel.
+// A panel id selects a panel and its assigned form; with no panel id we fall back
+// to the legacy single-config form/types so original /ticketsetup panels keep working.
+function resolveContext(config, panelId) {
+  if (panelId) {
+    const panel = (config.panels || []).find(p => p.id === panelId);
+    if (panel) {
+      const form = (config.forms || []).find(f => f.id === panel.formId);
+      return { panel, formFields: form ? form.fields : [], types: panel.types || [] };
+    }
+  }
+  return {
+    panel: null,
+    formFields: config.form?.enabled ? (config.form.fields || []) : [],
+    types: config.types || []
+  };
+}
+
+function buildFormModal(fields, panelId) {
+  const modal = new ModalBuilder()
+    .setCustomId(panelId ? `ticket:form:${panelId}` : 'ticket:form')
+    .setTitle('Open a Ticket');
+  fields.slice(0, 5).forEach((f, i) => {
     const input = new TextInputBuilder()
       .setCustomId(`f${i}`)
       .setLabel(f.label.slice(0, 45))
@@ -30,17 +50,13 @@ function buildFormModal(config) {
   return modal;
 }
 
-function formEnabled(config) {
-  return config.form?.enabled && config.form.fields?.length > 0;
-}
-
 function isTicketMod(config, member) {
   const roleIds = getModRoleIds(config);
   if (roleIds.some(id => member.roles.cache.has(id))) return true;
   return member.permissions.has('ManageMessages');
 }
 
-async function createPrompt(interaction, client) {
+async function createPrompt(interaction, client, panelId = null) {
   const config = getConfig(client, interaction.guildId);
   const open = interaction.guild.channels.cache.filter(c => c.topic?.includes(`tkt-uid-${interaction.user.id}`));
   const max = config.maxTickets || 1;
@@ -49,47 +65,101 @@ async function createPrompt(interaction, client) {
       ? `You already have an open ticket: ${open.first()}`
       : `You've reached the maximum of **${max}** open tickets.`)], ephemeral: true });
 
-  if (config.types?.length) {
+  const ctx = resolveContext(config, panelId);
+
+  if (ctx.types.length) {
     const select = new StringSelectMenuBuilder()
-      .setCustomId('ticket:type')
+      .setCustomId(panelId ? `ticket:type:${panelId}` : 'ticket:type')
       .setPlaceholder('What do you need help with?')
-      .addOptions(config.types.slice(0, 25).map(t => ({ label: t, value: t })));
+      .addOptions(ctx.types.slice(0, 25).map(t => ({ label: t.slice(0, 100), value: t.slice(0, 100) })));
     return interaction.reply({
-      content: '📋 Please select a ticket type:',
+      content: 'Please select a ticket type:',
       components: [new ActionRowBuilder().addComponents(select)],
       ephemeral: true
     });
   }
 
-  if (formEnabled(config)) {
-    pendingForms.set(formKey(interaction), { type: null, ts: Date.now() });
-    return interaction.showModal(buildFormModal(config));
+  if (ctx.formFields.length) {
+    pendingForms.set(formKey(interaction), { type: null, panelId: panelId || null, ts: Date.now() });
+    return interaction.showModal(buildFormModal(ctx.formFields, panelId));
   }
 
   await createChannel(interaction, null, client);
 }
 
-async function typeSelect(interaction, client) {
+async function typeSelect(interaction, client, panelId = null) {
   const config = getConfig(client, interaction.guildId);
   const type = interaction.values[0];
-  if (formEnabled(config)) {
-    pendingForms.set(formKey(interaction), { type, ts: Date.now() });
-    return interaction.showModal(buildFormModal(config));
+  const ctx = resolveContext(config, panelId);
+  if (ctx.formFields.length) {
+    pendingForms.set(formKey(interaction), { type, panelId: panelId || null, ts: Date.now() });
+    return interaction.showModal(buildFormModal(ctx.formFields, panelId));
   }
   await createChannel(interaction, type, client);
 }
 
-async function formSubmit(interaction, client) {
+async function formSubmit(interaction, client, panelId = null) {
   const key = formKey(interaction);
   const pending = pendingForms.get(key);
   pendingForms.delete(key);
 
   const config = getConfig(client, interaction.guildId);
-  const answers = (config.form?.fields || []).slice(0, 5).map((f, i) => ({
+  const ctx = resolveContext(config, pending?.panelId ?? panelId);
+  const answers = ctx.formFields.slice(0, 5).map((f, i) => ({
     label: f.label,
     value: (interaction.fields.getTextInputValue(`f${i}`) || '').trim() || '*No answer*'
   }));
   await createChannel(interaction, pending?.type ?? null, client, answers);
+}
+
+// Posts (or refreshes) a panel's message in its channel with an open button that
+// carries the panel id, so opening from it uses that panel's assigned form.
+async function publishPanel(client, guildId, panel) {
+  const guild = client.guilds.cache.get(guildId);
+  if (!guild) return { error: 'Server not found.' };
+  const channel = guild.channels.cache.get(panel.channelId);
+  if (!channel || typeof channel.send !== 'function')
+    return { error: 'Pick a valid text channel for this panel first.' };
+
+  const config = getConfig(client, guildId);
+  const color = panel.color ? parseInt(panel.color.replace('#', ''), 16)
+    : (config.panelColor ? parseInt(config.panelColor.replace('#', ''), 16) : embeds.COLORS.brand);
+
+  const embed = {
+    title: panel.title || 'Support Tickets',
+    description: panel.description || 'Need help? Use the button below to open a ticket.',
+    color
+  };
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`ticket:create:${panel.id}`)
+      .setLabel((panel.buttonLabel || 'Create Ticket').slice(0, 60)).setStyle(ButtonStyle.Primary)
+  );
+
+  let message = null;
+  if (panel.messageId) message = await channel.messages.fetch(panel.messageId).catch(() => null);
+  if (message) await message.edit({ embeds: [embed], components: [row] }).catch(() => { message = null; });
+  if (!message) message = await channel.send({ embeds: [embed], components: [row] }).catch(() => null);
+  if (!message) return { error: 'I could not post the panel. Check that I can send messages in that channel.' };
+
+  return { ok: true, messageId: message.id, channelId: channel.id };
+}
+
+// Dispatches every ticket component by action, parsing an optional panel id from
+// the customId ("ticket:<action>[:<panelId>]").
+async function route(interaction, client) {
+  const [, action, arg] = interaction.customId.split(':');
+  switch (action) {
+    case 'create':          return createPrompt(interaction, client, arg || null);
+    case 'type':            return typeSelect(interaction, client, arg || null);
+    case 'form':            return formSubmit(interaction, client, arg || null);
+    case 'claim':           return claim(interaction, client);
+    case 'priority':        return openPriority(interaction, client);
+    case 'priority_select': return prioritySelect(interaction, client);
+    case 'close':           return closePrompt(interaction, client);
+    case 'confirm_close':   return confirmClose(interaction, client);
+    case 'cancel_close':    return cancelClose(interaction, client);
+    default:                return;
+  }
 }
 
 async function createChannel(interaction, type, client, answers = []) {
@@ -351,5 +421,6 @@ async function handleMemberLeave(client, member) {
 
 module.exports = {
   createPrompt, typeSelect, formSubmit, claim, openPriority, prioritySelect,
-  closePrompt, cancelClose, confirmClose, closeTicket, autoCloseSweep, handleMemberLeave
+  closePrompt, cancelClose, confirmClose, closeTicket, autoCloseSweep, handleMemberLeave,
+  publishPanel, route
 };

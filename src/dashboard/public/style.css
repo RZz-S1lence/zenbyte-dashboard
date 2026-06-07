@@ -711,3 +711,46 @@ button .ic, .btn .ic, .apps-tab .ic, .mc-act .ic, .cmd-cat-btn .ic { margin-righ
 .premium-profile-name { font-size: 17px; font-weight: 700; color: var(--white); }
 .premium-profile-meta { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; margin-top: 8px; font-size: 13px; color: var(--text); }
 .premium-profile-meta code { background: var(--card2); padding: 2px 6px; border-radius: 5px; }
+
+/* ── Auto Responses ─────────────────────────────── */
+.arsp-list { display: flex; flex-direction: column; gap: 12px; }
+.arsp-rule { padding: 16px; }
+.arsp-rule-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.arsp-rule-meta { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.arsp-rule-title { font-weight: 600; color: var(--white); }
+.arsp-rule-body { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.arsp-trigger { font-family: var(--mono); font-size: 13px; color: var(--text); background: var(--card2); padding: 4px 8px; border-radius: var(--radius-sm); display: inline-block; margin-top: 2px; word-break: break-word; }
+.arsp-editor { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+.arsp-editor-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.arsp-editor-side { position: sticky; top: 16px; }
+.arsp-type-tabs { display: inline-flex; background: var(--card2); border-radius: var(--radius-sm); padding: 4px; gap: 4px; margin-bottom: 14px; }
+.arsp-tab { border: none; background: transparent; color: var(--muted); padding: 7px 16px; border-radius: 6px; cursor: pointer; font: inherit; font-weight: 600; }
+.arsp-tab.active { background: var(--accent); color: var(--white); }
+.arsp-field-row { display: grid; grid-template-columns: 1fr 1.4fr auto auto; gap: 8px; align-items: center; margin-bottom: 8px; }
+.arsp-f-inline { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--muted); white-space: nowrap; }
+
+/* Live preview, styled to resemble a Discord message */
+.arsp-preview { background: #2b2d31; border-radius: var(--radius-sm); padding: 14px; min-height: 60px; }
+.arsp-preview-text { color: #dbdee1; white-space: pre-wrap; word-break: break-word; font-size: 14px; }
+.arsp-pv-embed { background: #313338; border-left: 4px solid var(--accent); border-radius: 4px; padding: 12px 16px; max-width: 100%; }
+.arsp-pv-author { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #f2f3f5; }
+.arsp-pv-author img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
+.arsp-pv-main { display: flex; gap: 12px; justify-content: space-between; }
+.arsp-pv-content { min-width: 0; flex: 1; }
+.arsp-pv-title { font-weight: 600; color: #f2f3f5; margin-bottom: 6px; word-break: break-word; }
+.arsp-pv-link { color: #00a8fc; text-decoration: none; }
+.arsp-pv-desc { color: #dbdee1; font-size: 14px; word-break: break-word; }
+.arsp-pv-fields { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.arsp-pv-field { flex: 1 1 100%; min-width: 0; }
+.arsp-pv-field.inline { flex: 1 1 30%; }
+.arsp-pv-fname { font-weight: 600; color: #f2f3f5; font-size: 13px; }
+.arsp-pv-fval { color: #dbdee1; font-size: 13px; word-break: break-word; }
+.arsp-pv-image { max-width: 100%; border-radius: 4px; margin-top: 8px; }
+.arsp-pv-thumb { width: 64px; height: 64px; border-radius: 4px; object-fit: cover; flex-shrink: 0; }
+.arsp-pv-footer { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; color: #b5bac1; }
+.arsp-pv-footer img { width: 18px; height: 18px; border-radius: 50%; }
+@media (max-width: 900px) {
+  .arsp-editor { grid-template-columns: 1fr; }
+  .arsp-editor-side { position: static; }
+  .arsp-rule-body { grid-template-columns: 1fr; }
+}

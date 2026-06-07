@@ -1,8 +1,57 @@
 const fs   = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const TRANSCRIPT_DIR = path.join(__dirname, '..', '..', 'transcripts');
 const PRIORITY_COLORS = { Low: 0x57f287, Medium: 0xfee75c, High: 0xed4245 };
+
+const genTicketId = () => crypto.randomBytes(4).toString('hex');
+const ID_RE = /^\d{16,20}$/;
+
+// Normalizes a set of open-form modal fields (max 5, per Discord's modal limit).
+function normalizeFormFields(fields) {
+  const styles = ['short', 'paragraph'];
+  return Array.isArray(fields)
+    ? fields
+        .filter(f => f && typeof f.label === 'string' && f.label.trim())
+        .slice(0, 5)
+        .map(f => ({
+          label:       f.label.trim().slice(0, 45),
+          placeholder: typeof f.placeholder === 'string' ? f.placeholder.slice(0, 100) : '',
+          style:       styles.includes(f.style) ? f.style : 'short',
+          required:    f.required !== false
+        }))
+    : [];
+}
+
+// A named, reusable open form (a set of modal questions) that a panel can point to.
+function normalizeTicketForm(form = {}) {
+  const f = form || {};
+  return {
+    id:     /^[0-9a-f]{8}$/.test(f.id || '') ? f.id : genTicketId(),
+    name:   (typeof f.name === 'string' && f.name.trim()) ? f.name.trim().slice(0, 80) : 'Untitled form',
+    fields: normalizeFormFields(f.fields)
+  };
+}
+
+// A ticket panel: one published message with an "open" button. Each panel chooses
+// which form (by id) is shown when a ticket is opened from it, and may carry its
+// own set of ticket types.
+function normalizeTicketPanel(panel = {}) {
+  const p = panel || {};
+  return {
+    id:          /^[0-9a-f]{8}$/.test(p.id || '') ? p.id : genTicketId(),
+    name:        (typeof p.name === 'string' && p.name.trim()) ? p.name.trim().slice(0, 80) : 'Ticket panel',
+    channelId:   ID_RE.test(p.channelId || '') ? p.channelId : null,
+    messageId:   ID_RE.test(p.messageId || '') ? p.messageId : null,
+    title:       (typeof p.title === 'string' && p.title.trim()) ? p.title.slice(0, 256) : null,
+    description: (typeof p.description === 'string' && p.description.trim()) ? p.description.slice(0, 2000) : null,
+    color:       /^#[0-9a-fA-F]{6}$/.test(p.color) ? p.color : null,
+    buttonLabel: (typeof p.buttonLabel === 'string' && p.buttonLabel.trim()) ? p.buttonLabel.trim().slice(0, 60) : 'Create Ticket',
+    formId:      (typeof p.formId === 'string' && p.formId) ? p.formId : null,  // null = no form (open immediately)
+    types:       Array.isArray(p.types) ? p.types.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim().slice(0, 100)).slice(0, 25) : []
+  };
+}
 
 // Returns the moderator role IDs for a ticket config, supporting both the new
 // `modRoleIds` array and the legacy single `modRoleId` field.
@@ -49,23 +98,22 @@ function normalizeTicketConfig(config = {}) {
     closeOnLeave:    !!ac.closeOnLeave
   };
 
-  // Open form (modal questions asked when a ticket is created).
+  // Legacy single open form (modal questions asked when a ticket is created).
+  // Kept for backward compatibility with the original /ticketsetup panel.
   const form = config.form || {};
-  const styles = ['short', 'paragraph'];
   config.form = {
     enabled: !!form.enabled,
-    fields: Array.isArray(form.fields)
-      ? form.fields
-          .filter(f => f && typeof f.label === 'string' && f.label.trim())
-          .slice(0, 5)
-          .map(f => ({
-            label:       f.label.trim().slice(0, 45),
-            placeholder: typeof f.placeholder === 'string' ? f.placeholder.slice(0, 100) : '',
-            style:       styles.includes(f.style) ? f.style : 'short',
-            required:    f.required !== false
-          }))
-      : []
+    fields:  normalizeFormFields(form.fields)
   };
+
+  // Multi-panel model: named forms and panels that each select a form by id.
+  config.forms  = Array.isArray(config.forms)  ? config.forms.map(normalizeTicketForm)   : [];
+  config.panels = Array.isArray(config.panels) ? config.panels.map(normalizeTicketPanel) : [];
+
+  // Drop dangling form references so a panel never points at a deleted form.
+  const formIds = new Set(config.forms.map(f => f.id));
+  for (const panel of config.panels)
+    if (panel.formId && !formIds.has(panel.formId)) panel.formId = null;
 
   return config;
 }
@@ -141,6 +189,10 @@ module.exports = {
   PRIORITY_COLORS,
   getModRoleIds,
   normalizeTicketConfig,
+  normalizeTicketForm,
+  normalizeTicketPanel,
+  normalizeFormFields,
+  genTicketId,
   fetchAllMessages,
   saveJsonTranscript,
   buildTextTranscript

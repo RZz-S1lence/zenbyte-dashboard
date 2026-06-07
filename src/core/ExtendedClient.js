@@ -9,6 +9,7 @@ const { PollStore } = require('../polls/store');
 const { SocialStore } = require('../social/store');
 const { AutoRoleStore } = require('../autorole/store');
 const { ReactionRoleStore } = require('../reactionrole/store');
+const { AutoResponseStore } = require('../autoresponse/store');
 const { ApplicationStore } = require('../applications/store');
 const { MemberCounterStore } = require('../membercounter/store');
 const { getPremiumStore } = require('../premium');
@@ -33,6 +34,7 @@ class ExtendedClient extends Client {
     this.social    = new SocialStore();
     this.autoroles     = new AutoRoleStore();
     this.reactionroles = new ReactionRoleStore();
+    this.autoresponses = new AutoResponseStore();
     this.applications  = new ApplicationStore();
     this.memberCounters = new MemberCounterStore();
     this.premium        = getPremiumStore();

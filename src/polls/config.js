@@ -3,7 +3,10 @@ function defaultConfig() {
   return {
     creatorRoleIds: [],   // roles allowed to create polls (besides ManageMessages / moderators)
     defaultDurationMin: 0, // 0 = polls stay open until ended manually
-    maxOptions: 10,
+    // Admin-chosen soft cap on options per poll. Defaults to the highest premium
+    // ceiling so it never silently restricts a premium server below its tier; the
+    // effective cap is always min(maxOptions, tier limit) (see premium/limits.js).
+    maxOptions: 25,
     resultsChannelId: null // optional channel where a summary is posted when a poll ends
   };
 }

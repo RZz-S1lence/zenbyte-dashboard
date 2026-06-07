@@ -8,7 +8,9 @@ const state = {
   guildData: null,   // { textChannels, categories, roles }
   guilds:    [],     // all guilds list
   ticketTypes: [],
-  ticketForm:  [],   // open-form question fields
+  ticketForm:  [],   // legacy open-form question fields
+  ticketForms: [],   // named reusable ticket forms
+  ticketPanels: [],  // ticket panels with assigned forms
   modRoleIds:  [],   // selected ticket moderator role IDs
   commands:    [],   // cached command list from /api/commands
   cmdDisabled: new Set(), // disabled command names for the selected guild
@@ -30,6 +32,9 @@ const state = {
   autorole:      null, // current autorole config
   reactionMenus: [],   // reaction-role panels for the selected guild
   reactionModes: [],   // available reaction-role modes
+  arspRules:   [],     // auto-response rules for the selected guild
+  arspMeta:    null,   // { matchModes, responseTypes }
+  arspEditing: null,   // the rule currently being created/edited, or null
   links:         null, // { invite, support } bot-invite and support-server links
   // Applications
   appsForms:   [],     // form list for the selected guild
@@ -132,6 +137,20 @@ function premiumNudge(feature) {
   alert(`This is a Premium feature.\n\nFree servers allow up to ${lim.free}; Premium allows up to ${lim.premium}.\n\nOpen the Premium tab in the sidebar to upgrade and activate this server.`);
 }
 
+// Renders the correct "create" button for a gated feature based on plan + usage:
+//   not at cap          -> a normal primary button that runs `onclick`
+//   at cap, no Premium  -> a locked button that nudges the user to upgrade
+//   at cap, on Premium  -> a disabled button stating the plan limit is reached
+// This keeps upgrade messaging exclusive to users who actually lack Premium, and
+// shows a plain "limit reached" state once a Premium server is at its ceiling.
+function gateCreateButton(gate, label, onclick, feature, opts = {}) {
+  const cls = opts.className || 'btn-primary';
+  const inner = `${opts.icon ? opts.icon + ' ' : ''}${label}`;
+  if (!gate.atCap) return `<button class="btn ${cls}" onclick="${onclick}">${inner}</button>`;
+  if (!gate.isPrem) return premiumLockedBtn(label, feature);
+  return `<button class="btn ${cls}" disabled title="You have reached the maximum for your plan">${inner}</button>`;
+}
+
 // Fills any static element marked <... data-icon="name"> with its SVG. Lets the
 // HTML stay emoji-free without inlining big SVG blobs everywhere.
 function hydrateIcons(root = document) {
@@ -232,6 +251,7 @@ function goto(page) {
   if (page === 'leveling'    && state.guildId) loadLeveling();
   if (page === 'polls'       && state.guildId) loadPolls();
   if (page === 'social'      && state.guildId) loadSocial();
+  if (page === 'autoresponses' && state.guildId) loadAutoResponses();
   if (page === 'applications' && state.guildId) loadApplications();
   if (page === 'membercounters' && state.guildId) loadMemberCounters();
   if (page === 'autorole'    && state.guildId) loadAutorole();
@@ -546,6 +566,7 @@ async function selectGuild(id) {
   if (activePage === 'autorole')    await loadAutorole();
   if (activePage === 'reactionroles') await loadReactionRoles();
   if (activePage === 'social')      await loadSocial();
+  if (activePage === 'autoresponses') await loadAutoResponses();
   if (activePage === 'applications') await loadApplications();
   if (activePage === 'membercounters') await loadMemberCounters();
   if (activePage === 'transcripts') await loadTranscripts();
@@ -688,6 +709,12 @@ async function loadTicketConfig() {
 
   state.ticketTypes = config.types ? [...config.types] : [];
   renderTypeChips();
+
+  state.ticketForms  = Array.isArray(config.forms)  ? config.forms  : [];
+  state.ticketPanels = Array.isArray(config.panels) ? config.panels : [];
+  renderTicketForms();
+  renderTicketPanels();
+
   await loadOpenTickets();
   show('tickets-body');
 }
@@ -901,6 +928,182 @@ async function saveTicketConfig() {
   } catch {
     setStatus(msg, 'err', '❌ Failed to save.');
   }
+}
+
+// ── Ticket forms (named, reusable) ─────────────────
+function tfFieldRow(f = {}) {
+  return `<div class="tf-row">
+    <input type="text" class="tf-label" placeholder="Question / label" maxlength="45" value="${esc(f.label || '')}">
+    <input type="text" class="tf-ph" placeholder="Placeholder (optional)" maxlength="100" value="${esc(f.placeholder || '')}">
+    <select class="tf-style">
+      <option value="short"${f.style === 'short' ? ' selected' : ''}>Short</option>
+      <option value="paragraph"${f.style === 'paragraph' ? ' selected' : ''}>Paragraph</option>
+    </select>
+    <label class="tf-req"><input type="checkbox" class="tf-required" ${f.required !== false ? 'checked' : ''}> Required</label>
+    <button class="btn btn-secondary tf-del" onclick="this.closest('.tf-row').remove()">${svg('x')}</button>
+  </div>`;
+}
+
+function renderTicketForms() {
+  const forms = state.ticketForms || [];
+  const gate = premiumGate('ticketForms', forms.length);
+  const newBtn = gateCreateButton(gate, 'New Form', 'tfNewForm()', 'ticketForms', { icon: svg('plus') });
+  const cards = forms.map(f => `
+    <div class="card tf-card" data-formid="${f.id}">
+      <div class="form-row"><label>Form name</label><input type="text" class="tf-name" maxlength="80" value="${esc(f.name)}"></div>
+      <div class="form-row"><label>Questions</label>
+        <div class="tf-fields">${(f.fields || []).map(tfFieldRow).join('') || '<p class="hint">No questions; tickets open immediately.</p>'}</div>
+        <button class="btn btn-secondary" style="margin-top:8px" onclick="tfAddField('${f.id}')">+ Add Question</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="tfSaveForm('${f.id}')">Save Form</button>
+        <button class="btn btn-secondary" onclick="tfDeleteForm('${f.id}')">Delete</button>
+        <span id="tf-msg-${f.id}" class="save-status"></span>
+      </div>
+    </div>`).join('') || '<p class="hint">No forms yet. Create one, then assign it to a panel below.</p>';
+
+  document.getElementById('t-forms-section').innerHTML = `
+    <div class="card"><h3>Ticket Forms &nbsp; ${gate.hint}</h3>
+      <p class="hint">Build reusable question forms here, then choose which form each panel uses.</p>
+      <div style="margin-top:10px">${newBtn}</div>
+    </div>
+    ${cards}`;
+}
+
+function tfCollectFields(formId) {
+  const card = document.querySelector(`.tf-card[data-formid="${formId}"]`);
+  return [...card.querySelectorAll('.tf-row')].map(row => ({
+    label:       row.querySelector('.tf-label').value.trim(),
+    placeholder: row.querySelector('.tf-ph').value.trim(),
+    style:       row.querySelector('.tf-style').value,
+    required:    row.querySelector('.tf-required').checked
+  })).filter(f => f.label);
+}
+
+function tfAddField(formId) {
+  const box = document.querySelector(`.tf-card[data-formid="${formId}"] .tf-fields`);
+  if (box.querySelectorAll('.tf-row').length >= 5) return;
+  const empty = box.querySelector('.hint'); if (empty) empty.remove();
+  box.insertAdjacentHTML('beforeend', tfFieldRow());
+}
+
+async function tfNewForm() {
+  const gate = premiumGate('ticketForms', (state.ticketForms || []).length);
+  if (gate.atCap) { if (!gate.isPrem) premiumNudge('ticketForms'); return; }
+  try {
+    const r = await api('POST', `/api/guild/${state.guildId}/ticket-forms`, { name: 'New form', fields: [] });
+    state.ticketForms = r.config.forms; state.ticketPanels = r.config.panels;
+    renderTicketForms(); renderTicketPanels();
+  } catch (e) { alert(e.message); }
+}
+
+async function tfSaveForm(id) {
+  const card = document.querySelector(`.tf-card[data-formid="${id}"]`);
+  const msg = document.getElementById(`tf-msg-${id}`);
+  const payload = { name: card.querySelector('.tf-name').value.trim() || 'Untitled form', fields: tfCollectFields(id) };
+  try {
+    const r = await api('PUT', `/api/guild/${state.guildId}/ticket-forms/${id}`, payload);
+    state.ticketForms = r.config.forms; state.ticketPanels = r.config.panels;
+    renderTicketPanels(); // refresh the form picker in each panel
+    setStatus(msg, 'ok', 'Saved.');
+  } catch (e) { setStatus(msg, 'err', e.message); }
+}
+
+async function tfDeleteForm(id) {
+  if (!confirm('Delete this form? Panels using it will fall back to opening with no form.')) return;
+  try {
+    const r = await api('DELETE', `/api/guild/${state.guildId}/ticket-forms/${id}`);
+    state.ticketForms = r.config.forms; state.ticketPanels = r.config.panels;
+    renderTicketForms(); renderTicketPanels();
+  } catch (e) { alert(e.message); }
+}
+
+// ── Ticket panels (each picks a form) ──────────────
+function tpFormOptions(selectedId) {
+  const none = '<option value="">No form (open immediately)</option>';
+  return none + (state.ticketForms || []).map(f =>
+    `<option value="${f.id}"${f.id === selectedId ? ' selected' : ''}>${esc(f.name)}</option>`).join('');
+}
+
+function renderTicketPanels() {
+  const panels = state.ticketPanels || [];
+  const gate = premiumGate('ticketPanels', panels.length);
+  const newBtn = gateCreateButton(gate, 'New Panel', 'tpNewPanel()', 'ticketPanels', { icon: svg('plus') });
+  const cards = panels.map(p => `
+    <div class="card tp-card" data-panelid="${p.id}">
+      <div class="card-grid">
+        <div class="form-row"><label>Panel name</label><input type="text" class="tp-name" maxlength="80" value="${esc(p.name)}"></div>
+        <div class="form-row"><label>Channel</label><select class="tp-channel">${lvChannelOpts(p.channelId || '')}</select></div>
+      </div>
+      <div class="card-grid">
+        <div class="form-row"><label>Assigned form</label><select class="tp-form">${tpFormOptions(p.formId)}</select></div>
+        <div class="form-row"><label>Button label</label><input type="text" class="tp-button" maxlength="60" value="${esc(p.buttonLabel || 'Create Ticket')}"></div>
+      </div>
+      <div class="form-row"><label>Panel title</label><input type="text" class="tp-title" maxlength="256" value="${esc(p.title || '')}" placeholder="Support Tickets"></div>
+      <div class="form-row"><label>Panel description</label><textarea class="tp-desc" maxlength="2000" placeholder="Need help? Use the button below to open a ticket.">${esc(p.description || '')}</textarea></div>
+      <div class="card-grid">
+        <div class="form-row"><label>Color</label><div class="color-row"><input type="color" class="tp-color" value="${/^#[0-9a-fA-F]{6}$/.test(p.color) ? p.color : '#5865F2'}"></div></div>
+        <div class="form-row"><label>Ticket types (comma separated, optional)</label><input type="text" class="tp-types" value="${esc((p.types || []).join(', '))}" placeholder="Billing, Bug, Other"></div>
+      </div>
+      <div class="btn-row" style="align-items:center">
+        <button class="btn btn-primary" onclick="tpSave('${p.id}', true)">Save &amp; Publish</button>
+        <button class="btn btn-secondary" onclick="tpSave('${p.id}', false)">Save</button>
+        <button class="btn btn-secondary" onclick="tpDelete('${p.id}')">Delete</button>
+        <span class="hint">${p.messageId ? 'Published' : 'Not published'}</span>
+        <span id="tp-msg-${p.id}" class="save-status"></span>
+      </div>
+    </div>`).join('') || '<p class="hint">No panels yet. Create one and assign a form to it.</p>';
+
+  document.getElementById('t-panels-section').innerHTML = `
+    <div class="card"><h3>Ticket Panels &nbsp; ${gate.hint}</h3>
+      <p class="hint">Each panel posts its own button. Pick which form opens when a ticket is created from it.</p>
+      <div style="margin-top:10px">${newBtn}</div>
+    </div>
+    ${cards}`;
+}
+
+function tpCollect(id) {
+  const card = document.querySelector(`.tp-card[data-panelid="${id}"]`);
+  return {
+    name:        card.querySelector('.tp-name').value.trim() || 'Ticket panel',
+    channelId:   card.querySelector('.tp-channel').value || null,
+    formId:      card.querySelector('.tp-form').value || null,
+    buttonLabel: card.querySelector('.tp-button').value.trim() || 'Create Ticket',
+    title:       card.querySelector('.tp-title').value.trim() || null,
+    description: card.querySelector('.tp-desc').value.trim() || null,
+    color:       card.querySelector('.tp-color').value || '#5865F2',
+    types:       card.querySelector('.tp-types').value.split(',').map(s => s.trim()).filter(Boolean)
+  };
+}
+
+async function tpNewPanel() {
+  const gate = premiumGate('ticketPanels', (state.ticketPanels || []).length);
+  if (gate.atCap) { if (!gate.isPrem) premiumNudge('ticketPanels'); return; }
+  try {
+    const r = await api('POST', `/api/guild/${state.guildId}/ticket-panels`, { name: 'New panel' });
+    state.ticketPanels = r.config.panels;
+    renderTicketPanels();
+  } catch (e) { alert(e.message); }
+}
+
+async function tpSave(id, publish) {
+  const payload = { ...tpCollect(id), publish: !!publish };
+  if (publish && !payload.channelId) return setStatus(document.getElementById(`tp-msg-${id}`), 'err', 'Pick a channel to publish.');
+  try {
+    const r = await api('PUT', `/api/guild/${state.guildId}/ticket-panels/${id}`, payload);
+    state.ticketPanels = r.config.panels;
+    renderTicketPanels();
+    setStatus(document.getElementById(`tp-msg-${id}`), 'ok', publish ? (r.published ? 'Saved and published.' : 'Saved.') : 'Saved.');
+  } catch (e) { setStatus(document.getElementById(`tp-msg-${id}`), 'err', e.message); }
+}
+
+async function tpDelete(id) {
+  if (!confirm('Delete this panel? Its posted message will be removed too.')) return;
+  try {
+    const r = await api('DELETE', `/api/guild/${state.guildId}/ticket-panels/${id}`);
+    state.ticketPanels = r.config.panels;
+    renderTicketPanels();
+  } catch (e) { alert(e.message); }
 }
 
 async function loadOpenTickets() {
@@ -1369,7 +1572,7 @@ async function savePollConfig() {
   const msg = document.getElementById('pollcfg-msg');
   const payload = {
     defaultDurationMin: numv('pollcfg-duration', 0),
-    maxOptions: numv('pollcfg-maxopts', 10),
+    maxOptions: numv('pollcfg-maxopts', 25),
     resultsChannelId: document.getElementById('pollcfg-results').value || null,
     creatorRoleIds: msValues('pollcfg-creators')
   };
@@ -1686,10 +1889,7 @@ function renderLeveling() {
       <p class="hint" style="margin-bottom:12px">Grant roles at levels. Multiple rewards per level allowed.</p>
       <div id="lv-rewards">${rewardRows}</div>
       <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        ${(() => { const g = premiumGate('levelingRewards', c.roleRewards.length);
-          return (g.atCap && !g.isPrem)
-            ? premiumLockedBtn('Add Reward', 'levelingRewards')
-            : `<button class="btn btn-secondary" onclick="lvAdd('roleRewards')">+ Add Reward</button>`; })()}
+        ${gateCreateButton(premiumGate('levelingRewards', c.roleRewards.length), '+ Add Reward', "lvAdd('roleRewards')", 'levelingRewards', { className: 'btn-secondary' })}
         ${premiumGate('levelingRewards', c.roleRewards.length).hint}
       </div>
       <div style="margin-top:14px">
@@ -2142,12 +2342,13 @@ function rrMenuCard(menu) {
 function renderReactionRoles() {
   const existing = state.reactionMenus.map(rrMenuCard).join('');
   const panelGate = premiumGate('reactionPanels', state.reactionMenus.length);
-  const createBtn = panelGate.atCap && !panelGate.isPrem
-    ? premiumLockedBtn('Create Panel', 'reactionPanels')
-    : `<button class="btn btn-primary" onclick="rrCreate()">Create Panel</button>`;
+  const createBtn = gateCreateButton(panelGate, 'Create Panel', 'rrCreate()', 'reactionPanels');
+  const limitNote = panelGate.atCap && panelGate.isPrem
+    ? `<span class="hint">Limit reached: this server is using all ${panelGate.cap} reaction-role panels.</span>`
+    : '';
   document.getElementById('rr-body').innerHTML = `
     <div class="card">
-      <h3>Create a Panel &nbsp; ${panelGate.hint}</h3>
+      <h3>Create a Panel &nbsp; ${panelGate.hint} ${limitNote}</h3>
       <div class="card-grid">
         <div class="form-row"><label>Channel</label><select id="rr-new-channel">${lvChannelOpts('')}</select></div>
         <div class="form-row"><label>Mode</label><select id="rr-new-mode">${rrModeOpts('normal')}</select></div>
@@ -2241,6 +2442,314 @@ async function rrSave(id) {
 async function rrDelete(id) {
   if (!confirm('Delete this reaction-role panel? If the bot posted the message, it will be deleted too.')) return;
   try { await api('DELETE', `/api/guild/${state.guildId}/reactionroles/${id}`); await loadReactionRoles(); }
+  catch (e) { alert('Failed to delete: ' + e.message); }
+}
+
+// ── AUTO RESPONSES ────────────────────────────────
+const ARSP_MATCH_LABELS = { exact: 'Exact match', contains: 'Contains', starts: 'Starts with', ends: 'Ends with' };
+
+async function loadAutoResponses() {
+  hide('arsp-body');
+  if (!state.guildId) { show('arsp-no-guild'); return; }
+  hide('arsp-no-guild');
+  await ensureGuildData();
+  const data = await api('GET', `/api/guild/${state.guildId}/autoresponses`);
+  state.arspRules = data.rules || [];
+  state.arspMeta  = data.meta || { matchModes: [], responseTypes: ['text', 'embed'] };
+  state.arspEditing = null;
+  renderAutoResponses();
+  show('arsp-body');
+}
+
+function arspBlankRule() {
+  return {
+    id: null, enabled: true, name: '', trigger: '', match: 'contains', caseSensitive: false,
+    responseType: 'text', text: '', reply: true, deleteTrigger: false, cooldownSec: 0,
+    channelIds: [], ignoreRoleIds: [],
+    embed: { author: { name: '', iconUrl: '', url: '' }, title: '', url: '', description: '',
+      color: '#5865F2', fields: [], image: { url: '' }, thumbnail: { url: '' },
+      footer: { text: '', iconUrl: '' }, timestamp: false }
+  };
+}
+
+function renderAutoResponses() {
+  if (state.arspEditing) return renderArspEditor();
+  const gate = premiumGate('autoResponses', state.arspRules.length);
+  const newBtn = gateCreateButton(gate, 'New Response', 'arspNew()', 'autoResponses', { icon: svg('plus') });
+
+  const rows = state.arspRules.length
+    ? state.arspRules.map(arspRuleCard).join('')
+    : '<p class="hint" style="padding:16px">No auto responses yet. Create one to reply automatically when a message matches a trigger.</p>';
+
+  document.getElementById('arsp-body').innerHTML = `
+    <div class="card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px"><strong>${state.arspRules.length}</strong> auto response${state.arspRules.length === 1 ? '' : 's'} configured. ${gate.hint}</div>
+      ${newBtn}
+    </div>
+    <div class="arsp-list">${rows}</div>`;
+}
+
+function arspRuleCard(r) {
+  const typeTag = r.responseType === 'embed' ? 'Embed' : 'Text';
+  const summary = r.responseType === 'embed'
+    ? (r.embed.title || r.embed.description || 'Rich embed').slice(0, 80)
+    : (r.text || '').slice(0, 80);
+  return `<div class="card arsp-rule">
+    <div class="arsp-rule-head">
+      <div class="arsp-rule-meta">
+        <label class="sec-switch" title="Enable or disable this response">
+          <input type="checkbox" ${chk(r.enabled)} onchange="arspToggle('${r.id}', this.checked)"><span></span>
+        </label>
+        <div>
+          <div class="arsp-rule-title">${esc(r.name || r.trigger || 'Untitled')}</div>
+          <div class="hint">${ARSP_MATCH_LABELS[r.match] || r.match}${r.caseSensitive ? ', case sensitive' : ''} · ${typeTag}</div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="arspEdit('${r.id}')">Edit</button>
+        <button class="btn btn-secondary" onclick="arspDelete('${r.id}')">Delete</button>
+      </div>
+    </div>
+    <div class="arsp-rule-body">
+      <div><span class="hint">Trigger</span><div class="arsp-trigger">${esc(r.trigger || '(none)')}</div></div>
+      <div><span class="hint">Responds with</span><div>${esc(summary) || '<span class="hint">(empty)</span>'}</div></div>
+    </div>
+  </div>`;
+}
+
+function arspNew() {
+  const gate = premiumGate('autoResponses', state.arspRules.length);
+  if (gate.atCap) { if (!gate.isPrem) premiumNudge('autoResponses'); return; }
+  state.arspEditing = arspBlankRule();
+  renderAutoResponses();
+}
+
+function arspEdit(id) {
+  const r = state.arspRules.find(x => x.id === id);
+  if (!r) return;
+  // Deep copy so edits are discardable until saved.
+  state.arspEditing = JSON.parse(JSON.stringify({ ...arspBlankRule(), ...r, embed: { ...arspBlankRule().embed, ...(r.embed || {}) } }));
+  renderAutoResponses();
+}
+
+function arspCancel() { state.arspEditing = null; renderAutoResponses(); }
+
+function renderArspEditor() {
+  const r = state.arspEditing;
+  const isEmbed = r.responseType === 'embed';
+  const matchOpts = (state.arspMeta.matchModes || []).map(m =>
+    `<option value="${m.value}" ${r.match === m.value ? 'selected' : ''}>${esc(m.label)}</option>`).join('');
+
+  document.getElementById('arsp-body').innerHTML = `
+    <div class="arsp-editor">
+      <div class="arsp-editor-main">
+        <div class="card">
+          <h3>${r.id ? 'Edit Auto Response' : 'New Auto Response'}</h3>
+          <div class="card-grid">
+            <div class="form-row"><label>Name (optional)</label>
+              <input type="text" id="arsp-name" maxlength="80" value="${esc(r.name)}" placeholder="Internal label" oninput="arspCollect()"></div>
+            <div class="form-row"><label>Match type</label>
+              <select id="arsp-match" onchange="arspCollect()">${matchOpts}</select></div>
+          </div>
+          <div class="form-row"><label>Trigger phrase</label>
+            <input type="text" id="arsp-trigger" maxlength="200" value="${esc(r.trigger)}" placeholder="e.g. how do I open a ticket" oninput="arspCollect()"></div>
+          <label class="sec-switch"><input type="checkbox" id="arsp-case" ${chk(r.caseSensitive)} onchange="arspCollect()"><span>Case sensitive</span></label>
+        </div>
+
+        <div class="card">
+          <div class="arsp-type-tabs">
+            <button class="arsp-tab ${isEmbed ? '' : 'active'}" onclick="arspSetType('text')">Plain text</button>
+            <button class="arsp-tab ${isEmbed ? 'active' : ''}" onclick="arspSetType('embed')">Rich embed</button>
+          </div>
+          ${isEmbed ? arspEmbedEditorHtml(r) : arspTextEditorHtml(r)}
+        </div>
+
+        <div class="card">
+          <h3>Behaviour</h3>
+          <div class="card-grid">
+            <label class="sec-switch"><input type="checkbox" id="arsp-reply" ${chk(r.reply)} onchange="arspCollect()"><span>Reply to the triggering message</span></label>
+            <label class="sec-switch"><input type="checkbox" id="arsp-delete" ${chk(r.deleteTrigger)} onchange="arspCollect()"><span>Delete the triggering message</span></label>
+          </div>
+          <div class="card-grid">
+            <div class="form-row"><label>Cooldown (seconds)</label>
+              <input type="number" id="arsp-cooldown" min="0" max="3600" value="${r.cooldownSec || 0}" oninput="arspCollect()">
+              <span class="hint">Minimum time between responses for this rule. 0 means no cooldown.</span></div>
+          </div>
+          <div class="card-grid">
+            <div class="form-row"><label>Only in these channels (optional)</label><div id="arsp-channels"></div></div>
+            <div class="form-row"><label>Ignore these roles (optional)</label><div id="arsp-ignoreroles"></div></div>
+          </div>
+        </div>
+
+        <div class="save-bar" style="position:static">
+          <button class="btn btn-primary" onclick="arspSave()">${r.id ? 'Save Changes' : 'Create Response'}</button>
+          <button class="btn btn-secondary" onclick="arspCancel()">Cancel</button>
+          <span id="arsp-save-msg" class="save-status"></span>
+        </div>
+      </div>
+
+      <div class="arsp-editor-side">
+        <div class="card">
+          <h3>Live preview</h3>
+          <div id="arsp-preview" class="arsp-preview"></div>
+          <span class="hint">Placeholders: {user} {username} {server} {channel} {memberCount}</span>
+        </div>
+      </div>
+    </div>`;
+
+  msInit('arsp-channels', channelItems(), r.channelIds || []);
+  msInit('arsp-ignoreroles', roleItems(), r.ignoreRoleIds || []);
+  arspRefreshPreview();
+}
+
+function arspTextEditorHtml(r) {
+  return `<div class="form-row"><label>Response text</label>
+    <textarea id="arsp-text" rows="4" maxlength="2000" placeholder="What the bot should say" oninput="arspCollect()">${esc(r.text)}</textarea></div>`;
+}
+
+function arspEmbedEditorHtml(r) {
+  const e = r.embed;
+  const fieldRows = (e.fields || []).map((f, i) => `
+    <div class="arsp-field-row" data-i="${i}">
+      <input type="text" class="arsp-f-name" maxlength="256" placeholder="Field name" value="${esc(f.name)}" oninput="arspCollect()">
+      <input type="text" class="arsp-f-value" maxlength="1024" placeholder="Field value" value="${esc(f.value)}" oninput="arspCollect()">
+      <label class="arsp-f-inline"><input type="checkbox" class="arsp-f-inlinecb" ${chk(f.inline)} onchange="arspCollect()"> Inline</label>
+      <button class="btn btn-secondary" onclick="arspRemoveField(${i})">${svg('x')}</button>
+    </div>`).join('') || '<p class="hint">No fields yet.</p>';
+
+  return `
+    <div class="card-grid">
+      <div class="form-row"><label>Author name</label><input type="text" id="arsp-e-author" maxlength="256" value="${esc(e.author.name)}" oninput="arspCollect()"></div>
+      <div class="form-row"><label>Author icon URL</label><input type="text" id="arsp-e-authoricon" value="${esc(e.author.iconUrl)}" placeholder="https://" oninput="arspCollect()"></div>
+    </div>
+    <div class="form-row"><label>Title</label><input type="text" id="arsp-e-title" maxlength="256" value="${esc(e.title)}" oninput="arspCollect()"></div>
+    <div class="form-row"><label>Title link URL (optional)</label><input type="text" id="arsp-e-url" value="${esc(e.url)}" placeholder="https://" oninput="arspCollect()"></div>
+    <div class="form-row"><label>Description</label><textarea id="arsp-e-desc" rows="4" maxlength="4000" oninput="arspCollect()">${esc(e.description)}</textarea></div>
+    <div class="card-grid">
+      <div class="form-row"><label>Color</label>
+        <div class="color-row"><input type="color" id="arsp-e-color" value="${/^#[0-9a-fA-F]{6}$/.test(e.color) ? e.color : '#5865F2'}" oninput="arspCollect()"></div></div>
+      <div class="form-row"><label>Thumbnail URL</label><input type="text" id="arsp-e-thumb" value="${esc(e.thumbnail.url)}" placeholder="https://" oninput="arspCollect()"></div>
+    </div>
+    <div class="form-row"><label>Image URL</label><input type="text" id="arsp-e-image" value="${esc(e.image.url)}" placeholder="https://" oninput="arspCollect()"></div>
+    <div class="form-row"><label>Fields</label><div id="arsp-fields">${fieldRows}</div>
+      <div style="margin-top:8px"><button class="btn btn-secondary" onclick="arspAddField()">+ Add field</button></div></div>
+    <div class="card-grid">
+      <div class="form-row"><label>Footer text</label><input type="text" id="arsp-e-footer" maxlength="2048" value="${esc(e.footer.text)}" oninput="arspCollect()"></div>
+      <div class="form-row"><label>Footer icon URL</label><input type="text" id="arsp-e-footericon" value="${esc(e.footer.iconUrl)}" placeholder="https://" oninput="arspCollect()"></div>
+    </div>
+    <label class="sec-switch"><input type="checkbox" id="arsp-e-timestamp" ${chk(e.timestamp)} onchange="arspCollect()"><span>Show current timestamp</span></label>`;
+}
+
+// Reads editor DOM into state.arspEditing without re-rendering inputs (keeps focus).
+function arspCollect() {
+  const r = state.arspEditing;
+  if (!r) return;
+  const v = id => document.getElementById(id)?.value ?? '';
+  const c = id => document.getElementById(id)?.checked ?? false;
+  r.name = v('arsp-name'); r.match = v('arsp-match'); r.trigger = v('arsp-trigger');
+  r.caseSensitive = c('arsp-case');
+  r.reply = c('arsp-reply'); r.deleteTrigger = c('arsp-delete');
+  r.cooldownSec = parseInt(v('arsp-cooldown'), 10) || 0;
+  r.channelIds = msValues('arsp-channels');
+  r.ignoreRoleIds = msValues('arsp-ignoreroles');
+
+  if (r.responseType === 'text') {
+    r.text = v('arsp-text');
+  } else {
+    const e = r.embed;
+    e.author.name = v('arsp-e-author'); e.author.iconUrl = v('arsp-e-authoricon');
+    e.title = v('arsp-e-title'); e.url = v('arsp-e-url'); e.description = v('arsp-e-desc');
+    e.color = v('arsp-e-color') || '#5865F2';
+    e.thumbnail.url = v('arsp-e-thumb'); e.image.url = v('arsp-e-image');
+    e.footer.text = v('arsp-e-footer'); e.footer.iconUrl = v('arsp-e-footericon');
+    e.timestamp = c('arsp-e-timestamp');
+    e.fields = [...document.querySelectorAll('#arsp-fields .arsp-field-row')].map(row => ({
+      name:  row.querySelector('.arsp-f-name').value,
+      value: row.querySelector('.arsp-f-value').value,
+      inline: row.querySelector('.arsp-f-inlinecb').checked
+    }));
+  }
+  arspRefreshPreview();
+}
+
+function arspSetType(type) {
+  arspCollect();
+  state.arspEditing.responseType = type;
+  renderAutoResponses();
+}
+
+function arspAddField() {
+  arspCollect();
+  if (state.arspEditing.embed.fields.length >= 25) return;
+  state.arspEditing.embed.fields.push({ name: '', value: '', inline: false });
+  renderAutoResponses();
+}
+
+function arspRemoveField(i) {
+  arspCollect();
+  state.arspEditing.embed.fields.splice(i, 1);
+  renderAutoResponses();
+}
+
+function arspRefreshPreview() {
+  const node = document.getElementById('arsp-preview');
+  if (node) node.innerHTML = arspPreviewHtml(state.arspEditing);
+}
+
+// Renders a Discord-like preview of the response. Placeholders are shown verbatim.
+function arspPreviewHtml(r) {
+  if (r.responseType === 'text') {
+    const t = (r.text || '').trim();
+    return t ? `<div class="arsp-preview-text">${esc(t).replace(/\n/g, '<br>')}</div>`
+             : '<span class="hint">Nothing to preview yet.</span>';
+  }
+  const e = r.embed;
+  const has = e.title || e.description || e.author.name || e.footer.text || e.image.url || e.thumbnail.url || (e.fields || []).some(f => f.name || f.value);
+  if (!has) return '<span class="hint">Nothing to preview yet.</span>';
+  const color = /^#[0-9a-fA-F]{6}$/.test(e.color) ? e.color : '#5865F2';
+  const fieldsHtml = (e.fields || []).filter(f => f.name || f.value).map(f =>
+    `<div class="arsp-pv-field${f.inline ? ' inline' : ''}"><div class="arsp-pv-fname">${esc(f.name) || '​'}</div><div class="arsp-pv-fval">${esc(f.value).replace(/\n/g, '<br>') || '​'}</div></div>`).join('');
+  const titleHtml = e.url
+    ? `<a class="arsp-pv-title arsp-pv-link" href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.title)}</a>`
+    : (e.title ? `<div class="arsp-pv-title">${esc(e.title)}</div>` : '');
+  return `<div class="arsp-pv-embed" style="border-left-color:${color}">
+    ${e.author.name ? `<div class="arsp-pv-author">${e.author.iconUrl ? `<img src="${esc(e.author.iconUrl)}" alt="">` : ''}<span>${esc(e.author.name)}</span></div>` : ''}
+    <div class="arsp-pv-main">
+      <div class="arsp-pv-content">
+        ${titleHtml}
+        ${e.description ? `<div class="arsp-pv-desc">${esc(e.description).replace(/\n/g, '<br>')}</div>` : ''}
+        ${fieldsHtml ? `<div class="arsp-pv-fields">${fieldsHtml}</div>` : ''}
+        ${e.image.url ? `<img class="arsp-pv-image" src="${esc(e.image.url)}" alt="">` : ''}
+        ${e.footer.text || e.timestamp ? `<div class="arsp-pv-footer">${e.footer.iconUrl ? `<img src="${esc(e.footer.iconUrl)}" alt="">` : ''}<span>${esc(e.footer.text)}${e.footer.text && e.timestamp ? ' • ' : ''}${e.timestamp ? new Date().toLocaleString() : ''}</span></div>` : ''}
+      </div>
+      ${e.thumbnail.url ? `<img class="arsp-pv-thumb" src="${esc(e.thumbnail.url)}" alt="">` : ''}
+    </div>
+  </div>`;
+}
+
+async function arspSave() {
+  arspCollect();
+  const r = state.arspEditing;
+  const msg = document.getElementById('arsp-save-msg');
+  if (!r.trigger.trim()) return setStatus(msg, 'err', 'A trigger phrase is required.');
+  if (r.responseType === 'text' && !r.text.trim()) return setStatus(msg, 'err', 'Add the text this response should send.');
+  try {
+    if (r.id) await api('PUT', `/api/guild/${state.guildId}/autoresponses/${r.id}`, r);
+    else      await api('POST', `/api/guild/${state.guildId}/autoresponses`, r);
+    await loadAutoResponses();
+  } catch (e) { setStatus(msg, 'err', e.message); }
+}
+
+async function arspToggle(id, enabled) {
+  try {
+    await api('PUT', `/api/guild/${state.guildId}/autoresponses/${id}`, { enabled });
+    const r = state.arspRules.find(x => x.id === id); if (r) r.enabled = enabled;
+  } catch { renderAutoResponses(); }
+}
+
+async function arspDelete(id) {
+  if (!confirm('Delete this auto response?')) return;
+  try { await api('DELETE', `/api/guild/${state.guildId}/autoresponses/${id}`); await loadAutoResponses(); }
   catch (e) { alert('Failed to delete: ' + e.message); }
 }
 
@@ -2588,9 +3097,7 @@ function renderFormsTab() {
     </div>`).join('') : '<p class="hint" style="padding:16px">No forms yet. Create your first application form.</p>';
 
   const gate = premiumGate('applicationForms', state.appsForms.length);
-  const newBtn = gate.atCap && !gate.isPrem
-    ? premiumLockedBtn('New Form', 'applicationForms')
-    : `<button class="btn btn-primary" onclick="appsNewForm()">${svg('plus')} New Form</button>`;
+  const newBtn = gateCreateButton(gate, 'New Form', 'appsNewForm()', 'applicationForms', { icon: svg('plus') });
   box.innerHTML = `
     <div class="btn-row" style="margin-bottom:14px;align-items:center">${newBtn} ${gate.hint}</div>
     <div class="apps-form-list">${rows}</div>`;
@@ -3073,9 +3580,7 @@ function renderMemberCounters() {
 
 function mcListHtml() {
   const gate = premiumGate('memberCounters', state.mcCounters.length);
-  const addBtn = gate.atCap && !gate.isPrem
-    ? premiumLockedBtn('Add Counter', 'memberCounters')
-    : `<button class="btn btn-primary" onclick="mcAdd()">${svg('plus')} Add Counter</button>`;
+  const addBtn = gateCreateButton(gate, 'Add Counter', 'mcAdd()', 'memberCounters', { icon: svg('plus') });
   const head = `<div class="mc-head">
       <div class="mc-head-info"><strong>${state.mcCounters.length}</strong> counter${state.mcCounters.length === 1 ? '' : 's'} configured &nbsp; ${gate.hint}</div>
       <div class="mc-head-actions">

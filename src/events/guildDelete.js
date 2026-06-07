@@ -10,7 +10,7 @@ module.exports = {
     // GuildDelete also fires on a brief outage; skip those so we don't wipe live data.
     if (guild.unavailable) return;
 
-    const stores = [client.store, client.levels, client.activity, client.trust, client.altdetect, client.polls, client.social, client.autoroles, client.reactionroles, client.applications, client.memberCounters];
+    const stores = [client.store, client.levels, client.activity, client.trust, client.altdetect, client.polls, client.social, client.autoroles, client.reactionroles, client.autoresponses, client.applications, client.memberCounters];
     for (const store of stores) {
       try { store.purgeGuild(guild.id); }
       catch (e) { logger.error(`Failed to purge ${store?.constructor?.name || 'store'} for guild ${guild.id}:`, e.message); }

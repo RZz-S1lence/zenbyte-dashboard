@@ -12,7 +12,9 @@ const LIMITS = {
   memberCounters:       { free: 3,  premium: 10, label: 'member counters',                unit: 'counters' },
   applicationForms:     { free: 2,  premium: 10, label: 'application forms',              unit: 'forms' },
   applicationQuestions: { free: 8,  premium: 25, label: 'questions per application form', unit: 'questions' },
-  ticketPanels:         { free: 2,  premium: 10, label: 'ticket panels',                  unit: 'panels' } // Phase 2
+  ticketPanels:         { free: 2,  premium: 10, label: 'ticket panels',                  unit: 'panels' },
+  ticketForms:          { free: 2,  premium: 10, label: 'ticket forms',                   unit: 'forms' },
+  autoResponses:        { free: 5,  premium: 50, label: 'auto responses',                 unit: 'responses' }
 };
 
 // The effective cap for a feature given whether the guild is premium.

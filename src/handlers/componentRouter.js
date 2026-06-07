@@ -4,23 +4,16 @@ const applications = require('./applications');
 const logger  = require('../utils/logger');
 const embeds  = require('../utils/embeds');
 
-// Namespaces whose components use dynamic customIds (e.g. "app:rv:accept:<id>")
-// are routed to a single handler that parses the rest of the id itself.
+// Namespaces whose components use dynamic customIds (e.g. "app:rv:accept:<id>"
+// or "ticket:create:<panelId>") are routed to a single handler that parses the
+// rest of the id itself.
 const namespaced = {
-  app: applications.route
+  app: applications.route,
+  ticket: tickets.route
 };
 
 // Maps a component customId to its handler. customIds use "namespace:action[:args]".
 const routes = {
-  'ticket:create':          tickets.createPrompt,
-  'ticket:type':            tickets.typeSelect,
-  'ticket:form':            tickets.formSubmit,
-  'ticket:claim':           tickets.claim,
-  'ticket:priority':        tickets.openPriority,
-  'ticket:priority_select': tickets.prioritySelect,
-  'ticket:close':           tickets.closePrompt,
-  'ticket:confirm_close':   tickets.confirmClose,
-  'ticket:cancel_close':    tickets.cancelClose,
   'verify:start':           verification.start,
   'verify:enter':           verification.openModal,
   'verify:modal':           verification.submit

@@ -4,7 +4,17 @@ const {
   ModalBuilder, LabelBuilder, TextInputBuilder, TextInputStyle
 } = require('discord.js');
 const { parseDuration } = require('../utils/time');
+const { limitFor } = require('../premium/limits');
 const logger = require('../utils/logger');
+
+// The real cap on options for a poll: the admin's soft cap, never above the
+// server's premium tier ceiling. Free servers land on the free limit; premium
+// servers get the full premium limit unless an admin chose a lower maxOptions.
+function effectiveMaxOptions(config, isPremium) {
+  const tierCap = limitFor('pollOptions', !!isPremium);
+  const soft = Number.isFinite(config?.maxOptions) ? config.maxOptions : tierCap;
+  return Math.min(soft, tierCap);
+}
 
 const NUM_EMOJI = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
 const BAR_LEN = 12;
@@ -321,5 +331,5 @@ async function sweep(client) {
 module.exports = {
   parseSetup, createPoll, buildMessage, buildPollEmbed, castVote, endPoll, cancelPoll,
   postScheduled, resultsEmbed, analytics, sweep, canManagePolls, countsOf,
-  buildCreateModal, parseModalSubmit
+  buildCreateModal, parseModalSubmit, effectiveMaxOptions
 };

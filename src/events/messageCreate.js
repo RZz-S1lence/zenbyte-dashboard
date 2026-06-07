@@ -4,6 +4,7 @@ const permissions = require('../middleware/permissions');
 const embeds = require('../utils/embeds');
 const logger = require('../utils/logger');
 const { buildPrefixContext, PrefixUsageError } = require('../handlers/prefixContext');
+const autoresponse = require('../autoresponse/service');
 const { prefixEnabled } = require('../config');
 
 let warnedNoContent = false;
@@ -12,6 +13,11 @@ module.exports = {
   name: Events.MessageCreate,
   async execute(client, message) {
     if (message.author.bot || !message.inGuild()) return;
+
+    // Auto responses run on every message, independent of the prefix system.
+    try { await autoresponse.handleMessage(client, message); }
+    catch (e) { logger.debug('Auto-response handling failed:', e.message); }
+
     if (!prefixEnabled) return;
 
     // One-time diagnostic: a normal message with no readable content means the

@@ -93,14 +93,21 @@ module.exports = {
       if (!polls.canManagePolls(interaction.member, config, client.store))
         return interaction.reply({ embeds: [embeds.error('You need permission to manage polls in this server.')], ephemeral: true });
 
-      // Free servers are capped at the free poll-option limit; premium uses the
-      // server's configured maxOptions (up to 25).
-      if (!await isPremium(interaction.guildId)) {
-        const optCount = interaction.fields.getTextInputValue('opts').split('\n').map(s => s.trim()).filter(Boolean).length;
-        if (optCount > limitFor('pollOptions', false)) return interaction.reply(upgradeReply('pollOptions'));
+      // Enforce the poll-option cap up front so we can show the right message:
+      // free servers over the free limit get the upgrade nudge, premium servers
+      // over their tier ceiling get a plain "limit reached".
+      const prem = await isPremium(interaction.guildId);
+      const tierCap = limitFor('pollOptions', prem);
+      const optCount = interaction.fields.getTextInputValue('opts').split('\n').map(s => s.trim()).filter(Boolean).length;
+      if (optCount > tierCap) {
+        return interaction.reply(prem
+          ? { embeds: [embeds.error(`A poll can have at most ${tierCap} options.`)], ephemeral: true }
+          : upgradeReply('pollOptions'));
       }
 
-      const parsed = polls.parseModalSubmit(interaction.fields, config);
+      // parseModalSubmit also clamps to the admin's soft cap (maxOptions), never above the tier ceiling.
+      const effectiveMax = polls.effectiveMaxOptions(config, prem);
+      const parsed = polls.parseModalSubmit(interaction.fields, { ...config, maxOptions: effectiveMax });
       if (parsed.error) return interaction.reply({ embeds: [embeds.error(parsed.error)], ephemeral: true });
 
       const poll = await polls.createPoll(client, {

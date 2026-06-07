@@ -10,14 +10,30 @@ const loginOf = input => input.trim()
   .split(/[/?]/)[0]
   .toLowerCase();
 
+// Placeholder values shipped in .env.example. Treat them as "not configured" so a
+// half-filled .env never looks like working credentials.
+const PLACEHOLDERS = new Set(['your-client-id', 'your-client-secret', 'changeme', 'xxx']);
+const cleanCred = v => (typeof v === 'string' ? v.trim() : '');
+
+// The trimmed Client ID / Secret, or empty strings. Reading these lazily (rather
+// than at module load) means a key added to the environment is picked up without
+// having to touch this file, and surrounding whitespace never breaks detection.
+function credentials() {
+  return { clientId: cleanCred(twitch.clientId), clientSecret: cleanCred(twitch.clientSecret) };
+}
+
 function isConfigured() {
-  return !!(twitch.clientId && twitch.clientSecret);
+  const { clientId, clientSecret } = credentials();
+  if (!clientId || !clientSecret) return false;
+  return !PLACEHOLDERS.has(clientId.toLowerCase()) && !PLACEHOLDERS.has(clientSecret.toLowerCase());
 }
 
 async function getToken() {
   if (token && Date.now() < tokenExpiry) return token;
-  const url = `https://id.twitch.tv/oauth2/token?client_id=${twitch.clientId}` +
-    `&client_secret=${twitch.clientSecret}&grant_type=client_credentials`;
+  const { clientId, clientSecret } = credentials();
+  if (!clientId || !clientSecret) return null;
+  const url = `https://id.twitch.tv/oauth2/token?client_id=${encodeURIComponent(clientId)}` +
+    `&client_secret=${encodeURIComponent(clientSecret)}&grant_type=client_credentials`;
   const res = await request(url, { method: 'POST', json: true });
   if (!res.ok || !res.body?.access_token) { logger.warn('Twitch token request failed.'); return null; }
   token = res.body.access_token;
@@ -25,11 +41,24 @@ async function getToken() {
   return token;
 }
 
+// Live credential check: confirms the configured keys actually authenticate with
+// Twitch, not just that two non-empty strings are present. Returns { ok } or
+// { ok:false, error } with a message safe to show an admin.
+async function validate() {
+  if (!isConfigured())
+    return { ok: false, error: 'Twitch Client ID and Client Secret are not set on the bot.' };
+  // Force a fresh token so a stale cache cannot mask rotated/invalid keys.
+  token = null; tokenExpiry = 0;
+  const t = await getToken();
+  if (!t) return { ok: false, error: 'Twitch rejected these credentials. Re-check the Client ID and Secret, then restart the bot.' };
+  return { ok: true };
+}
+
 async function helix(path) {
   const t = await getToken();
   if (!t) return null;
   return request(`https://api.twitch.tv/helix/${path}`, {
-    json: true, headers: { 'Client-Id': twitch.clientId, Authorization: `Bearer ${t}` }
+    json: true, headers: { 'Client-Id': credentials().clientId, Authorization: `Bearer ${t}` }
   });
 }
 
@@ -42,6 +71,7 @@ module.exports = {
   defaultTemplate: '🔴 **{name}** is now live on Twitch!\n{title}\n{url}',
   emoji: '🟣',
   isConfigured,
+  validate,
 
   async resolve(input) {
     const login = loginOf(input);
