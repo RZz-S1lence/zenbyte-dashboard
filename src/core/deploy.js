@@ -18,8 +18,11 @@ async function deployCommands(client) {
   const all = [...client.commands.values()];
   if (!all.length) return;
 
-  const ownerCmds  = all.filter(c => c.ownerOnly);
-  const publicCmds = all.filter(c => !c.ownerOnly);
+  // prefix-only commands deliberately have no slash registration; they run solely
+  // through the text-prefix path (and stay hidden from the slash-command picker).
+  const registrable = all.filter(c => !c.prefixOnly);
+  const ownerCmds  = registrable.filter(c => c.ownerOnly);
+  const publicCmds = registrable.filter(c => !c.ownerOnly);
   const ownerGuildId = process.env.OFFICIAL_GUILD_ID || guildId || null;
 
   const rest = new REST({ version: '10' }).setToken(token);
@@ -28,7 +31,7 @@ async function deployCommands(client) {
   try {
     // Test mode: register the full set (owner commands included) to the test guild.
     if (guildId) {
-      const data = await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), { body: toBody(all) });
+      const data = await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), { body: toBody(registrable) });
       logger.success(`Registered ${data.length} guild command(s) to ${guildId}.`);
       return;
     }

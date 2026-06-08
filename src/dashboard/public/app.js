@@ -7,7 +7,6 @@ const state = {
   guildId:   null,   // currently selected guild
   guildData: null,   // { textChannels, categories, roles }
   guilds:    [],     // all guilds list
-  ticketTypes: [],
   ticketForms: [],   // named reusable ticket forms
   ticketPanels: [],  // ticket panels with assigned forms
   modRoleIds:  [],   // selected ticket moderator role IDs
@@ -703,9 +702,6 @@ async function loadTicketConfig() {
   msInit('t-pp-medium', roleItems(), ppr.Medium || []);
   msInit('t-pp-high',   roleItems(), ppr.High || []);
 
-  state.ticketTypes = config.types ? [...config.types] : [];
-  renderTypeChips();
-
   state.ticketForms  = Array.isArray(config.forms)  ? config.forms  : [];
   state.ticketPanels = Array.isArray(config.panels) ? config.panels : [];
   renderTicketForms();
@@ -813,26 +809,6 @@ function msRemove(hostId, id, e) {
 
 function msSearch(hostId, val) { msRenderOptions(hostId, val); }
 
-function renderTypeChips() {
-  document.getElementById('types-chips').innerHTML = state.ticketTypes.map(t =>
-    `<div class="type-chip"><span>${esc(t)}</span><button class="remove" onclick="removeType('${esc(t)}')" title="Remove">${svg('x')}</button></div>`
-  ).join('');
-}
-
-function addType() {
-  const input = document.getElementById('new-type-input');
-  const val   = input.value.trim();
-  if (!val || state.ticketTypes.includes(val) || state.ticketTypes.length >= 25) return;
-  state.ticketTypes.push(val);
-  renderTypeChips();
-  input.value = '';
-}
-
-function removeType(name) {
-  state.ticketTypes = state.ticketTypes.filter(t => t !== name);
-  renderTypeChips();
-}
-
 function syncColor(source) {
   if (source === 'picker') {
     document.getElementById('t-color-hex').value = document.getElementById('t-color-picker').value;
@@ -852,7 +828,6 @@ async function saveTicketConfig() {
     categoryId:       document.getElementById('t-category').value     || null,
     logChannelId:     document.getElementById('t-logchannel').value   || null,
     modRoleIds:       msValues('t-modroles'),
-    types:            state.ticketTypes,
     priorityCategories: {
       enabled: document.getElementById('t-pc-enabled').checked,
       Low:     document.getElementById('t-pc-low').value    || null,
@@ -1020,13 +995,7 @@ async function tfDeleteForm(id) {
   } catch (e) { alert(e.message); }
 }
 
-// ── Ticket panels (each picks a form) ──────────────
-function tpFormOptions(selectedId) {
-  const none = '<option value="">No form (open immediately)</option>';
-  return none + (state.ticketForms || []).map(f =>
-    `<option value="${f.id}"${f.id === selectedId ? ' selected' : ''}>${esc(f.name)}</option>`).join('');
-}
-
+// ── Ticket panels (each type picks its own form) ───
 function renderTicketPanels() {
   const panels = state.ticketPanels || [];
   const gate = premiumGate('ticketPanels', panels.length);
@@ -1045,12 +1014,15 @@ function renderTicketPanels() {
 }
 
 function tpItemCard(p) {
-  const formName = p.formId ? ((state.ticketForms || []).find(f => f.id === p.formId)?.name || 'Unknown form') : 'No form';
   const ch = p.channelId ? `#${channelName(p.channelId)}` : 'No channel';
+  const typeCount = (p.types || []).length;
+  const bits = [esc(ch)];
+  bits.push(typeCount ? `${typeCount} type${typeCount > 1 ? 's' : ''}` : 'No types');
+  bits.push(p.messageId ? 'Published' : 'Not published');
   return `<div class="ticket-item">
     <div class="ticket-item-info">
       <div class="ticket-item-name">${esc(p.name)}</div>
-      <div class="hint">${esc(ch)} &middot; Form: ${esc(formName)} &middot; ${p.messageId ? 'Published' : 'Not published'}</div>
+      <div class="hint">${bits.join(' &middot; ')}</div>
     </div>
     <div class="btn-row">
       <button class="btn btn-secondary" onclick="tpEdit('${p.id}')">Edit</button>
@@ -1058,6 +1030,49 @@ function tpItemCard(p) {
       <button class="btn btn-secondary" onclick="tpDelete('${p.id}')">Delete</button>
     </div>
   </div>`;
+}
+
+// Options for a per-type form picker: an explicit "no form" entry plus every
+// saved form. Picking a form makes that type open the form when chosen.
+function tpTypeFormOptions(selectedId) {
+  const none = `<option value=""${!selectedId ? ' selected' : ''}>No form (open immediately)</option>`;
+  return none + (state.ticketForms || []).map(f =>
+    `<option value="${f.id}"${f.id === selectedId ? ' selected' : ''}>${esc(f.name)}</option>`).join('');
+}
+
+// One editable ticket-type row: a name plus the form it opens. Accepts legacy
+// string types (no per-type form) as well as { name, formId } objects.
+function tpTypeRow(t) {
+  if (typeof t === 'string') t = { name: t, formId: '' };
+  t = t || { name: '', formId: '' };
+  return `<div class="tp-type-row">
+    <input type="text" class="tp-type-name" maxlength="100" placeholder="Type name (e.g. Support)" value="${esc(t.name || '')}">
+    <select class="tp-type-form">${tpTypeFormOptions(t.formId || '')}</select>
+    <button class="btn btn-secondary tp-type-del" title="Remove type" onclick="this.closest('.tp-type-row').remove()">${svg('trash')}</button>
+  </div>`;
+}
+
+function tpModalAddType() {
+  const list = document.getElementById('tp-types-list');
+  list.insertAdjacentHTML('beforeend', tpTypeRow(null));
+}
+
+// Premium-only branding for the published panel embed (logo, banner, author,
+// footer). For non-premium guilds the fields are shown but locked.
+function tpBrandingSection(p) {
+  const isPrem = !!state.guildData?.premium;
+  const dis = isPrem ? '' : ' disabled';
+  const note = isPrem
+    ? '<span class="hint">Customize how the published panel message looks.</span>'
+    : `<span class="hint">${premiumChip()} Customize the panel embed (logo, banner, author, footer). Activate Premium on this server to unlock.</span>`;
+  return `
+    <div class="form-row" style="margin-top:4px"><label>Panel embed branding ${isPrem ? '' : premiumChip()}</label>${note}</div>
+    <div class="card-grid">
+      <div class="form-row"><label>Logo / thumbnail URL</label><input type="text" id="tp-edit-thumb"${dis} maxlength="500" value="${esc(p.thumbnailUrl || '')}" placeholder="https://example.com/logo.png"></div>
+      <div class="form-row"><label>Author / header text</label><input type="text" id="tp-edit-author"${dis} maxlength="256" value="${esc(p.authorName || '')}" placeholder="Shown as a small heading above the title"></div>
+    </div>
+    <div class="form-row"><label>Banner image URL</label><input type="text" id="tp-edit-image"${dis} maxlength="500" value="${esc(p.imageUrl || '')}" placeholder="https://example.com/banner.png (large image below the text)"></div>
+    <div class="form-row"><label>Footer text</label><input type="text" id="tp-edit-footer"${dis} maxlength="2048" value="${esc(p.footerText || '')}" placeholder="Optional footer line"></div>`;
 }
 
 // Modal editor for a single panel (new when p.id is null).
@@ -1069,15 +1084,16 @@ function tpOpenModal(p) {
       <div class="form-row"><label>Panel name</label><input type="text" id="tp-edit-name" maxlength="80" value="${esc(p.name || '')}"></div>
       <div class="form-row"><label>Channel</label><select id="tp-edit-channel">${lvChannelOpts(p.channelId || '')}</select></div>
     </div>
-    <div class="card-grid">
-      <div class="form-row"><label>Assigned form</label><select id="tp-edit-form">${tpFormOptions(p.formId)}</select></div>
-      <div class="form-row"><label>Button label</label><input type="text" id="tp-edit-button" maxlength="60" value="${esc(p.buttonLabel || 'Create Ticket')}"></div>
-    </div>
+    <div class="form-row"><label>Button label</label><input type="text" id="tp-edit-button" maxlength="60" value="${esc(p.buttonLabel || 'Create Ticket')}"></div>
     <div class="form-row"><label>Panel title</label><input type="text" id="tp-edit-title" maxlength="256" value="${esc(p.title || '')}" placeholder="Support Tickets"></div>
     <div class="form-row"><label>Panel description</label><textarea id="tp-edit-desc" maxlength="2000" placeholder="Need help? Use the button below to open a ticket.">${esc(p.description || '')}</textarea></div>
-    <div class="card-grid">
-      <div class="form-row"><label>Color</label><div class="color-row"><input type="color" id="tp-edit-color" value="${/^#[0-9a-fA-F]{6}$/.test(p.color) ? p.color : '#5865F2'}"></div></div>
-      <div class="form-row"><label>Ticket types (comma separated, optional)</label><input type="text" id="tp-edit-types" value="${esc((p.types || []).join(', '))}" placeholder="Billing, Bug, Other"></div>
+    <div class="form-row"><label>Color</label><div class="color-row"><input type="color" id="tp-edit-color" value="${/^#[0-9a-fA-F]{6}$/.test(p.color) ? p.color : '#5865F2'}"></div></div>
+    ${tpBrandingSection(p)}
+    <div class="form-row">
+      <label>Ticket types</label>
+      <span class="hint">Add types so users pick one when opening, and choose which form each one shows. Leave empty to open a ticket immediately with no type picker.</span>
+      <div id="tp-types-list">${(p.types || []).map(tpTypeRow).join('')}</div>
+      <button class="btn btn-secondary" onclick="tpModalAddType()" style="margin-top:8px">${svg('plus')} Add type</button>
     </div>
     <div class="btn-row" style="margin-top:18px;align-items:center">
       <button class="btn btn-primary" onclick="tpModalSave(true)">Save &amp; Publish</button>
@@ -1090,7 +1106,7 @@ function tpOpenModal(p) {
 function tpNew() {
   const gate = premiumGate('ticketPanels', (state.ticketPanels || []).length);
   if (gate.atCap) { if (!gate.isPrem) premiumNudge('ticketPanels'); return; }
-  tpOpenModal({ id: null, name: '', channelId: '', formId: '', buttonLabel: 'Create Ticket', title: '', description: '', color: '#5865F2', types: [], messageId: null });
+  tpOpenModal({ id: null, name: '', channelId: '', buttonLabel: 'Create Ticket', title: '', description: '', color: '#5865F2', thumbnailUrl: '', imageUrl: '', authorName: '', footerText: '', types: [], messageId: null });
 }
 
 function tpEdit(id) {
@@ -1098,17 +1114,27 @@ function tpEdit(id) {
   if (p) tpOpenModal(JSON.parse(JSON.stringify(p)));
 }
 
+function tpModalCollectTypes() {
+  return [...document.querySelectorAll('#tp-types-list .tp-type-row')].map(row => ({
+    name:   row.querySelector('.tp-type-name').value.trim(),
+    formId: row.querySelector('.tp-type-form').value || null
+  })).filter(t => t.name);
+}
+
 function tpModalCollect() {
   const g = id => document.getElementById(id);
   return {
-    name:        g('tp-edit-name').value.trim() || 'Ticket panel',
-    channelId:   g('tp-edit-channel').value || null,
-    formId:      g('tp-edit-form').value || null,
-    buttonLabel: g('tp-edit-button').value.trim() || 'Create Ticket',
-    title:       g('tp-edit-title').value.trim() || null,
-    description: g('tp-edit-desc').value.trim() || null,
-    color:       g('tp-edit-color').value || '#5865F2',
-    types:       g('tp-edit-types').value.split(',').map(s => s.trim()).filter(Boolean)
+    name:         g('tp-edit-name').value.trim() || 'Ticket panel',
+    channelId:    g('tp-edit-channel').value || null,
+    buttonLabel:  g('tp-edit-button').value.trim() || 'Create Ticket',
+    title:        g('tp-edit-title').value.trim() || null,
+    description:  g('tp-edit-desc').value.trim() || null,
+    color:        g('tp-edit-color').value || '#5865F2',
+    thumbnailUrl: g('tp-edit-thumb').value.trim() || null,
+    imageUrl:     g('tp-edit-image').value.trim() || null,
+    authorName:   g('tp-edit-author').value.trim() || null,
+    footerText:   g('tp-edit-footer').value.trim() || null,
+    types:        tpModalCollectTypes()
   };
 }
 
@@ -1134,8 +1160,10 @@ async function tpDuplicate(id) {
   if (gate.atCap) { if (!gate.isPrem) premiumNudge('ticketPanels'); return; }
   try {
     const r = await api('POST', `/api/guild/${state.guildId}/ticket-panels`, {
-      name: `${p.name} (copy)`, formId: p.formId, buttonLabel: p.buttonLabel,
-      title: p.title, description: p.description, color: p.color, types: p.types
+      name: `${p.name} (copy)`, buttonLabel: p.buttonLabel,
+      title: p.title, description: p.description, color: p.color,
+      thumbnailUrl: p.thumbnailUrl, imageUrl: p.imageUrl, authorName: p.authorName, footerText: p.footerText,
+      types: p.types
     });
     state.ticketPanels = r.config.panels;
     renderTicketPanels();

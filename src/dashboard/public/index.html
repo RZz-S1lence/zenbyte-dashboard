@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ZenByte Dashboard</title>
-  <link rel="stylesheet" href="style.css?v=11">
+  <link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
 
@@ -385,19 +385,6 @@
         </div>
 
 
-        <div class="card">
-          <h3>Ticket Types</h3>
-          <p style="color:var(--muted);font-size:13px;margin-bottom:14px">
-            Users pick from these types when opening a ticket. Leave empty to skip the selector.
-          </p>
-          <div id="types-chips" class="types-grid"></div>
-          <div class="add-type-row">
-            <input type="text" id="new-type-input" placeholder="e.g. Partnership" maxlength="32"
-                   onkeydown="if(event.key==='Enter') addType()">
-            <button class="btn btn-secondary" onclick="addType()">+ Add</button>
-          </div>
-        </div>
-
         <div id="t-forms-section"></div>
         <div id="t-panels-section"></div>
 
@@ -730,6 +717,6 @@
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
-<script src="app.js?v=8"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>

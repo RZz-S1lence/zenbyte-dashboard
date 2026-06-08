@@ -34,9 +34,34 @@ function normalizeTicketForm(form = {}) {
   };
 }
 
-// A ticket panel: one published message with an "open" button. Each panel chooses
-// which form (by id) is shown when a ticket is opened from it, and may carry its
-// own set of ticket types.
+// Ticket types for a panel. Each type is { name, formId }, where formId picks the
+// form shown when that type is chosen (null/empty = fall back to the panel's
+// default form). Legacy data stored types as plain strings; those are coerced to
+// objects with no per-type form so old panels keep working.
+function normalizeTicketTypes(types) {
+  if (!Array.isArray(types)) return [];
+  return types
+    .map(t => {
+      if (typeof t === 'string') return { name: t.trim(), formId: null };
+      if (t && typeof t === 'object' && typeof t.name === 'string')
+        return { name: t.name.trim(), formId: (typeof t.formId === 'string' && t.formId) ? t.formId : null };
+      return null;
+    })
+    .filter(t => t && t.name)
+    .map(t => ({ name: t.name.slice(0, 100), formId: t.formId }))
+    .slice(0, 25);
+}
+
+// Accepts only http(s) URLs (for embed image/thumbnail/icon fields), else null.
+function safeUrl(v, max = 500) {
+  return (typeof v === 'string' && /^https?:\/\//i.test(v.trim())) ? v.trim().slice(0, max) : null;
+}
+
+// A ticket panel: one published message with an "open" button. A panel has a
+// default form (by id) plus a set of ticket types; each type may point to its own
+// form, so opening "Support" can show a different form than "Bug". The branding
+// fields (thumbnail/image/author/footer) are premium-only and only applied when
+// the guild has active premium at publish time.
 function normalizeTicketPanel(panel = {}) {
   const p = panel || {};
   return {
@@ -49,7 +74,11 @@ function normalizeTicketPanel(panel = {}) {
     color:       /^#[0-9a-fA-F]{6}$/.test(p.color) ? p.color : null,
     buttonLabel: (typeof p.buttonLabel === 'string' && p.buttonLabel.trim()) ? p.buttonLabel.trim().slice(0, 60) : 'Create Ticket',
     formId:      (typeof p.formId === 'string' && p.formId) ? p.formId : null,  // null = no form (open immediately)
-    types:       Array.isArray(p.types) ? p.types.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim().slice(0, 100)).slice(0, 25) : []
+    thumbnailUrl: safeUrl(p.thumbnailUrl),
+    imageUrl:     safeUrl(p.imageUrl),
+    authorName:   (typeof p.authorName === 'string' && p.authorName.trim()) ? p.authorName.trim().slice(0, 256) : null,
+    footerText:   (typeof p.footerText === 'string' && p.footerText.trim()) ? p.footerText.trim().slice(0, 2048) : null,
+    types:       normalizeTicketTypes(p.types)
   };
 }
 

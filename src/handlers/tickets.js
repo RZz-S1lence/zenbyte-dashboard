@@ -4,6 +4,7 @@ const {
 } = require('discord.js');
 const embeds = require('../utils/embeds');
 const logger = require('../utils/logger');
+const { isPremium } = require('../premium');
 const {
   PRIORITY_COLORS, getModRoleIds, fetchAllMessages, saveJsonTranscript, buildTextTranscript
 } = require('../utils/tickets');
@@ -16,22 +17,31 @@ function getConfig(client, guildId) {
   return client.store.tickets.get(guildId) || {};
 }
 
-// Resolves which form fields and ticket types apply when opening from a panel.
-// A panel id selects a panel and its assigned form; with no panel id we fall back
-// to the legacy single-config form/types so original /ticketsetup panels keep working.
+// Resolves the panel (if any) and its ticket types when opening. A panel id selects
+// a configured panel; with no panel id we fall back to the legacy single-config
+// types so original /ticketsetup panels keep working. Types are always returned as
+// { name, formId } objects (legacy string types are coerced).
 function resolveContext(config, panelId) {
   if (panelId) {
     const panel = (config.panels || []).find(p => p.id === panelId);
-    if (panel) {
-      const form = (config.forms || []).find(f => f.id === panel.formId);
-      return { panel, formFields: form ? form.fields : [], types: panel.types || [] };
-    }
+    if (panel) return { panel, types: panel.types || [] };
   }
-  return {
-    panel: null,
-    formFields: config.form?.enabled ? (config.form.fields || []) : [],
-    types: config.types || []
-  };
+  const legacyTypes = (config.types || []).map(t =>
+    typeof t === 'string' ? { name: t, formId: null } : t);
+  return { panel: null, types: legacyTypes };
+}
+
+// Resolves the open-form fields to show for the selected type. A type's own form
+// wins; otherwise we fall back to the panel's default form (or the legacy
+// single-config form when there is no panel). Empty array = open immediately.
+function fieldsForContext(config, ctx, typeName) {
+  if (ctx.panel) {
+    const t = (ctx.types || []).find(x => x.name === typeName);
+    const formId = (t && t.formId) || ctx.panel.formId || null;
+    const form = (config.forms || []).find(f => f.id === formId);
+    return form ? (form.fields || []) : [];
+  }
+  return config.form?.enabled ? (config.form.fields || []) : [];
 }
 
 function buildFormModal(fields, panelId) {
@@ -71,7 +81,7 @@ async function createPrompt(interaction, client, panelId = null) {
     const select = new StringSelectMenuBuilder()
       .setCustomId(panelId ? `ticket:type:${panelId}` : 'ticket:type')
       .setPlaceholder('What do you need help with?')
-      .addOptions(ctx.types.slice(0, 25).map(t => ({ label: t.slice(0, 100), value: t.slice(0, 100) })));
+      .addOptions(ctx.types.slice(0, 25).map(t => ({ label: t.name.slice(0, 100), value: t.name.slice(0, 100) })));
     return interaction.reply({
       content: 'Please select a ticket type:',
       components: [new ActionRowBuilder().addComponents(select)],
@@ -79,9 +89,10 @@ async function createPrompt(interaction, client, panelId = null) {
     });
   }
 
-  if (ctx.formFields.length) {
+  const formFields = fieldsForContext(config, ctx, null);
+  if (formFields.length) {
     pendingForms.set(formKey(interaction), { type: null, panelId: panelId || null, ts: Date.now() });
-    return interaction.showModal(buildFormModal(ctx.formFields, panelId));
+    return interaction.showModal(buildFormModal(formFields, panelId));
   }
 
   await createChannel(interaction, null, client);
@@ -91,9 +102,10 @@ async function typeSelect(interaction, client, panelId = null) {
   const config = getConfig(client, interaction.guildId);
   const type = interaction.values[0];
   const ctx = resolveContext(config, panelId);
-  if (ctx.formFields.length) {
+  const formFields = fieldsForContext(config, ctx, type);
+  if (formFields.length) {
     pendingForms.set(formKey(interaction), { type, panelId: panelId || null, ts: Date.now() });
-    return interaction.showModal(buildFormModal(ctx.formFields, panelId));
+    return interaction.showModal(buildFormModal(formFields, panelId));
   }
   await createChannel(interaction, type, client);
 }
@@ -105,7 +117,8 @@ async function formSubmit(interaction, client, panelId = null) {
 
   const config = getConfig(client, interaction.guildId);
   const ctx = resolveContext(config, pending?.panelId ?? panelId);
-  const answers = ctx.formFields.slice(0, 5).map((f, i) => ({
+  const formFields = fieldsForContext(config, ctx, pending?.type ?? null);
+  const answers = formFields.slice(0, 5).map((f, i) => ({
     label: f.label,
     value: (interaction.fields.getTextInputValue(`f${i}`) || '').trim() || '*No answer*'
   }));
@@ -130,6 +143,15 @@ async function publishPanel(client, guildId, panel) {
     description: panel.description || 'Need help? Use the button below to open a ticket.',
     color
   };
+
+  // Custom branding (logo, banner, author, footer) is a premium perk. We check at
+  // publish time so a downgraded guild's panels quietly drop back to the plain embed.
+  if (await isPremium(guildId)) {
+    if (panel.authorName)   embed.author    = { name: panel.authorName.slice(0, 256) };
+    if (panel.thumbnailUrl) embed.thumbnail = { url: panel.thumbnailUrl };
+    if (panel.imageUrl)     embed.image     = { url: panel.imageUrl };
+    if (panel.footerText)   embed.footer    = { text: panel.footerText.slice(0, 2048) };
+  }
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`ticket:create:${panel.id}`)
       .setLabel((panel.buttonLabel || 'Create Ticket').slice(0, 60)).setStyle(ButtonStyle.Primary)

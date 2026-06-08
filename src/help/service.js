@@ -109,7 +109,8 @@ function categoryView(client, viewerId, category) {
   const lines = cmds.map(c => {
     const perm = permissionLabel(c);
     const tag = perm === 'Everyone' ? '' : ` · ${perm}`;
-    return `\`/${c.data.name}\` ${c.data.description}${tag}`;
+    const label = c.prefixOnly ? `${DEFAULT_PREFIX}${c.data.name}` : `/${c.data.name}`;
+    return `\`${label}\` ${c.data.description}${tag}`;
   });
 
   const embed = embeds.custom({
@@ -129,7 +130,7 @@ function categoryView(client, viewerId, category) {
     .setCustomId(`help:cmd:${viewerId}:${category}`)
     .setPlaceholder('View a command')
     .addOptions(cmds.map(c => ({
-      label: `/${c.data.name}`,
+      label: c.prefixOnly ? `${DEFAULT_PREFIX}${c.data.name}` : `/${c.data.name}`,
       value: c.data.name,
       description: c.data.description.slice(0, 90)
     })));
@@ -153,7 +154,9 @@ function commandView(client, viewerId, category, name, prefix = DEFAULT_PREFIX) 
   const meta = META[cmd.category] || META.System;
 
   const usage = usageLines(cmd, prefix);
-  const usageText = usage.map(u => `${u.slash}\n${u.text}`).join('\n\n');
+  const usageText = (cmd.prefixOnly
+    ? usage.map(u => u.text)
+    : usage.map(u => `${u.slash}\n${u.text}`)).join('\n\n');
 
   const fields = [
     { name: 'Usage', value: usageText },
@@ -166,11 +169,11 @@ function commandView(client, viewerId, category, name, prefix = DEFAULT_PREFIX) 
     fields.push({ name: 'Subcommands', value: subs.map(s => `\`${s.name}\` ${s.description}`).join('\n') });
 
   const embed = embeds.custom({
-    title: `/${json.name}`,
+    title: cmd.prefixOnly ? `${prefix}${json.name}` : `/${json.name}`,
     description: json.description,
     color: embeds.COLORS.brand,
     fields,
-    footer: { text: `Works with /${json.name} or ${prefix}${json.name}` }
+    footer: { text: cmd.prefixOnly ? `Works with ${prefix}${json.name} only` : `Works with /${json.name} or ${prefix}${json.name}` }
   });
 
   const backCat = new ButtonBuilder().setCustomId(`help:back:${viewerId}:${category}`)

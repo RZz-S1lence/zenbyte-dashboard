@@ -765,3 +765,7 @@ button .ic, .btn .ic, .apps-tab .ic, .mc-act .ic, .cmd-cat-btn .ic { margin-righ
 .ticket-item-info { min-width: 0; }
 .ticket-item-name { font-weight: 600; color: var(--white); }
 .modal-title { font-size: 16px; font-weight: 700; color: var(--white); margin-bottom: 18px; }
+.tp-type-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.tp-type-row .tp-type-name { flex: 1 1 40%; min-width: 0; }
+.tp-type-row .tp-type-form { flex: 1 1 50%; min-width: 0; }
+.tp-type-row .tp-type-del { flex: 0 0 auto; padding: 8px 10px; }
