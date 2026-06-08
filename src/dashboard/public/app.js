@@ -8,7 +8,6 @@ const state = {
   guildData: null,   // { textChannels, categories, roles }
   guilds:    [],     // all guilds list
   ticketTypes: [],
-  ticketForm:  [],   // legacy open-form question fields
   ticketForms: [],   // named reusable ticket forms
   ticketPanels: [],  // ticket panels with assigned forms
   modRoleIds:  [],   // selected ticket moderator role IDs
@@ -122,9 +121,10 @@ function premiumGate(feature, count) {
   const isPrem = !!state.guildData?.premium;
   if (!lim) return { atCap: false, isPrem, cap: Infinity, hint: '' };
   const cap = isPrem ? lim.premium : lim.free;
+  const used = `<b>${count}</b>/<b>${cap}</b> used`;
   const hint = isPrem
-    ? `<span class="hint">${premiumChip()} up to ${lim.premium}.</span>`
-    : `<span class="hint">Free: up to <b>${lim.free}</b> · ${premiumChip()} up to <b>${lim.premium}</b>.</span>`;
+    ? `<span class="hint">${used} &middot; ${premiumChip()} up to ${lim.premium}.</span>`
+    : `<span class="hint">${used} &middot; Free up to <b>${lim.free}</b> &middot; ${premiumChip()} up to <b>${lim.premium}</b>.</span>`;
   return { atCap: count >= cap, isPrem, cap, hint, free: lim.free, premium: lim.premium };
 }
 
@@ -703,10 +703,6 @@ async function loadTicketConfig() {
   msInit('t-pp-medium', roleItems(), ppr.Medium || []);
   msInit('t-pp-high',   roleItems(), ppr.High || []);
 
-  document.getElementById('t-form-enabled').checked = !!config.form?.enabled;
-  state.ticketForm = (config.form?.fields || []).map(f => ({ ...f }));
-  renderFormFields();
-
   state.ticketTypes = config.types ? [...config.types] : [];
   renderTypeChips();
 
@@ -728,45 +724,6 @@ function toggleTicketPriority() {
   const on = document.getElementById('t-priority-enabled').checked;
   document.getElementById('t-priority-cat-card').classList.toggle('hidden', !on);
   document.getElementById('t-pp-section').classList.toggle('hidden', !on);
-}
-
-// ── Ticket open-form questions (dynamic list) ─────
-function renderFormFields() {
-  const box = document.getElementById('t-form-fields');
-  box.innerHTML = state.ticketForm.map((f, i) => `
-    <div class="tf-row" data-i="${i}">
-      <input type="text" class="tf-label" placeholder="Question / label" maxlength="45" value="${esc(f.label || '')}">
-      <input type="text" class="tf-ph" placeholder="Placeholder (optional)" maxlength="100" value="${esc(f.placeholder || '')}">
-      <select class="tf-style">
-        <option value="short"${f.style === 'short' ? ' selected' : ''}>Short</option>
-        <option value="paragraph"${f.style === 'paragraph' ? ' selected' : ''}>Paragraph</option>
-      </select>
-      <label class="tf-req"><input type="checkbox" class="tf-required" ${f.required !== false ? 'checked' : ''}> Required</label>
-      <button class="btn btn-secondary tf-del" onclick="removeFormField(${i})">${svg('x')}</button>
-    </div>`).join('') || '<p class="lv-empty">No questions, a ticket opens immediately.</p>';
-}
-
-function collectFormFields() {
-  state.ticketForm = [...document.querySelectorAll('#t-form-fields .tf-row')].map(row => ({
-    label:       row.querySelector('.tf-label').value.trim(),
-    placeholder: row.querySelector('.tf-ph').value.trim(),
-    style:       row.querySelector('.tf-style').value,
-    required:    row.querySelector('.tf-required').checked
-  }));
-  return state.ticketForm;
-}
-
-function addFormField() {
-  collectFormFields();
-  if (state.ticketForm.length >= 5) return;
-  state.ticketForm.push({ label: '', placeholder: '', style: 'short', required: true });
-  renderFormFields();
-}
-
-function removeFormField(i) {
-  collectFormFields();
-  state.ticketForm.splice(i, 1);
-  renderFormFields();
 }
 
 function fillSelect(id, items, savedId, labelFn) {
@@ -916,10 +873,6 @@ async function saveTicketConfig() {
       enabled:         document.getElementById('t-ac-enabled').checked,
       inactivityHours: parseInt(document.getElementById('t-ac-hours').value, 10) || 0,
       closeOnLeave:    document.getElementById('t-ac-leave').checked
-    },
-    form: {
-      enabled: document.getElementById('t-form-enabled').checked,
-      fields:  collectFormFields().filter(f => f.label)
     }
   };
   try {
@@ -944,35 +897,86 @@ function tfFieldRow(f = {}) {
   </div>`;
 }
 
+// Centered empty state shared by the forms and panels sections.
+function ticketEmptyState(icon, title, text, btn) {
+  return `<div class="mc-empty">
+    <div class="mc-empty-ico">${svg(icon)}</div>
+    <h4>${esc(title)}</h4>
+    <p>${esc(text)}</p>
+    ${btn}
+  </div>`;
+}
+
 function renderTicketForms() {
   const forms = state.ticketForms || [];
   const gate = premiumGate('ticketForms', forms.length);
-  const newBtn = gateCreateButton(gate, 'New Form', 'tfNewForm()', 'ticketForms', { icon: svg('plus') });
-  const cards = forms.map(f => `
-    <div class="card tf-card" data-formid="${f.id}">
-      <div class="form-row"><label>Form name</label><input type="text" class="tf-name" maxlength="80" value="${esc(f.name)}"></div>
-      <div class="form-row"><label>Questions</label>
-        <div class="tf-fields">${(f.fields || []).map(tfFieldRow).join('') || '<p class="hint">No questions; tickets open immediately.</p>'}</div>
-        <button class="btn btn-secondary" style="margin-top:8px" onclick="tfAddField('${f.id}')">+ Add Question</button>
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-primary" onclick="tfSaveForm('${f.id}')">Save Form</button>
-        <button class="btn btn-secondary" onclick="tfDeleteForm('${f.id}')">Delete</button>
-        <span id="tf-msg-${f.id}" class="save-status"></span>
-      </div>
-    </div>`).join('') || '<p class="hint">No forms yet. Create one, then assign it to a panel below.</p>';
-
+  const newBtn = gateCreateButton(gate, 'New Form', 'tfNew()', 'ticketForms', { icon: svg('plus') });
+  const body = forms.length
+    ? `<div class="ticket-items">${forms.map(tfItemCard).join('')}</div>`
+    : ticketEmptyState('clipboard', 'No forms yet', 'Create a reusable question form, then assign it to a panel.', newBtn);
   document.getElementById('t-forms-section').innerHTML = `
-    <div class="card"><h3>Ticket Forms &nbsp; ${gate.hint}</h3>
-      <p class="hint">Build reusable question forms here, then choose which form each panel uses.</p>
-      <div style="margin-top:10px">${newBtn}</div>
-    </div>
-    ${cards}`;
+    <div class="card">
+      <div class="section-head">
+        <h3>Ticket Forms</h3>
+        <div class="section-head-actions">${gate.hint}${forms.length ? newBtn : ''}</div>
+      </div>
+      ${body}
+    </div>`;
 }
 
-function tfCollectFields(formId) {
-  const card = document.querySelector(`.tf-card[data-formid="${formId}"]`);
-  return [...card.querySelectorAll('.tf-row')].map(row => ({
+function tfItemCard(f) {
+  const n = (f.fields || []).length;
+  return `<div class="ticket-item">
+    <div class="ticket-item-info">
+      <div class="ticket-item-name">${esc(f.name)}</div>
+      <div class="hint">${n} question${n === 1 ? '' : 's'}</div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="tfEdit('${f.id}')">Edit</button>
+      <button class="btn btn-secondary" onclick="tfDuplicate('${f.id}')">Duplicate</button>
+      <button class="btn btn-secondary" onclick="tfDeleteForm('${f.id}')">Delete</button>
+    </div>
+  </div>`;
+}
+
+// Modal editor for a single form (new when form.id is null).
+function tfOpenModal(form) {
+  const rows = (form.fields || []).map(tfFieldRow).join('');
+  openAppsModal(`
+    <h3 class="modal-title">${form.id ? 'Edit Form' : 'New Form'}</h3>
+    <input type="hidden" id="tf-edit-id" value="${form.id || ''}">
+    <div class="form-row"><label>Form name</label><input type="text" id="tf-edit-name" maxlength="80" value="${esc(form.name || '')}"></div>
+    <div class="form-row"><label>Questions (up to 5)</label>
+      <div id="tf-edit-fields">${rows}</div>
+      <button class="btn btn-secondary" style="margin-top:8px" onclick="tfModalAddField()">+ Add Question</button>
+      <span class="hint" style="display:block;margin-top:6px">Answers appear in the ticket when it opens.</span>
+    </div>
+    <div class="btn-row" style="margin-top:18px;align-items:center">
+      <button class="btn btn-primary" onclick="tfModalSave()">${form.id ? 'Save Form' : 'Create Form'}</button>
+      <button class="btn btn-secondary" onclick="closeAppsModal()">Cancel</button>
+      <span id="tf-edit-msg" class="save-status"></span>
+    </div>`);
+}
+
+function tfNew() {
+  const gate = premiumGate('ticketForms', (state.ticketForms || []).length);
+  if (gate.atCap) { if (!gate.isPrem) premiumNudge('ticketForms'); return; }
+  tfOpenModal({ id: null, name: '', fields: [] });
+}
+
+function tfEdit(id) {
+  const f = (state.ticketForms || []).find(x => x.id === id);
+  if (f) tfOpenModal(JSON.parse(JSON.stringify(f)));
+}
+
+function tfModalAddField() {
+  const box = document.getElementById('tf-edit-fields');
+  if (box.querySelectorAll('.tf-row').length >= 5) return;
+  box.insertAdjacentHTML('beforeend', tfFieldRow());
+}
+
+function tfModalCollect() {
+  return [...document.querySelectorAll('#tf-edit-fields .tf-row')].map(row => ({
     label:       row.querySelector('.tf-label').value.trim(),
     placeholder: row.querySelector('.tf-ph').value.trim(),
     style:       row.querySelector('.tf-style').value,
@@ -980,33 +984,31 @@ function tfCollectFields(formId) {
   })).filter(f => f.label);
 }
 
-function tfAddField(formId) {
-  const box = document.querySelector(`.tf-card[data-formid="${formId}"] .tf-fields`);
-  if (box.querySelectorAll('.tf-row').length >= 5) return;
-  const empty = box.querySelector('.hint'); if (empty) empty.remove();
-  box.insertAdjacentHTML('beforeend', tfFieldRow());
+async function tfModalSave() {
+  const id = document.getElementById('tf-edit-id').value || null;
+  const name = document.getElementById('tf-edit-name').value.trim() || 'Untitled form';
+  const fields = tfModalCollect();
+  const msg = document.getElementById('tf-edit-msg');
+  try {
+    const r = id
+      ? await api('PUT', `/api/guild/${state.guildId}/ticket-forms/${id}`, { name, fields })
+      : await api('POST', `/api/guild/${state.guildId}/ticket-forms`, { name, fields });
+    state.ticketForms = r.config.forms; state.ticketPanels = r.config.panels;
+    closeAppsModal();
+    renderTicketForms(); renderTicketPanels();
+  } catch (e) { setStatus(msg, 'err', e.message); }
 }
 
-async function tfNewForm() {
+async function tfDuplicate(id) {
+  const f = (state.ticketForms || []).find(x => x.id === id);
+  if (!f) return;
   const gate = premiumGate('ticketForms', (state.ticketForms || []).length);
   if (gate.atCap) { if (!gate.isPrem) premiumNudge('ticketForms'); return; }
   try {
-    const r = await api('POST', `/api/guild/${state.guildId}/ticket-forms`, { name: 'New form', fields: [] });
+    const r = await api('POST', `/api/guild/${state.guildId}/ticket-forms`, { name: `${f.name} (copy)`, fields: f.fields });
     state.ticketForms = r.config.forms; state.ticketPanels = r.config.panels;
-    renderTicketForms(); renderTicketPanels();
+    renderTicketForms();
   } catch (e) { alert(e.message); }
-}
-
-async function tfSaveForm(id) {
-  const card = document.querySelector(`.tf-card[data-formid="${id}"]`);
-  const msg = document.getElementById(`tf-msg-${id}`);
-  const payload = { name: card.querySelector('.tf-name').value.trim() || 'Untitled form', fields: tfCollectFields(id) };
-  try {
-    const r = await api('PUT', `/api/guild/${state.guildId}/ticket-forms/${id}`, payload);
-    state.ticketForms = r.config.forms; state.ticketPanels = r.config.panels;
-    renderTicketPanels(); // refresh the form picker in each panel
-    setStatus(msg, 'ok', 'Saved.');
-  } catch (e) { setStatus(msg, 'err', e.message); }
 }
 
 async function tfDeleteForm(id) {
@@ -1028,73 +1030,116 @@ function tpFormOptions(selectedId) {
 function renderTicketPanels() {
   const panels = state.ticketPanels || [];
   const gate = premiumGate('ticketPanels', panels.length);
-  const newBtn = gateCreateButton(gate, 'New Panel', 'tpNewPanel()', 'ticketPanels', { icon: svg('plus') });
-  const cards = panels.map(p => `
-    <div class="card tp-card" data-panelid="${p.id}">
-      <div class="card-grid">
-        <div class="form-row"><label>Panel name</label><input type="text" class="tp-name" maxlength="80" value="${esc(p.name)}"></div>
-        <div class="form-row"><label>Channel</label><select class="tp-channel">${lvChannelOpts(p.channelId || '')}</select></div>
-      </div>
-      <div class="card-grid">
-        <div class="form-row"><label>Assigned form</label><select class="tp-form">${tpFormOptions(p.formId)}</select></div>
-        <div class="form-row"><label>Button label</label><input type="text" class="tp-button" maxlength="60" value="${esc(p.buttonLabel || 'Create Ticket')}"></div>
-      </div>
-      <div class="form-row"><label>Panel title</label><input type="text" class="tp-title" maxlength="256" value="${esc(p.title || '')}" placeholder="Support Tickets"></div>
-      <div class="form-row"><label>Panel description</label><textarea class="tp-desc" maxlength="2000" placeholder="Need help? Use the button below to open a ticket.">${esc(p.description || '')}</textarea></div>
-      <div class="card-grid">
-        <div class="form-row"><label>Color</label><div class="color-row"><input type="color" class="tp-color" value="${/^#[0-9a-fA-F]{6}$/.test(p.color) ? p.color : '#5865F2'}"></div></div>
-        <div class="form-row"><label>Ticket types (comma separated, optional)</label><input type="text" class="tp-types" value="${esc((p.types || []).join(', '))}" placeholder="Billing, Bug, Other"></div>
-      </div>
-      <div class="btn-row" style="align-items:center">
-        <button class="btn btn-primary" onclick="tpSave('${p.id}', true)">Save &amp; Publish</button>
-        <button class="btn btn-secondary" onclick="tpSave('${p.id}', false)">Save</button>
-        <button class="btn btn-secondary" onclick="tpDelete('${p.id}')">Delete</button>
-        <span class="hint">${p.messageId ? 'Published' : 'Not published'}</span>
-        <span id="tp-msg-${p.id}" class="save-status"></span>
-      </div>
-    </div>`).join('') || '<p class="hint">No panels yet. Create one and assign a form to it.</p>';
-
+  const newBtn = gateCreateButton(gate, 'New Panel', 'tpNew()', 'ticketPanels', { icon: svg('plus') });
+  const body = panels.length
+    ? `<div class="ticket-items">${panels.map(tpItemCard).join('')}</div>`
+    : ticketEmptyState('ticket', 'No panels yet', 'Create a panel, assign a form, and publish it to a channel.', newBtn);
   document.getElementById('t-panels-section').innerHTML = `
-    <div class="card"><h3>Ticket Panels &nbsp; ${gate.hint}</h3>
-      <p class="hint">Each panel posts its own button. Pick which form opens when a ticket is created from it.</p>
-      <div style="margin-top:10px">${newBtn}</div>
-    </div>
-    ${cards}`;
+    <div class="card">
+      <div class="section-head">
+        <h3>Ticket Panels</h3>
+        <div class="section-head-actions">${gate.hint}${panels.length ? newBtn : ''}</div>
+      </div>
+      ${body}
+    </div>`;
 }
 
-function tpCollect(id) {
-  const card = document.querySelector(`.tp-card[data-panelid="${id}"]`);
+function tpItemCard(p) {
+  const formName = p.formId ? ((state.ticketForms || []).find(f => f.id === p.formId)?.name || 'Unknown form') : 'No form';
+  const ch = p.channelId ? `#${channelName(p.channelId)}` : 'No channel';
+  return `<div class="ticket-item">
+    <div class="ticket-item-info">
+      <div class="ticket-item-name">${esc(p.name)}</div>
+      <div class="hint">${esc(ch)} &middot; Form: ${esc(formName)} &middot; ${p.messageId ? 'Published' : 'Not published'}</div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="tpEdit('${p.id}')">Edit</button>
+      <button class="btn btn-secondary" onclick="tpDuplicate('${p.id}')">Duplicate</button>
+      <button class="btn btn-secondary" onclick="tpDelete('${p.id}')">Delete</button>
+    </div>
+  </div>`;
+}
+
+// Modal editor for a single panel (new when p.id is null).
+function tpOpenModal(p) {
+  openAppsModal(`
+    <h3 class="modal-title">${p.id ? 'Edit Panel' : 'New Panel'}</h3>
+    <input type="hidden" id="tp-edit-id" value="${p.id || ''}">
+    <div class="card-grid">
+      <div class="form-row"><label>Panel name</label><input type="text" id="tp-edit-name" maxlength="80" value="${esc(p.name || '')}"></div>
+      <div class="form-row"><label>Channel</label><select id="tp-edit-channel">${lvChannelOpts(p.channelId || '')}</select></div>
+    </div>
+    <div class="card-grid">
+      <div class="form-row"><label>Assigned form</label><select id="tp-edit-form">${tpFormOptions(p.formId)}</select></div>
+      <div class="form-row"><label>Button label</label><input type="text" id="tp-edit-button" maxlength="60" value="${esc(p.buttonLabel || 'Create Ticket')}"></div>
+    </div>
+    <div class="form-row"><label>Panel title</label><input type="text" id="tp-edit-title" maxlength="256" value="${esc(p.title || '')}" placeholder="Support Tickets"></div>
+    <div class="form-row"><label>Panel description</label><textarea id="tp-edit-desc" maxlength="2000" placeholder="Need help? Use the button below to open a ticket.">${esc(p.description || '')}</textarea></div>
+    <div class="card-grid">
+      <div class="form-row"><label>Color</label><div class="color-row"><input type="color" id="tp-edit-color" value="${/^#[0-9a-fA-F]{6}$/.test(p.color) ? p.color : '#5865F2'}"></div></div>
+      <div class="form-row"><label>Ticket types (comma separated, optional)</label><input type="text" id="tp-edit-types" value="${esc((p.types || []).join(', '))}" placeholder="Billing, Bug, Other"></div>
+    </div>
+    <div class="btn-row" style="margin-top:18px;align-items:center">
+      <button class="btn btn-primary" onclick="tpModalSave(true)">Save &amp; Publish</button>
+      <button class="btn btn-secondary" onclick="tpModalSave(false)">Save</button>
+      <button class="btn btn-secondary" onclick="closeAppsModal()">Cancel</button>
+      <span id="tp-edit-msg" class="save-status"></span>
+    </div>`);
+}
+
+function tpNew() {
+  const gate = premiumGate('ticketPanels', (state.ticketPanels || []).length);
+  if (gate.atCap) { if (!gate.isPrem) premiumNudge('ticketPanels'); return; }
+  tpOpenModal({ id: null, name: '', channelId: '', formId: '', buttonLabel: 'Create Ticket', title: '', description: '', color: '#5865F2', types: [], messageId: null });
+}
+
+function tpEdit(id) {
+  const p = (state.ticketPanels || []).find(x => x.id === id);
+  if (p) tpOpenModal(JSON.parse(JSON.stringify(p)));
+}
+
+function tpModalCollect() {
+  const g = id => document.getElementById(id);
   return {
-    name:        card.querySelector('.tp-name').value.trim() || 'Ticket panel',
-    channelId:   card.querySelector('.tp-channel').value || null,
-    formId:      card.querySelector('.tp-form').value || null,
-    buttonLabel: card.querySelector('.tp-button').value.trim() || 'Create Ticket',
-    title:       card.querySelector('.tp-title').value.trim() || null,
-    description: card.querySelector('.tp-desc').value.trim() || null,
-    color:       card.querySelector('.tp-color').value || '#5865F2',
-    types:       card.querySelector('.tp-types').value.split(',').map(s => s.trim()).filter(Boolean)
+    name:        g('tp-edit-name').value.trim() || 'Ticket panel',
+    channelId:   g('tp-edit-channel').value || null,
+    formId:      g('tp-edit-form').value || null,
+    buttonLabel: g('tp-edit-button').value.trim() || 'Create Ticket',
+    title:       g('tp-edit-title').value.trim() || null,
+    description: g('tp-edit-desc').value.trim() || null,
+    color:       g('tp-edit-color').value || '#5865F2',
+    types:       g('tp-edit-types').value.split(',').map(s => s.trim()).filter(Boolean)
   };
 }
 
-async function tpNewPanel() {
+async function tpModalSave(publish) {
+  const id = document.getElementById('tp-edit-id').value || null;
+  const msg = document.getElementById('tp-edit-msg');
+  const payload = { ...tpModalCollect(), publish: !!publish };
+  if (publish && !payload.channelId) return setStatus(msg, 'err', 'Pick a channel to publish.');
+  try {
+    const r = id
+      ? await api('PUT', `/api/guild/${state.guildId}/ticket-panels/${id}`, payload)
+      : await api('POST', `/api/guild/${state.guildId}/ticket-panels`, payload);
+    state.ticketPanels = r.config.panels;
+    closeAppsModal();
+    renderTicketPanels();
+  } catch (e) { setStatus(msg, 'err', e.message); }
+}
+
+async function tpDuplicate(id) {
+  const p = (state.ticketPanels || []).find(x => x.id === id);
+  if (!p) return;
   const gate = premiumGate('ticketPanels', (state.ticketPanels || []).length);
   if (gate.atCap) { if (!gate.isPrem) premiumNudge('ticketPanels'); return; }
   try {
-    const r = await api('POST', `/api/guild/${state.guildId}/ticket-panels`, { name: 'New panel' });
+    const r = await api('POST', `/api/guild/${state.guildId}/ticket-panels`, {
+      name: `${p.name} (copy)`, formId: p.formId, buttonLabel: p.buttonLabel,
+      title: p.title, description: p.description, color: p.color, types: p.types
+    });
     state.ticketPanels = r.config.panels;
     renderTicketPanels();
   } catch (e) { alert(e.message); }
-}
-
-async function tpSave(id, publish) {
-  const payload = { ...tpCollect(id), publish: !!publish };
-  if (publish && !payload.channelId) return setStatus(document.getElementById(`tp-msg-${id}`), 'err', 'Pick a channel to publish.');
-  try {
-    const r = await api('PUT', `/api/guild/${state.guildId}/ticket-panels/${id}`, payload);
-    state.ticketPanels = r.config.panels;
-    renderTicketPanels();
-    setStatus(document.getElementById(`tp-msg-${id}`), 'ok', publish ? (r.published ? 'Saved and published.' : 'Saved.') : 'Saved.');
-  } catch (e) { setStatus(document.getElementById(`tp-msg-${id}`), 'err', e.message); }
 }
 
 async function tpDelete(id) {
@@ -2331,7 +2376,7 @@ function rrMenuCard(menu) {
         </div>
         <span class="hint" style="display:block;margin-top:6px">Use a normal emoji or a custom one from this server (type <code>:name:</code> and pick it, then copy it here).</span>
       </div>
-      <div class="save-bar" style="position:static;margin-top:4px">
+      <div class="btn-row" style="margin-top:14px;align-items:center">
         <button class="btn btn-primary" onclick="rrSave('${menu.id}')">Save Panel</button>
         <button class="btn btn-secondary" onclick="rrDelete('${menu.id}')">Delete</button>
         <span id="rr-${menu.id}-msg" class="save-status"></span>
@@ -2378,7 +2423,7 @@ function renderReactionRoles() {
           <button class="btn btn-secondary" onclick="rrAddMap('rr-new-maps')">+ Add pair</button>${rrMapHint()}
         </div>
       </div>
-      <div class="save-bar" style="position:static;margin-top:4px">
+      <div class="btn-row" style="margin-top:14px;align-items:center">
         ${createBtn}
         <span id="rr-new-msg" class="save-status"></span>
       </div>
@@ -2581,7 +2626,7 @@ function renderArspEditor() {
           </div>
         </div>
 
-        <div class="save-bar" style="position:static">
+        <div class="btn-row" style="margin-top:14px;align-items:center">
           <button class="btn btn-primary" onclick="arspSave()">${r.id ? 'Save Changes' : 'Create Response'}</button>
           <button class="btn btn-secondary" onclick="arspCancel()">Cancel</button>
           <span id="arsp-save-msg" class="save-status"></span>

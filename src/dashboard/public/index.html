@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ZenByte Dashboard</title>
-  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
 
@@ -384,14 +384,6 @@
           </div>
         </div>
 
-        <div class="card">
-          <h3>Default Open Form</h3>
-          <label class="sec-switch"><input type="checkbox" id="t-form-enabled">
-            <span>Ask questions in a pop-up form when a ticket is opened</span></label>
-          <div id="t-form-fields" style="margin-top:14px"></div>
-          <button class="btn btn-secondary" style="margin-top:6px" onclick="addFormField()">+ Add Question</button>
-          <span class="hint" style="display:block;margin-top:8px">Up to 5 questions (Discord modal limit). This form is used by the panel posted with the /ticketsetup command. For multiple panels with their own forms, use the Ticket Forms and Ticket Panels sections below.</span>
-        </div>
 
         <div class="card">
           <h3>Ticket Types</h3>
@@ -406,14 +398,14 @@
           </div>
         </div>
 
+        <div id="t-forms-section"></div>
+        <div id="t-panels-section"></div>
+
         <div class="save-bar">
           <button class="btn btn-primary" onclick="saveTicketConfig()">Save Changes</button>
           <span class="save-hint">Unsaved changes</span>
           <span id="ticket-save-msg" class="save-status"></span>
         </div>
-
-        <div id="t-forms-section"></div>
-        <div id="t-panels-section"></div>
       </div>
     </div>
 
@@ -738,6 +730,6 @@
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>
