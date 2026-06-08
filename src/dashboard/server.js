@@ -16,6 +16,8 @@ const { PROTECTIONS, PUNISHMENTS, mergeConfig } = require('../security/protectio
 const { CURVES, ANNOUNCE_MODES } = require('../leveling/config');
 const { SIGNALS: ALT_SIGNALS, SENSITIVITY_PRESETS, ACTIONS: ALT_ACTIONS } = require('../altdetect/config');
 const verificationHandler = require('../handlers/verification');
+const greetingsService = require('../greetings/service');
+const { PLACEHOLDERS: GREETING_PLACEHOLDERS } = require('../greetings/config');
 const reactionRoleService = require('../reactionrole/service');
 const { MODES: RR_MODES, parseEmoji: rrParseEmoji } = require('../reactionrole/config');
 const pollService = require('../polls/service');
@@ -559,6 +561,31 @@ module.exports = function startDashboard(client) {
       if (channel) { await channel.send(verificationHandler.buildPanel(config)).then(() => posted = true).catch(() => {}); }
     }
     res.json({ success: true, config, posted });
+  });
+
+  // ── Welcome / leave messages ──────────────────
+  app.get('/api/guild/:id/greetings', requireAuth, guildGuard, (req, res) => {
+    res.json({ config: client.store.getGreetingsConfig(req.params.id), placeholders: GREETING_PLACEHOLDERS });
+  });
+
+  app.put('/api/guild/:id/greetings', requireAuth, guildGuard, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: 'Guild not found' });
+    const config = client.store.setGreetingsConfig(req.params.id, req.body || {});
+
+    // Optional preview: send a sample greeting to the configured channel using the
+    // bot itself as the stand-in member, so admins can see exactly how it looks.
+    let tested = false;
+    const which = req.body?.test;
+    if ((which === 'welcome' || which === 'leave') && config[which].channelId) {
+      const channel = guild.channels.cache.get(config[which].channelId);
+      if (channel && typeof channel.send === 'function') {
+        const sample = { id: client.user.id, user: client.user, guild };
+        const payload = greetingsService.buildPayload(config[which], sample, guild);
+        if (payload) await channel.send(payload).then(() => { tested = true; }).catch(() => {});
+      }
+    }
+    res.json({ success: true, config, tested });
   });
 
   // ── Autoroles (roles given on join) ───────────

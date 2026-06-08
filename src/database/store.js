@@ -3,6 +3,7 @@ const path = require('path');
 const { Collection } = require('discord.js');
 const logger = require('../utils/logger');
 const { normalizeTicketConfig } = require('../utils/tickets');
+const { normalizeGreetings } = require('../greetings/config');
 const { mergeConfig } = require('../security/protections');
 const { prefix: DEFAULT_PREFIX } = require('../config');
 
@@ -15,7 +16,8 @@ const FILES = {
   security:     path.join(ROOT, 'security.json'),
   verification: path.join(ROOT, 'verification.json'),
   commandToggles: path.join(ROOT, 'commandtoggles.json'),
-  prefixes:     path.join(ROOT, 'prefixes.json')
+  prefixes:     path.join(ROOT, 'prefixes.json'),
+  greetings:    path.join(ROOT, 'greetings.json')
 };
 
 const { readJson: loadJson, writeJsonAtomic: saveJson } = require('../utils/persistence');
@@ -58,6 +60,12 @@ class Store {
 
     // prefixes: Map<guildId, string>, custom command prefix per guild
     this.prefixes = new Map(Object.entries(loadJson(FILES.prefixes)));
+
+    // greetings: Map<guildId, { welcome, leave }>, welcome/leave message config
+    this.greetings = new Map();
+    for (const [gid, cfg] of Object.entries(loadJson(FILES.greetings))) {
+      this.greetings.set(gid, normalizeGreetings(cfg));
+    }
 
     logger.info(`Store loaded: ${this.warnings.size} guild(s) with warnings, ${this.tickets.size} ticket config(s).`);
   }
@@ -118,6 +126,21 @@ class Store {
     return this.getPrefix(guildId);
   }
 
+  getGreetingsConfig(guildId) {
+    return this.greetings.get(guildId) || normalizeGreetings({});
+  }
+
+  setGreetingsConfig(guildId, cfg) {
+    const clean = normalizeGreetings(cfg);
+    this.greetings.set(guildId, clean);
+    this.saveGreetings();
+    return clean;
+  }
+
+  saveGreetings() {
+    saveJson(FILES.greetings, Object.fromEntries(this.greetings));
+  }
+
   getDisabledCommands(guildId) {
     return this.commandToggles.get(guildId) || [];
   }
@@ -162,6 +185,7 @@ class Store {
     if (this.verification.delete(guildId))   this.saveVerification();
     if (this.commandToggles.delete(guildId)) saveJson(FILES.commandToggles, Object.fromEntries(this.commandToggles));
     if (this.prefixes.delete(guildId))       saveJson(FILES.prefixes, Object.fromEntries(this.prefixes));
+    if (this.greetings.delete(guildId))      this.saveGreetings();
     this.openTickets.delete(guildId);
   }
 }

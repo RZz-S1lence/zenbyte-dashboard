@@ -10,7 +10,7 @@ module.exports = {
 
   async execute(interaction, client) {
     const prefix = client.store.getPrefix(interaction.guildId);
-    const view = help.homeView(client, interaction.user.id, prefix);
+    const view = help.homeView(client, interaction.user.id, interaction.guildId, prefix);
     await interaction.reply({ ...view, ephemeral: true });
   },
 
@@ -22,11 +22,12 @@ module.exports = {
       return interaction.reply({ content: 'This menu belongs to someone else. Run `/help` to open your own.', ephemeral: true });
 
     const prefix = client.store.getPrefix(interaction.guildId);
+    const gid = interaction.guildId;
     let view;
-    if (action === 'home')      view = help.homeView(client, interaction.user.id, prefix);
-    else if (action === 'cat')  view = help.categoryView(client, interaction.user.id, interaction.values[0]);
-    else if (action === 'back') view = help.categoryView(client, interaction.user.id, category);
-    else if (action === 'cmd')  view = help.commandView(client, interaction.user.id, category, interaction.values[0], prefix);
+    if (action === 'home')      view = help.homeView(client, interaction.user.id, gid, prefix);
+    else if (action === 'cat')  view = help.categoryView(client, interaction.user.id, gid, interaction.values[0], prefix);
+    else if (action === 'back') view = help.categoryView(client, interaction.user.id, gid, category, prefix);
+    else if (action === 'cmd')  view = help.commandView(client, interaction.user.id, gid, category, interaction.values[0], prefix);
     else return;
 
     await interaction.update(view);

@@ -3,12 +3,16 @@ const { sendLog, getAuditLogExecutor } = require('../utils/audit');
 const antinuke = require('../security/antinuke');
 const ticketHandler = require('../handlers/tickets');
 const memberCounter = require('../membercounter/service');
+const greetings = require('../greetings/service');
 
 module.exports = {
   name: Events.GuildMemberRemove,
   async execute(client, member) {
     memberCounter.scheduleGuildUpdate(client, member.guild.id);
     await ticketHandler.handleMemberLeave(client, member).catch(() => {});
+
+    // Leave message (humans only).
+    if (!member.user.bot) await greetings.sendLeave(client, member).catch(() => {});
 
     const kicker = await getAuditLogExecutor(member.guild, AuditLogEvent.MemberKick, member.id);
     if (kicker) await antinuke.track(client, member.guild, 'kick', kicker);

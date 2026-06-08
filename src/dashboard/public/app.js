@@ -9,6 +9,7 @@ const state = {
   guilds:    [],     // all guilds list
   ticketForms: [],   // named reusable ticket forms
   ticketPanels: [],  // ticket panels with assigned forms
+  greetings:   null, // welcome/leave message config { welcome, leave }
   modRoleIds:  [],   // selected ticket moderator role IDs
   commands:    [],   // cached command list from /api/commands
   cmdDisabled: new Set(), // disabled command names for the selected guild
@@ -252,6 +253,7 @@ function goto(page) {
   if (page === 'social'      && state.guildId) loadSocial();
   if (page === 'autoresponses' && state.guildId) loadAutoResponses();
   if (page === 'applications' && state.guildId) loadApplications();
+  if (page === 'greetings'   && state.guildId) loadGreetings();
   if (page === 'membercounters' && state.guildId) loadMemberCounters();
   if (page === 'autorole'    && state.guildId) loadAutorole();
   if (page === 'reactionroles' && state.guildId) loadReactionRoles();
@@ -568,6 +570,7 @@ async function selectGuild(id) {
   if (activePage === 'autoresponses') await loadAutoResponses();
   if (activePage === 'applications') await loadApplications();
   if (activePage === 'membercounters') await loadMemberCounters();
+  if (activePage === 'greetings')   await loadGreetings();
   if (activePage === 'transcripts') await loadTranscripts();
 }
 
@@ -1368,6 +1371,126 @@ async function saveVerification(repost) {
   }
 }
 
+// ── WELCOME & LEAVE ───────────────────────────────
+const GREET_META = {
+  welcome: { title: 'Welcome Message', blurb: 'Posted when a member joins the server.' },
+  leave:   { title: 'Leave Message',   blurb: 'Posted when a member leaves the server.' }
+};
+
+async function loadGreetings() {
+  hide('greet-body');
+  if (!state.guildId) { show('greet-no-guild'); return; }
+  hide('greet-no-guild');
+  const [data] = await Promise.all([
+    api('GET', `/api/guild/${state.guildId}/greetings`),
+    ensureGuildData()
+  ]);
+  state.greetings = data.config;
+  renderGreetSection('welcome');
+  renderGreetSection('leave');
+  show('greet-body');
+}
+
+function renderGreetSection(which) {
+  const cfg  = state.greetings[which];
+  const meta = GREET_META[which];
+  const isEmbed = cfg.mode === 'embed';
+  const thumbMode = cfg.embed.thumbnail === 'avatar' ? 'avatar' : (cfg.embed.thumbnail ? 'url' : 'none');
+  const textLabel = isEmbed ? 'Text above the embed (optional)' : 'Message text';
+  document.getElementById(`greet-${which}-section`).innerHTML = `
+    <div class="card">
+      <label class="sec-switch sec-master">
+        <input type="checkbox" id="g-${which}-enabled" ${cfg.enabled ? 'checked' : ''}>
+        <span><strong>Enable ${meta.title}</strong></span>
+      </label>
+      <p class="hint" style="margin:6px 0 14px">${meta.blurb}</p>
+      <div class="card-grid">
+        <div class="form-row"><label>Channel</label><select id="g-${which}-channel">${lvChannelOpts(cfg.channelId || '')}</select></div>
+        <div class="form-row"><label>Message style</label>
+          <select id="g-${which}-mode" onchange="greetModeChanged('${which}')">
+            <option value="embed"${isEmbed ? ' selected' : ''}>Embed</option>
+            <option value="text"${!isEmbed ? ' selected' : ''}>Plain text</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row"><label>${textLabel}</label><textarea id="g-${which}-text" maxlength="2000" placeholder="Welcome {user} to {server}!">${esc(cfg.text || '')}</textarea></div>
+      <div id="g-${which}-embed" class="${isEmbed ? '' : 'hidden'}">
+        <div class="card-grid">
+          <div class="form-row"><label>Embed title</label><input type="text" id="g-${which}-title" maxlength="256" value="${esc(cfg.embed.title)}" placeholder="Welcome!"></div>
+          <div class="form-row"><label>Color</label><div class="color-row"><input type="color" id="g-${which}-color" value="${/^#[0-9a-fA-F]{6}$/.test(cfg.embed.color) ? cfg.embed.color : '#5865F2'}"></div></div>
+        </div>
+        <div class="form-row"><label>Embed description</label><textarea id="g-${which}-desc" maxlength="4000" placeholder="Glad to have you, {username}. You are member number {membercount}.">${esc(cfg.embed.description)}</textarea></div>
+        <div class="card-grid">
+          <div class="form-row"><label>Thumbnail</label>
+            <select id="g-${which}-thumb-mode" onchange="greetThumbChanged('${which}')">
+              <option value="none"${thumbMode === 'none' ? ' selected' : ''}>None</option>
+              <option value="avatar"${thumbMode === 'avatar' ? ' selected' : ''}>Member avatar</option>
+              <option value="url"${thumbMode === 'url' ? ' selected' : ''}>Custom URL</option>
+            </select>
+          </div>
+          <div class="form-row"><label>Footer text</label><input type="text" id="g-${which}-footer" maxlength="2048" value="${esc(cfg.embed.footer)}"></div>
+        </div>
+        <div class="form-row ${thumbMode === 'url' ? '' : 'hidden'}" id="g-${which}-thumb-url-row"><label>Thumbnail URL</label><input type="text" id="g-${which}-thumb-url" maxlength="500" value="${esc(thumbMode === 'url' ? cfg.embed.thumbnail : '')}" placeholder="https://example.com/image.png"></div>
+        <div class="form-row"><label>Banner image URL</label><input type="text" id="g-${which}-image" maxlength="500" value="${esc(cfg.embed.image)}" placeholder="https://example.com/banner.png"></div>
+        <label class="sec-switch" style="margin-top:4px"><input type="checkbox" id="g-${which}-ts" ${cfg.embed.showTimestamp ? 'checked' : ''}><span>Show a timestamp on the embed</span></label>
+      </div>
+      <div class="hint" style="margin-top:12px">Placeholders: <code>{user}</code> mention, <code>{username}</code>, <code>{tag}</code>, <code>{server}</code>, <code>{membercount}</code>.</div>
+      <div class="btn-row" style="margin-top:12px;align-items:center">
+        <button class="btn btn-secondary" onclick="testGreeting('${which}')">Send test message</button>
+        <span id="g-${which}-test-msg" class="save-status"></span>
+      </div>
+    </div>`;
+}
+
+// Reads the current DOM for one section back into state, so re-rendering (after a
+// style/thumbnail change) keeps every other field the admin already edited.
+function collectGreetSection(which) {
+  const g = id => document.getElementById(`g-${which}-${id}`);
+  const cfg = state.greetings[which];
+  cfg.enabled   = g('enabled').checked;
+  cfg.channelId = g('channel').value || null;
+  cfg.mode      = g('mode').value;
+  cfg.text      = g('text').value;
+  cfg.embed.title         = g('title').value;
+  cfg.embed.description   = g('desc').value;
+  cfg.embed.color         = g('color').value;
+  cfg.embed.footer        = g('footer').value;
+  cfg.embed.image         = g('image').value;
+  cfg.embed.showTimestamp = g('ts').checked;
+  const tm = g('thumb-mode').value;
+  cfg.embed.thumbnail = tm === 'avatar' ? 'avatar' : (tm === 'url' ? g('thumb-url').value.trim() : '');
+}
+
+function greetModeChanged(which) { collectGreetSection(which); renderGreetSection(which); }
+function greetThumbChanged(which) { collectGreetSection(which); renderGreetSection(which); }
+
+async function saveGreetings() {
+  if (!state.guildId) return;
+  collectGreetSection('welcome');
+  collectGreetSection('leave');
+  const msg = document.getElementById('greet-save-msg');
+  try {
+    const res = await api('PUT', `/api/guild/${state.guildId}/greetings`, state.greetings);
+    state.greetings = res.config;
+    setStatus(msg, 'ok', 'Saved');
+    renderGreetSection('welcome');
+    renderGreetSection('leave');
+  } catch (e) { setStatus(msg, 'err', e.message || 'Failed to save.'); }
+}
+
+async function testGreeting(which) {
+  if (!state.guildId) return;
+  collectGreetSection('welcome');
+  collectGreetSection('leave');
+  const msg = document.getElementById(`g-${which}-test-msg`);
+  if (!state.greetings[which].channelId) return setStatus(msg, 'err', 'Pick a channel first.');
+  try {
+    const res = await api('PUT', `/api/guild/${state.guildId}/greetings`, { ...state.greetings, test: which });
+    state.greetings = res.config;
+    setStatus(msg, res.tested ? 'ok' : 'err', res.tested ? 'Test sent to the channel.' : 'Could not send. Check the channel and my permissions.');
+  } catch (e) { setStatus(msg, 'err', e.message || 'Failed.'); }
+}
+
 // ── SOCIAL ALERTS ─────────────────────────────────
 async function loadSocial() {
   hide('social-body');
@@ -1850,7 +1973,6 @@ const chk = b => b ? 'checked' : '';
 
 function renderLeveling() {
   const c = state.leveling;
-  const curveOpts = state.levelingMeta.curves.map(v => `<option value="${v}"${c.formula.curve === v ? ' selected' : ''}>${v}</option>`).join('');
   const annOpts = state.levelingMeta.announceModes.map(v => `<option value="${v}"${c.announce.mode === v ? ' selected' : ''}>${ANN_LABELS[v] || v}</option>`).join('');
 
   // Friendly "speed" preset: maps to the standard curve + a multiplier. Falls back to Custom.
@@ -1859,7 +1981,9 @@ function renderLeveling() {
   const speedOpts = speedOpt('0.5', 'Slow (takes longer to level up)')
     + speedOpt('1', 'Normal (recommended)')
     + speedOpt('2', 'Fast (level up quickly)')
-    + speedOpt('custom', 'Custom (set it yourself below)');
+    // "Custom" only appears if this server already had hand-tuned values, so we
+    // never silently overwrite them; new servers just see the three simple presets.
+    + (sp === 'custom' ? speedOpt('custom', 'Custom (keep current settings)') : '');
 
   const rewardRows = c.roleRewards.map((r, i) => `
     <div class="lv-row" data-i="${i}">
@@ -1927,20 +2051,6 @@ function renderLeveling() {
         <div class="form-row"><label>Highest Level</label><input type="number" id="lv-maxlevel" min="0" value="${c.maxLevel}">
           <span class="hint">Members stop leveling past this. Leave at 0 for no limit.</span></div>
       </div>
-      <details class="lv-advanced">
-        <summary>Advanced settings (most people can skip this)</summary>
-        <p class="hint" style="margin:10px 0 14px">The speed option above already sets these for you. Only change them if you want fine control.</p>
-        <div class="card-grid">
-          <div class="form-row"><label>XP Curve</label><select id="lv-curve" onchange="lvSpeedToCustom()">${curveOpts}</select>
-            <span class="hint">How fast the XP needed per level grows. "mee6" is the popular default.</span></div>
-          <div class="form-row"><label>XP Multiplier</label><input type="number" id="lv-multiplier" min="0" step="0.1" value="${c.multiplier}" onchange="lvSpeedToCustom()">
-            <span class="hint">Multiplies all XP earned. 2 means double XP.</span></div>
-          <div class="form-row"><label>Starting XP per level</label><input type="number" id="lv-base" min="1" value="${c.formula.baseXp}" onchange="lvSpeedToCustom()">
-            <span class="hint">Used by the linear and exponential curves.</span></div>
-          <div class="form-row"><label>Growth factor</label><input type="number" id="lv-factor" min="1.01" step="0.05" value="${c.formula.factor}" onchange="lvSpeedToCustom()">
-            <span class="hint">Used by the exponential curve only.</span></div>
-        </div>
-      </details>
     </div>
 
     <div class="card">
@@ -2016,17 +2126,15 @@ const ANN_LABELS = {
   off:     'Do not announce'
 };
 
-// Speed preset writes the curve + multiplier; touching an advanced field flips it to Custom.
+// Speed preset maps to the standard mee6 curve plus an XP multiplier, written
+// straight into state. "Custom" (only shown for servers with pre-existing tuned
+// values) leaves the stored curve/multiplier untouched.
 function lvApplySpeed() {
   const v = document.getElementById('lv-speed').value;
   if (v === 'custom') return;
-  document.getElementById('lv-curve').value = 'mee6';
-  document.getElementById('lv-multiplier').value = v;
+  state.leveling.formula.curve = 'mee6';
+  state.leveling.multiplier = Number(v);
   markDirty();
-}
-function lvSpeedToCustom() {
-  const sel = document.getElementById('lv-speed');
-  if (sel) sel.value = 'custom';
 }
 
 const lvDefaults = {
@@ -2055,8 +2163,8 @@ function collectLeveling() {
   c.reaction = { enabled: boolv('lv-react-enabled'), xp: numv('lv-react-xp', 5), cooldown: numv('lv-react-cd', 60) };
   c.voice = { enabled: boolv('lv-voice-enabled'), xpPerMinute: numv('lv-voice-xp', 10), minUsers: numv('lv-voice-min', 2),
               ignoreAfk: boolv('lv-voice-afk'), ignoreMuted: boolv('lv-voice-muted'), ignoreDeafened: boolv('lv-voice-deaf') };
-  c.formula = { curve: document.getElementById('lv-curve').value, baseXp: numv('lv-base', 100), factor: numv('lv-factor', 1.2) };
-  c.multiplier = numv('lv-multiplier', 1);
+  // c.formula and c.multiplier are driven by the Speed preset (see lvApplySpeed)
+  // and kept as-is here, so removing the advanced inputs never wipes them.
   c.maxLevel = numv('lv-maxlevel', 0);
   c.announce = { mode: document.getElementById('lv-ann-mode').value, channelId: document.getElementById('lv-ann-channel').value || null,
                  message: document.getElementById('lv-ann-msg').value, card: boolv('lv-ann-card') };
@@ -2171,7 +2279,7 @@ function renderActivity() {
     </div>
     <div class="card">
       <h3>Score Weights</h3>
-      <p class="hint" style="margin-bottom:14px">Activity score = messages×msg + voice-minutes×voice + reactions×reaction.</p>
+      <p class="hint" style="margin-bottom:14px">Set how much each action counts toward a member's activity score. Higher numbers are worth more.</p>
       <div class="card-grid">
         <div class="form-row"><label>Per Message</label><input type="number" id="act-w-msg" min="0" step="0.1" value="${c.weights.message}"></div>
         <div class="form-row"><label>Per Voice Minute</label><input type="number" id="act-w-voice" min="0" step="0.1" value="${c.weights.voicePerMinute}"></div>

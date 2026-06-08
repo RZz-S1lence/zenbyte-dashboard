@@ -5,6 +5,7 @@ const antinuke = require('../security/antinuke');
 const leveling = require('../leveling/service');
 const autorole = require('../autorole/service');
 const memberCounter = require('../membercounter/service');
+const greetings = require('../greetings/service');
 
 module.exports = {
   name: Events.GuildMemberAdd,
@@ -24,6 +25,9 @@ module.exports = {
 
     // Autoroles: grant the configured join roles (separate sets for humans/bots).
     await autorole.applyOnJoin(client, member).catch(() => {});
+
+    // Welcome message (humans only; alts that were removed already returned above).
+    if (!member.user.bot) await greetings.sendWelcome(client, member).catch(() => {});
 
     const createdAt = Math.floor(member.user.createdTimestamp / 1000);
     const accountAgeDays = Math.floor((Date.now() - member.user.createdTimestamp) / 86400000);

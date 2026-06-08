@@ -461,11 +461,6 @@ textarea { resize: vertical; min-height: 70px; width: 100%; }
 .lv-row select { flex: 1; min-width: 140px; }
 .lv-row .lv-del { padding: 6px 10px; font-size: 12px; }
 .lv-empty { color: var(--muted); font-size: 13px; padding: 4px 0; }
-.lv-advanced { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 14px; }
-.lv-advanced > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--accent2); list-style: none; user-select: none; }
-.lv-advanced > summary::-webkit-details-marker { display: none; }
-.lv-advanced > summary::before { content: '▸ '; }
-.lv-advanced[open] > summary::before { content: '▾ '; }
 
 /* ── ALT DETECTION ─────────────────────────── */
 .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
