@@ -751,6 +751,21 @@ module.exports = function startDashboard(client) {
     res.json({ success: true, disabled });
   });
 
+  // ── Per-command channel rules (blacklist / whitelist) ──
+  app.get('/api/guild/:id/channel-rules', requireAuth, guildGuard, (req, res) => {
+    res.json({ rules: client.store.getChannelRules(req.params.id) });
+  });
+
+  app.put('/api/guild/:id/channel-rules', requireAuth, guildGuard, (req, res) => {
+    const { name, mode, channels } = req.body || {};
+    if (!name || !togglable(name)) return res.status(400).json({ error: 'Unknown command.' });
+    if (!['off', 'blacklist', 'whitelist'].includes(mode))
+      return res.status(400).json({ error: 'Invalid mode.' });
+    const list = Array.isArray(channels) ? channels : [];
+    const rule = client.store.setChannelRule(req.params.id, name, mode, list);
+    res.json({ success: true, rule });
+  });
+
   // ── General settings (per guild) ──────────────
   app.get('/api/guild/:id/prefix', requireAuth, guildGuard, (req, res) => {
     res.json({ prefix: client.store.getPrefix(req.params.id), defaultPrefix: require('../config').prefix });

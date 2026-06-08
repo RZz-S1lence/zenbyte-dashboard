@@ -2,7 +2,10 @@ const {
   PermissionFlagsBits, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle
 } = require('discord.js');
 const embeds = require('../utils/embeds');
-const { prefix: DEFAULT_PREFIX, ownerId } = require('../config');
+const { prefix: DEFAULT_PREFIX, ownerId, dashboard } = require('../config');
+
+// Public dashboard URL, where admins customize the bot. Mirrors the /dashboard command's fallback.
+const DASHBOARD_URL = (dashboard.url || 'https://zenbyte-dashboard.de').replace(/\/+$/, '');
 
 // Display metadata for each command category. Order here is the order shown in the
 // menu. Kept emoji-free to match the rest of the product's clean, professional look.
@@ -104,6 +107,7 @@ function homeView(client, viewerId, guildId, prefix = DEFAULT_PREFIX) {
     description:
       'Browse commands by category using the menu below. '
       + `Every command works as a slash command and with the \`${prefix}\` prefix.`
+      + `\n\n🌐 **Want to customize the bot?** Head to the [ZenByte Dashboard](${DASHBOARD_URL}) to configure leveling, tickets, logging and more.`
       + (off ? `\n\nCommands shown with a ~~strikethrough~~ are currently disabled in this server.` : ''),
     color: embeds.COLORS.brand,
     fields,

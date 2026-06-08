@@ -338,10 +338,17 @@ async function loadCommands() {
   }
   // Per-guild enable/disable state (only when a server is selected).
   state.cmdDisabled = new Set();
+  state.cmdChannelRules = {};
   if (state.guildId) {
     try {
       const { disabled } = await api('GET', `/api/guild/${state.guildId}/command-toggles`);
       state.cmdDisabled = new Set(disabled);
+    } catch {}
+    try {
+      // Channel rules need the guild's channel list for the editor's multi-select.
+      await ensureGuildData();
+      const { rules } = await api('GET', `/api/guild/${state.guildId}/channel-rules`);
+      state.cmdChannelRules = rules || {};
     } catch {}
   }
   renderCommands();
@@ -378,6 +385,88 @@ function visibleCommandNames() { return (state.cmdFiltered || []).map(c => c.nam
 function toggleCategoryCommands(cat, enable) {
   const names = state.commands.filter(c => (c.category || 'General') === cat).map(c => c.name);
   bulkToggleCommands(names, enable);
+}
+
+// ── Per-command channel rules (blacklist / whitelist) ──
+// Only one command's editor is open at a time, tracked on `state`.
+function openChannelRuleEditor(name) {
+  const rule = state.cmdChannelRules?.[name];
+  state.cmdRuleEditing = name;
+  state.cmdRuleDraftMode = rule?.mode || 'off';
+  state.cmdRuleDraftChannels = rule?.channels ? [...rule.channels] : [];
+  renderCommands();
+}
+
+function closeChannelRuleEditor() {
+  state.cmdRuleEditing = null;
+  renderCommands();
+}
+
+// Switch mode while the editor is open, keeping any channels the user already picked.
+// Read from the live host element (not msStore, which can hold a stale entry).
+function setChannelRuleMode(mode) {
+  if (document.getElementById('chrule-ms')) state.cmdRuleDraftChannels = msValues('chrule-ms');
+  state.cmdRuleDraftMode = mode;
+  renderCommands();
+}
+
+async function saveChannelRule(name) {
+  if (!state.guildId) return;
+  const mode = state.cmdRuleDraftMode || 'off';
+  const channels = mode === 'off'
+    ? []
+    : (document.getElementById('chrule-ms') ? msValues('chrule-ms') : (state.cmdRuleDraftChannels || []));
+  if (mode !== 'off' && !channels.length)
+    return alert('Pick at least one channel, or set the mode to Off.');
+  try {
+    const { rule } = await api('PUT', `/api/guild/${state.guildId}/channel-rules`, { name, mode, channels });
+    if (rule) state.cmdChannelRules[name] = rule;
+    else delete state.cmdChannelRules[name];
+  } catch (e) { return alert('Failed to save: ' + e.message); }
+  state.cmdRuleEditing = null;
+  renderCommands();
+}
+
+function channelRuleSummary(rule) {
+  const n = rule.channels.length;
+  const label = rule.mode === 'whitelist' ? 'Only in' : 'Blocked in';
+  return `${label} ${n} channel${n === 1 ? '' : 's'}`;
+}
+
+// The inline channel-rule control shown on each command card (guild selected only).
+function channelRuleSection(cmd) {
+  if (!state.guildId || cmd.ownerOnly) return '';
+  const name = cmd.name;
+  const rule = state.cmdChannelRules?.[name];
+
+  if (state.cmdRuleEditing !== name) {
+    const summary = rule
+      ? `<span class="chrule-badge chrule-${rule.mode}">${channelRuleSummary(rule)}</span>`
+      : '<span class="chrule-none">Usable in any channel</span>';
+    return `<div class="cmd-chrule">
+      ${summary}
+      <button class="cmd-cat-btn" onclick="openChannelRuleEditor('${esc(name)}')">${rule ? 'Edit channels' : 'Limit channels'}</button>
+    </div>`;
+  }
+
+  const mode = state.cmdRuleDraftMode || 'off';
+  const modeBtn = (m, label) =>
+    `<button class="cmd-chip${mode === m ? ' active' : ''}" onclick="setChannelRuleMode('${m}')">${label}</button>`;
+  const help = mode === 'whitelist'
+    ? 'Command works <strong>only</strong> in the channels you pick.'
+    : mode === 'blacklist'
+      ? 'Command is <strong>blocked</strong> in the channels you pick.'
+      : 'No channel restriction — usable everywhere.';
+
+  return `<div class="cmd-chrule cmd-chrule-edit">
+    <div class="cmd-chips">${modeBtn('off', 'Off')}${modeBtn('whitelist', 'Whitelist')}${modeBtn('blacklist', 'Blacklist')}</div>
+    <p class="chrule-help">${help}</p>
+    ${mode === 'off' ? '' : '<div id="chrule-ms"></div>'}
+    <div class="chrule-actions">
+      <button class="btn btn-primary btn-sm" onclick="saveChannelRule('${esc(name)}')">Save</button>
+      <button class="btn btn-secondary btn-sm" onclick="closeChannelRuleEditor()">Cancel</button>
+    </div>
+  </div>`;
 }
 
 function permBadges(cmd) {
@@ -464,6 +553,11 @@ function renderCommands() {
         </div>`).join('');
 
   body.innerHTML = `<div class="cmd-chips">${chips}</div>${statusChips}${toolbar}${hint}${list}`;
+
+  // If a channel-rule editor is open, initialise its channel multi-select now that
+  // the host element exists in the DOM.
+  if (state.cmdRuleEditing && (state.cmdRuleDraftMode || 'off') !== 'off' && document.getElementById('chrule-ms'))
+    msInit('chrule-ms', channelItems(), state.cmdRuleDraftChannels || []);
 }
 
 function renderCommandCard(cmd) {
@@ -496,6 +590,7 @@ function renderCommandCard(cmd) {
       <p class="cmd-desc">${esc(cmd.description || '')}</p>
       <div class="cmd-badges">${permBadges(cmd)}</div>
       ${opts ? `<div class="cmd-opts">${opts}</div>` : ''}
+      ${channelRuleSection(cmd)}
     </div>`;
 }
 

@@ -1,6 +1,7 @@
 const { Events } = require('discord.js');
 const cooldowns   = require('../middleware/cooldowns');
 const permissions = require('../middleware/permissions');
+const channelRules = require('../middleware/channelRules');
 const embeds = require('../utils/embeds');
 const logger = require('../utils/logger');
 const { buildPrefixContext, PrefixUsageError } = require('../handlers/prefixContext');
@@ -44,6 +45,12 @@ module.exports = {
 
     if (client.store.isCommandDisabled(message.guild.id, command.data.name))
       return message.reply({ embeds: [embeds.error('This command is disabled in this server.')] }).catch(() => {});
+
+    const chan = channelRules.check(client, {
+      guildId: message.guild.id, channelId: message.channelId,
+      channel: message.channel, name: command.data.name
+    });
+    if (!chan.ok) return message.reply({ embeds: [embeds.error(chan.reason)] }).catch(() => {});
 
     const perm = permissions.check(command, {
       member: message.member, user: message.author, client, guildId: message.guild.id

@@ -16,6 +16,7 @@ const FILES = {
   security:     path.join(ROOT, 'security.json'),
   verification: path.join(ROOT, 'verification.json'),
   commandToggles: path.join(ROOT, 'commandtoggles.json'),
+  channelRules:   path.join(ROOT, 'channelrules.json'),
   prefixes:     path.join(ROOT, 'prefixes.json'),
   greetings:    path.join(ROOT, 'greetings.json')
 };
@@ -57,6 +58,10 @@ class Store {
 
     // commandToggles: Map<guildId, string[]>, names of disabled commands
     this.commandToggles = new Map(Object.entries(loadJson(FILES.commandToggles)));
+
+    // channelRules: Map<guildId, { [commandName]: { mode: 'blacklist'|'whitelist', channels: string[] } }>
+    // Restricts which channels a command may be used in, per guild.
+    this.channelRules = new Map(Object.entries(loadJson(FILES.channelRules)));
 
     // prefixes: Map<guildId, string>, custom command prefix per guild
     this.prefixes = new Map(Object.entries(loadJson(FILES.prefixes)));
@@ -163,6 +168,49 @@ class Store {
     return [...set];
   }
 
+  // ── Per-command channel rules ─────────────────
+  // All rules for a guild, as { [commandName]: { mode, channels } }.
+  getChannelRules(guildId) {
+    return this.channelRules.get(guildId) || {};
+  }
+
+  // The rule for one command, or null when unrestricted.
+  getChannelRule(guildId, name) {
+    const rule = this.getChannelRules(guildId)[name];
+    if (!rule || !Array.isArray(rule.channels) || !rule.channels.length) return null;
+    return rule;
+  }
+
+  // Sets (or clears) the rule for a command. Pass mode 'off' / no channels to clear.
+  setChannelRule(guildId, name, mode, channels) {
+    const all = { ...this.getChannelRules(guildId) };
+    const clean = Array.isArray(channels)
+      ? [...new Set(channels.filter(id => /^\d{16,20}$/.test(id)))]
+      : [];
+    if ((mode === 'blacklist' || mode === 'whitelist') && clean.length)
+      all[name] = { mode, channels: clean };
+    else
+      delete all[name];
+
+    if (Object.keys(all).length) this.channelRules.set(guildId, all);
+    else this.channelRules.delete(guildId);
+    saveJson(FILES.channelRules, Object.fromEntries(this.channelRules));
+    return all[name] || null;
+  }
+
+  // Decides whether a command may run in a channel. `channelIds` is the channel and,
+  // for threads, its parent — a match on either counts. Returns { ok } when allowed,
+  // or { ok:false, mode, channels } so callers can build a helpful message.
+  checkChannelRule(guildId, name, channelIds) {
+    const rule = this.getChannelRule(guildId, name);
+    if (!rule) return { ok: true };
+    const ids = (Array.isArray(channelIds) ? channelIds : [channelIds]).filter(Boolean);
+    const hit = rule.channels.some(c => ids.includes(c));
+    if (rule.mode === 'blacklist') return hit ? { ok: false, ...rule } : { ok: true };
+    // whitelist: allowed only inside a listed channel
+    return hit ? { ok: true } : { ok: false, ...rule };
+  }
+
   isTicketChannel(guildId, channelId) {
     return !!this.openTickets.get(guildId)?.has(channelId);
   }
@@ -184,6 +232,7 @@ class Store {
     if (this.security.delete(guildId))       this.saveSecurity();
     if (this.verification.delete(guildId))   this.saveVerification();
     if (this.commandToggles.delete(guildId)) saveJson(FILES.commandToggles, Object.fromEntries(this.commandToggles));
+    if (this.channelRules.delete(guildId))   saveJson(FILES.channelRules, Object.fromEntries(this.channelRules));
     if (this.prefixes.delete(guildId))       saveJson(FILES.prefixes, Object.fromEntries(this.prefixes));
     if (this.greetings.delete(guildId))      this.saveGreetings();
     this.openTickets.delete(guildId);

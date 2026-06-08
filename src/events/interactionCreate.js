@@ -1,6 +1,7 @@
 const { Events } = require('discord.js');
 const cooldowns   = require('../middleware/cooldowns');
 const permissions = require('../middleware/permissions');
+const channelRules = require('../middleware/channelRules');
 const componentRouter = require('../handlers/componentRouter');
 const embeds = require('../utils/embeds');
 const logger = require('../utils/logger');
@@ -26,6 +27,13 @@ module.exports = {
 
       if (client.store.isCommandDisabled(interaction.guildId, command.data.name))
         return interaction.reply({ embeds: [embeds.error('This command is disabled in this server.')], ephemeral: true });
+
+      const chan = channelRules.check(client, {
+        guildId: interaction.guildId, channelId: interaction.channelId,
+        channel: interaction.channel, name: command.data.name
+      });
+      if (!chan.ok)
+        return interaction.reply({ embeds: [embeds.error(chan.reason)], ephemeral: true });
 
       const perm = permissions.check(command, interaction);
       if (!perm.ok)
