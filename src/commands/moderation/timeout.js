@@ -8,7 +8,6 @@ const MAX = 28 * 86400000;
 module.exports = {
   category: 'Moderation',
   cooldown: 3,
-  aliases: ['mute'],
   modPermission: PermissionFlagsBits.ModerateMembers,
   data: new SlashCommandBuilder()
     .setName('timeout')

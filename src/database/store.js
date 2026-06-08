@@ -17,6 +17,7 @@ const FILES = {
   verification: path.join(ROOT, 'verification.json'),
   commandToggles: path.join(ROOT, 'commandtoggles.json'),
   channelRules:   path.join(ROOT, 'channelrules.json'),
+  muteRoles:    path.join(ROOT, 'muteroles.json'),
   prefixes:     path.join(ROOT, 'prefixes.json'),
   greetings:    path.join(ROOT, 'greetings.json')
 };
@@ -62,6 +63,9 @@ class Store {
     // channelRules: Map<guildId, { [commandName]: { mode: 'blacklist'|'whitelist', channels: string[] } }>
     // Restricts which channels a command may be used in, per guild.
     this.channelRules = new Map(Object.entries(loadJson(FILES.channelRules)));
+
+    // muteRoles: Map<guildId, roleId>, the role used to mute members in that guild
+    this.muteRoles = new Map(Object.entries(loadJson(FILES.muteRoles)));
 
     // prefixes: Map<guildId, string>, custom command prefix per guild
     this.prefixes = new Map(Object.entries(loadJson(FILES.prefixes)));
@@ -118,6 +122,17 @@ class Store {
 
   saveVerification() {
     saveJson(FILES.verification, Object.fromEntries(this.verification));
+  }
+
+  getMuteRoleId(guildId) {
+    return this.muteRoles.get(guildId) || null;
+  }
+
+  setMuteRoleId(guildId, roleId) {
+    if (roleId) this.muteRoles.set(guildId, roleId);
+    else this.muteRoles.delete(guildId);
+    saveJson(FILES.muteRoles, Object.fromEntries(this.muteRoles));
+    return this.getMuteRoleId(guildId);
   }
 
   getPrefix(guildId) {
@@ -233,6 +248,7 @@ class Store {
     if (this.verification.delete(guildId))   this.saveVerification();
     if (this.commandToggles.delete(guildId)) saveJson(FILES.commandToggles, Object.fromEntries(this.commandToggles));
     if (this.channelRules.delete(guildId))   saveJson(FILES.channelRules, Object.fromEntries(this.channelRules));
+    if (this.muteRoles.delete(guildId))      saveJson(FILES.muteRoles, Object.fromEntries(this.muteRoles));
     if (this.prefixes.delete(guildId))       saveJson(FILES.prefixes, Object.fromEntries(this.prefixes));
     if (this.greetings.delete(guildId))      this.saveGreetings();
     this.openTickets.delete(guildId);
