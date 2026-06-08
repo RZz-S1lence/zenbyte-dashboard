@@ -175,11 +175,22 @@ window.addEventListener('DOMContentLoaded', async () => {
 function applyLinks(links) {
   if (!links) return;
   const set = (id, url) => { const el = document.getElementById(id); if (el && url) el.href = url; };
-  set('sidebar-support', links.support);
-  set('addbot-support', links.support);
   set('addbot-invite', links.invite);
-  set('ov-support', links.support);
   set('ov-invite', links.invite);
+
+  // The support server is temporarily closed while it's being set up. Until it's
+  // ready, the support buttons show a notice instead of opening the invite.
+  ['sidebar-support', 'addbot-support', 'ov-support'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.removeAttribute('href');
+    el.removeAttribute('target');
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      alert('The ZenByte support server is currently being worked on. It will be joinable once it\'s finished — thanks for your patience!');
+    });
+  });
 }
 
 const AUTH_ERRORS = {

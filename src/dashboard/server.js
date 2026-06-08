@@ -143,14 +143,12 @@ module.exports = function startDashboard(client) {
     try {
       const token  = await oauthClient.exchangeCode(code, REDIRECT_URI);
       const user   = await oauthClient.fetchDiscordUser(token.access_token);
-      const guilds = await oauthClient.fetchUserGuilds(token.access_token);
 
       req.session.userId        = user.id;
       req.session.username      = user.global_name || user.username;  // display label used across the app
       req.session.handle        = user.username;                      // the @username handle
       req.session.displayName   = user.global_name || user.username;  // Discord display name
       req.session.avatar        = avatarUrl(user);
-      req.session.adminGuildIds = guilds.filter(oauthClient.hasAdminInOAuthGuild).map(g => g.id);
 
       logger.info(`Dashboard login: ${req.session.username} (${user.id}) from ${clientIp(req)}`);
       res.redirect('/');

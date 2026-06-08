@@ -6,7 +6,7 @@ module.exports = {
   category: 'System',
   cooldown: 3,
   data: new SlashCommandBuilder()
-    .setName('website')
+    .setName('dashboard')
     .setDescription('Get the link to the dashboard'),
 
   async execute(interaction) {
@@ -17,7 +17,7 @@ module.exports = {
         title: "🌐 ZenByte Dashboard",
         description: `**${url}**\n\nManage log channels, the ticket system, transcripts, and view bot logs.`,
         color: embeds.COLORS.brand,
-        footer: { text: 'The bot must be running for the dashboard to be reachable.' }
+        footer: { text: 'Made by Zen • @uqjc' }
       })],
       ephemeral: true
     });

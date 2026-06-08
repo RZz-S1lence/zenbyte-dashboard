@@ -96,12 +96,14 @@ async function computeAccess(client, userId, guildId) {
 }
 
 // Returns the guilds the session user may manage: bot is in, user is in, user is admin.
+// We check every guild the bot is in via the live, authoritative check rather than
+// gating on session.adminGuildIds — that list is only a login-time snapshot, so a
+// guild the user gained access to (or added the bot to) after logging in would
+// otherwise stay hidden until the next login.
 async function listAccessibleGuilds(client, session) {
-  const candidateIds = new Set(session?.adminGuildIds || []);
   const result = [];
   for (const guild of client.guilds.cache.values()) {
-    if (!candidateIds.has(guild.id)) continue;          // narrow by OAuth admin list first
-    if (!(await assertGuildAccess(client, session, guild.id))) continue; // then confirm live
+    if (!(await assertGuildAccess(client, session, guild.id))) continue; // bot in guild + user is admin member
     result.push({
       id:          guild.id,
       name:        guild.name,
