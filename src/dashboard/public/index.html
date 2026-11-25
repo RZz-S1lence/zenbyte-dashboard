@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ZenByte Dashboard</title>
-  <link rel="stylesheet" href="style.css?v=16">
+  <link rel="stylesheet" href="style.css?v=17">
 </head>
 <body>
 
@@ -141,34 +141,34 @@
       <div class="ov-hero">
         <img id="ov-avatar" class="ov-hero-avatar" src="" alt="">
         <div class="ov-hero-info">
-          <div class="ov-status" id="ov-status"><span class="ov-dot"></span> Connecting…</div>
+          <div class="ov-status" id="ov-status"><span class="ov-dot"></span> <span data-i18n="ov.connecting">Connecting…</span></div>
           <h2 id="ov-name">ZenByte</h2>
           <p data-i18n="sub.overview">Your all-in-one dashboard for moderation, leveling, tickets and more.</p>
         </div>
         <div class="ov-hero-actions">
-          <a id="ov-invite" class="btn btn-primary" href="#" target="_blank" rel="noopener"><span data-icon="plus"></span> Invite Bot</a>
-          <a id="ov-support" class="btn btn-secondary" href="#" target="_blank" rel="noopener"><span data-icon="chat"></span> Support</a>
+          <a id="ov-invite" class="btn btn-primary" href="#" target="_blank" rel="noopener"><span data-icon="plus"></span> <span data-i18n="ov.invite">Invite Bot</span></a>
+          <a id="ov-support" class="btn btn-secondary" href="#" target="_blank" rel="noopener"><span data-icon="chat"></span> <span data-i18n="ov.support">Support</span></a>
         </div>
       </div>
 
       <div class="stats-grid">
-        <div class="stat-card"><div class="stat-ico" data-icon="signal"></div><div class="stat-label">Status</div><div class="stat-value" id="stat-status">…</div></div>
-        <div class="stat-card"><div class="stat-ico" data-icon="home"></div><div class="stat-label">Servers</div><div class="stat-value" id="stat-guilds">…</div></div>
-        <div class="stat-card"><div class="stat-ico" data-icon="users"></div><div class="stat-label">Members</div><div class="stat-value" id="stat-members">…</div></div>
-        <div class="stat-card"><div class="stat-ico" data-icon="bolt"></div><div class="stat-label">Commands</div><div class="stat-value" id="stat-commands">…</div></div>
-        <div class="stat-card"><div class="stat-ico" data-icon="megaphone"></div><div class="stat-label">Ping</div><div class="stat-value" id="stat-ping">…</div></div>
-        <div class="stat-card"><div class="stat-ico" data-icon="clock"></div><div class="stat-label">Uptime</div><div class="stat-value" id="stat-uptime" style="font-size:18px">…</div></div>
+        <div class="stat-card"><div class="stat-ico" data-icon="signal"></div><div class="stat-label" data-i18n="stat.status">Status</div><div class="stat-value" id="stat-status">…</div></div>
+        <div class="stat-card"><div class="stat-ico" data-icon="home"></div><div class="stat-label" data-i18n="stat.servers">Servers</div><div class="stat-value" id="stat-guilds">…</div></div>
+        <div class="stat-card"><div class="stat-ico" data-icon="users"></div><div class="stat-label" data-i18n="stat.members">Members</div><div class="stat-value" id="stat-members">…</div></div>
+        <div class="stat-card"><div class="stat-ico" data-icon="bolt"></div><div class="stat-label" data-i18n="stat.commands">Commands</div><div class="stat-value" id="stat-commands">…</div></div>
+        <div class="stat-card"><div class="stat-ico" data-icon="megaphone"></div><div class="stat-label" data-i18n="stat.ping">Ping</div><div class="stat-value" id="stat-ping">…</div></div>
+        <div class="stat-card"><div class="stat-ico" data-icon="clock"></div><div class="stat-label" data-i18n="stat.uptime">Uptime</div><div class="stat-value" id="stat-uptime" style="font-size:18px">…</div></div>
       </div>
 
       <div class="ov-quick">
-        <h3 class="ov-quick-title">Quick Actions</h3>
+        <h3 class="ov-quick-title" data-i18n="ov.quick">Quick Actions</h3>
         <div class="ov-quick-grid">
-          <button class="ov-quick-card" onclick="goto('applications')"><span class="ov-q-ico" data-icon="clipboard"></span> Applications</button>
-          <button class="ov-quick-card" onclick="goto('membercounters')"><span class="ov-q-ico" data-icon="hash"></span> Member Counters</button>
-          <button class="ov-quick-card" onclick="goto('leveling')"><span class="ov-q-ico" data-icon="star"></span> Leveling</button>
-          <button class="ov-quick-card" onclick="goto('tickets')"><span class="ov-q-ico" data-icon="ticket"></span> Tickets</button>
-          <button class="ov-quick-card" onclick="goto('commands')"><span class="ov-q-ico" data-icon="list"></span> Commands</button>
-          <button class="ov-quick-card" onclick="goto('security')"><span class="ov-q-ico" data-icon="shield"></span> Anti-Nuke</button>
+          <button class="ov-quick-card" onclick="goto('applications')"><span class="ov-q-ico" data-icon="clipboard"></span> <span data-i18n="page.applications">Applications</span></button>
+          <button class="ov-quick-card" onclick="goto('membercounters')"><span class="ov-q-ico" data-icon="hash"></span> <span data-i18n="page.membercounters">Member Counters</span></button>
+          <button class="ov-quick-card" onclick="goto('leveling')"><span class="ov-q-ico" data-icon="star"></span> <span data-i18n="page.leveling">Leveling</span></button>
+          <button class="ov-quick-card" onclick="goto('tickets')"><span class="ov-q-ico" data-icon="ticket"></span> <span data-i18n="page.tickets">Tickets</span></button>
+          <button class="ov-quick-card" onclick="goto('commands')"><span class="ov-q-ico" data-icon="list"></span> <span data-i18n="page.commands">Commands</span></button>
+          <button class="ov-quick-card" onclick="goto('security')"><span class="ov-q-ico" data-icon="shield"></span> <span data-i18n="page.security">Anti-Nuke</span></button>
         </div>
       </div>
     </div>
@@ -189,7 +189,7 @@
         <p data-i18n-html="sub.commands">Every command the bot has loaded, generated live with nothing hardcoded.</p>
       </div>
       <div class="cmd-toolbar">
-        <input type="text" id="cmd-search" placeholder="Search commands…" oninput="renderCommands()">
+        <input type="text" id="cmd-search" data-i18n-ph="cmd.search" placeholder="Search commands…" oninput="renderCommands()">
         <span id="cmd-count" class="cmd-count"></span>
       </div>
       <div id="commands-body"></div>
@@ -201,7 +201,7 @@
         <h2 data-i18n="page.applications">Applications</h2>
         <p data-i18n-html="sub.applications">Build application forms, review submissions, and choose where everything is posted.</p>
       </div>
-      <div id="apps-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="apps-no-guild" class="no-guild-msg" data-i18n="common.selectServer">← Select a server from the sidebar to get started.</div>
       <div id="apps-body" class="hidden">
         <div class="apps-tabs">
           <button class="apps-tab active" data-tab="forms" onclick="appsTab('forms')"><span data-icon="clipboard"></span> Forms</button>
@@ -228,7 +228,7 @@
         <h2 data-i18n="page.membercounters">Member Counters</h2>
         <p data-i18n-html="sub.membercounters">Show live server stats as auto-updating channel names. Discord limits renames, so counters refresh every few minutes.</p>
       </div>
-      <div id="mc-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="mc-no-guild" class="no-guild-msg" data-i18n="common.selectServer">← Select a server from the sidebar to get started.</div>
       <div id="mc-body" class="hidden"></div>
     </div>
 
@@ -238,14 +238,14 @@
         <h2 data-i18n="h.settings">Server Settings</h2>
         <p data-i18n-html="sub.settings">General options for how the bot behaves in this server.</p>
       </div>
-      <div id="settings-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="settings-no-guild" class="no-guild-msg" data-i18n="common.selectServer">← Select a server from the sidebar to get started.</div>
       <div id="settings-body" class="hidden">
         <div class="card">
-          <h3>Command Prefix</h3>
+          <h3 data-i18n="set.prefixTitle">Command Prefix</h3>
           <div class="form-row" style="max-width:280px">
-            <label>Prefix</label>
+            <label data-i18n="set.prefix">Prefix</label>
             <input type="text" id="set-prefix" maxlength="5" placeholder="?">
-            <span class="hint">Used for text commands like <code>?ban</code>. Slash commands always work too. 1 to 5 characters, no spaces.</span>
+            <span class="hint" data-i18n-html="set.prefixHint">Used for text commands like <code>?ban</code>. Slash commands always work too. 1 to 5 characters, no spaces.</span>
           </div>
         </div>
         <div class="save-bar">
@@ -262,20 +262,20 @@
         <h2 data-i18n="page.logs">Log Channels</h2>
         <p data-i18n-html="sub.logs">Assign a Discord channel to each log type. Set to <em>None</em> to disable.</p>
       </div>
-      <div id="logs-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="logs-no-guild" class="no-guild-msg" data-i18n="common.selectServer">← Select a server from the sidebar to get started.</div>
       <div id="logs-body" class="hidden">
         <div class="log-table-wrap">
           <table class="log-table">
             <thead><tr>
-              <th style="width:150px">Log Type</th>
-              <th>Description</th>
-              <th style="width:260px">Channel</th>
+              <th style="width:150px" data-i18n="logs.type">Log Type</th>
+              <th data-i18n="logs.desc">Description</th>
+              <th style="width:260px" data-i18n="logs.channel">Channel</th>
             </tr></thead>
             <tbody id="log-rows"></tbody>
           </table>
         </div>
         <div class="save-bar">
-          <button class="btn btn-primary" onclick="saveLogConfig()">Save All</button>
+          <button class="btn btn-primary" onclick="saveLogConfig()" data-i18n="logs.saveAll">Save All</button>
           <span class="save-hint">Unsaved changes</span>
           <span id="log-save-msg" class="save-status"></span>
         </div>
@@ -288,7 +288,7 @@
         <h2 data-i18n="h.tickets">Ticket System</h2>
         <p data-i18n-html="sub.tickets">Configure the ticket panel, channels, and available types.</p>
       </div>
-      <div id="tickets-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="tickets-no-guild" class="no-guild-msg" data-i18n="common.selectServer">← Select a server from the sidebar to get started.</div>
       <div id="tickets-body" class="hidden">
 
         <div class="card">
@@ -404,7 +404,7 @@
         <h2 data-i18n="page.leveling">Leveling</h2>
         <p data-i18n-html="sub.leveling">XP, level rewards, multipliers, leaderboards and rank cards, all fully configurable.</p>
       </div>
-      <div id="leveling-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="leveling-no-guild" class="no-guild-msg" data-i18n="common.selectServer">← Select a server from the sidebar to get started.</div>
       <div id="leveling-body" class="hidden"></div>
       <div id="leveling-save-bar" class="save-bar hidden">
         <button class="btn btn-primary" onclick="saveLeveling()" data-i18n="save.changes">Save Changes</button>
@@ -419,7 +419,7 @@
         <h2 data-i18n="page.activity">Activity</h2>
         <p data-i18n-html="sub.activity">Track member engagement (messages, voice time and reactions) with a weighted activity score.</p>
       </div>
-      <div id="activity-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="activity-no-guild" class="no-guild-msg" data-i18n="common.selectServer">← Select a server from the sidebar to get started.</div>
       <div id="activity-body" class="hidden"></div>
       <div id="activity-save-bar" class="save-bar hidden">
         <button class="btn btn-primary" onclick="saveActivity()" data-i18n="save.changes">Save Changes</button>
@@ -434,7 +434,7 @@
         <h2 data-i18n="page.trust">Trust Score</h2>
         <p data-i18n-html="sub.trust">A unified 0–100 score per member, blending account age, server tenure, activity, level, verification and warnings.</p>
       </div>
-      <div id="trust-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="trust-no-guild" class="no-guild-msg" data-i18n="common.selectServer">← Select a server from the sidebar to get started.</div>
       <div id="trust-body" class="hidden"></div>
       <div id="trust-save-bar" class="save-bar hidden">
         <button class="btn btn-primary" onclick="saveTrust()" data-i18n="save.changes">Save Changes</button>
@@ -449,7 +449,7 @@
         <h2 data-i18n="page.moderators">Moderators</h2>
         <p data-i18n-html="sub.moderators">Roles and members here can use mod-level commands (warn, timeout, ticket tools) without full Administrator.</p>
       </div>
-      <div id="mods-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="mods-no-guild" class="no-guild-msg" data-i18n="common.selectServer">← Select a server from the sidebar to get started.</div>
       <div id="mods-body" class="hidden">
         <div class="card">
           <h3>Moderator Roles</h3>
@@ -480,7 +480,7 @@
         <h2 data-i18n="h.security">Anti-Nuke &amp; Security</h2>
         <p data-i18n-html="sub.security">Detect and automatically punish mass-destructive admin actions. Disabled by default. Review the limits before enabling.</p>
       </div>
-      <div id="security-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="security-no-guild" class="no-guild-msg" data-i18n="common.selectServer">← Select a server from the sidebar to get started.</div>
       <div id="security-body" class="hidden"></div>
       <div id="security-save-bar" class="save-bar hidden">
         <button class="btn btn-primary" onclick="saveSecurityConfig()" data-i18n="save.changes">Save Changes</button>
@@ -513,7 +513,7 @@
         <h2 data-i18n="page.verification">Verification</h2>
         <p data-i18n-html="sub.verification">Require new members to solve a captcha before they gain access.</p>
       </div>
-      <div id="verif-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="verif-no-guild" class="no-guild-msg" data-i18n="common.selectServer">← Select a server from the sidebar to get started.</div>
       <div id="verif-body" class="hidden">
         <div class="card">
           <label class="sec-switch sec-master">
@@ -575,7 +575,7 @@
         <h2 data-i18n="page.autorole">Autoroles</h2>
         <p data-i18n-html="sub.autorole">Roles handed out automatically the moment someone joins the server.</p>
       </div>
-      <div id="autorole-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="autorole-no-guild" class="no-guild-msg" data-i18n="common.selectServer">← Select a server from the sidebar to get started.</div>
       <div id="autorole-body" class="hidden">
         <div class="card">
           <label class="sec-switch sec-master"><input type="checkbox" id="ar-enabled">
@@ -610,7 +610,7 @@
         <h2 data-i18n="page.reactionroles">Reaction Roles</h2>
         <p data-i18n-html="sub.reactionroles">Let members give themselves roles by reacting to a message. The bot can post the message for you, or you can point it at an existing one.</p>
       </div>
-      <div id="rr-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="rr-no-guild" class="no-guild-msg" data-i18n="common.selectServer">← Select a server from the sidebar to get started.</div>
       <div id="rr-body" class="hidden"></div>
     </div>
 
@@ -630,7 +630,7 @@
         <h2 data-i18n="page.social">Social Alerts</h2>
         <p data-i18n-html="sub.social">Post a message in your server when a creator goes live or uploads. YouTube, Reddit and Kick work with no setup; Twitch needs free API keys in the bot's .env file.</p>
       </div>
-      <div id="social-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="social-no-guild" class="no-guild-msg" data-i18n="common.selectServer">← Select a server from the sidebar to get started.</div>
       <div id="social-body" class="hidden"></div>
     </div>
 
@@ -640,7 +640,7 @@
         <h2 data-i18n="page.polls">Polls</h2>
         <p data-i18n-html="sub.polls">Create polls, post them straight to a channel, and track results. Members vote with a menu on the poll message; you can end, cancel or review polls here at any time.</p>
       </div>
-      <div id="polls-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="polls-no-guild" class="no-guild-msg" data-i18n="common.selectServer">← Select a server from the sidebar to get started.</div>
       <div id="polls-body" class="hidden"></div>
     </div>
 
@@ -650,7 +650,7 @@
         <h2 data-i18n="page.altdetect">Alt Detection</h2>
         <p data-i18n-html="sub.altdetect">Score new members against throwaway-account heuristics, flag likely alts for moderator review, and optionally act automatically. No method is certain, so tune the sensitivity to balance catches against false positives.</p>
       </div>
-      <div id="alt-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+      <div id="alt-no-guild" class="no-guild-msg" data-i18n="common.selectServer">← Select a server from the sidebar to get started.</div>
       <div id="alt-body" class="hidden"></div>
       <div id="alt-save-bar" class="save-bar hidden">
         <button class="btn btn-primary" onclick="saveAltDetect()" data-i18n="save.changes">Save Changes</button>
@@ -668,7 +668,7 @@
 
       <!-- List view -->
       <div id="tx-list-view">
-        <div id="tx-no-guild" class="no-guild-msg">← Select a server from the sidebar to get started.</div>
+        <div id="tx-no-guild" class="no-guild-msg" data-i18n="common.selectServer">← Select a server from the sidebar to get started.</div>
         <div id="tx-list" class="hidden">
           <div class="card" style="padding:0;overflow:hidden">
             <table class="log-table">
@@ -737,7 +737,7 @@
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
-<script src="i18n.js?v=2"></script>
-<script src="app.js?v=14"></script>
+<script src="i18n.js?v=3"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>

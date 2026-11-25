@@ -364,13 +364,15 @@ document.addEventListener('animationend', e => { if (e.animationName === 'saveSh
 window.addEventListener('beforeunload', e => { if (dirtyBars().length) { e.preventDefault(); e.returnValue = ''; } });
 
 // ── Overview ──────────────────────────────────────
+let _lastStatus = null;
 async function loadStatus() {
   try {
     const s = await api('GET', '/api/status');
+    _lastStatus = s;
     const setTxt = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
 
     const statusEl = document.getElementById('stat-status');
-    if (statusEl) statusEl.innerHTML = s.ready ? `${dot('var(--green)')}Online` : `${dot('var(--red)')}Offline`;
+    if (statusEl) statusEl.innerHTML = s.ready ? `${dot('var(--green)')}${t('ov.online', 'Online')}` : `${dot('var(--red)')}${t('ov.offline', 'Offline')}`;
     setTxt('stat-guilds',   s.guilds);
     setTxt('stat-members',  (s.members ?? 0).toLocaleString());
     setTxt('stat-commands', s.commands ?? '—');
@@ -379,7 +381,7 @@ async function loadStatus() {
 
     setTxt('ov-name', s.tag);
     const st = document.getElementById('ov-status');
-    if (st) st.innerHTML = `<span class="ov-dot${s.ready ? '' : ' off'}"></span> ${s.ready ? 'Online' : 'Offline'}`;
+    if (st) st.innerHTML = `<span class="ov-dot${s.ready ? '' : ' off'}"></span> ${s.ready ? t('ov.online', 'Online') : t('ov.offline', 'Offline')}`;
 
     if (s.avatarUrl) {
       document.getElementById('sidebar-bot-avatar').src = s.avatarUrl;
@@ -399,9 +401,9 @@ const OPTION_TYPES = {
 async function loadCommands() {
   const body = document.getElementById('commands-body');
   if (!state.commands.length) {
-    body.innerHTML = '<p style="color:var(--muted);padding:20px">Loading…</p>';
+    body.innerHTML = `<p style="color:var(--muted);padding:20px">${t('common.loading', 'Loading…')}</p>`;
     try { state.commands = await api('GET', '/api/commands'); }
-    catch { body.innerHTML = '<p style="color:var(--muted);padding:20px">Failed to load commands.</p>'; return; }
+    catch { body.innerHTML = `<p style="color:var(--muted);padding:20px">${t('cmd.loadFailed', 'Failed to load commands.')}</p>`; return; }
   }
   // Per-guild enable/disable state (only when a server is selected).
   state.cmdDisabled = new Set();
@@ -484,20 +486,19 @@ async function saveChannelRule(name) {
     ? []
     : (document.getElementById('chrule-ms') ? msValues('chrule-ms') : (state.cmdRuleDraftChannels || []));
   if (mode !== 'off' && !channels.length)
-    return alert('Pick at least one channel, or set the mode to Off.');
+    return alert(t('cr.pickOne', 'Pick at least one channel, or set the mode to Off.'));
   try {
     const { rule } = await api('PUT', `/api/guild/${state.guildId}/channel-rules`, { name, mode, channels });
     if (rule) state.cmdChannelRules[name] = rule;
     else delete state.cmdChannelRules[name];
-  } catch (e) { return alert('Failed to save: ' + e.message); }
+  } catch (e) { return alert(t('cr.saveFailed', 'Failed to save: ') + e.message); }
   state.cmdRuleEditing = null;
   renderCommands();
 }
 
 function channelRuleSummary(rule) {
   const n = rule.channels.length;
-  const label = rule.mode === 'whitelist' ? 'Only in' : 'Blocked in';
-  return `${label} ${n} channel${n === 1 ? '' : 's'}`;
+  return tn(rule.mode === 'whitelist' ? 'cr.onlyIn' : 'cr.blockedIn', n);
 }
 
 // The inline channel-rule control shown on each command card (guild selected only).
@@ -509,10 +510,10 @@ function channelRuleSection(cmd) {
   if (state.cmdRuleEditing !== name) {
     const summary = rule
       ? `<span class="chrule-badge chrule-${rule.mode}">${channelRuleSummary(rule)}</span>`
-      : '<span class="chrule-none">Usable in any channel</span>';
+      : `<span class="chrule-none">${t('cr.any', 'Usable in any channel')}</span>`;
     return `<div class="cmd-chrule">
       ${summary}
-      <button class="cmd-cat-btn" onclick="openChannelRuleEditor('${esc(name)}')">${rule ? 'Edit channels' : 'Limit channels'}</button>
+      <button class="cmd-cat-btn" onclick="openChannelRuleEditor('${esc(name)}')">${rule ? t('cr.edit', 'Edit channels') : t('cr.limit', 'Limit channels')}</button>
     </div>`;
   }
 
@@ -520,29 +521,29 @@ function channelRuleSection(cmd) {
   const modeBtn = (m, label) =>
     `<button class="cmd-chip${mode === m ? ' active' : ''}" onclick="setChannelRuleMode('${m}')">${label}</button>`;
   const help = mode === 'whitelist'
-    ? 'Command works <strong>only</strong> in the channels you pick.'
+    ? t('cr.helpWhite', 'Command works <strong>only</strong> in the channels you pick.')
     : mode === 'blacklist'
-      ? 'Command is <strong>blocked</strong> in the channels you pick.'
-      : 'No channel restriction — usable everywhere.';
+      ? t('cr.helpBlack', 'Command is <strong>blocked</strong> in the channels you pick.')
+      : t('cr.helpOff', 'No channel restriction, usable everywhere.');
 
   return `<div class="cmd-chrule cmd-chrule-edit">
-    <div class="cmd-chips">${modeBtn('off', 'Off')}${modeBtn('whitelist', 'Whitelist')}${modeBtn('blacklist', 'Blacklist')}</div>
+    <div class="cmd-chips">${modeBtn('off', t('cr.off', 'Off'))}${modeBtn('whitelist', t('cr.white', 'Whitelist'))}${modeBtn('blacklist', t('cr.black', 'Blacklist'))}</div>
     <p class="chrule-help">${help}</p>
     ${mode === 'off' ? '' : '<div id="chrule-ms"></div>'}
     <div class="chrule-actions">
-      <button class="btn btn-primary btn-sm" onclick="saveChannelRule('${esc(name)}')">Save</button>
-      <button class="btn btn-secondary btn-sm" onclick="closeChannelRuleEditor()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveChannelRule('${esc(name)}')">${t('common.save', 'Save')}</button>
+      <button class="btn btn-secondary btn-sm" onclick="closeChannelRuleEditor()">${t('common.cancel', 'Cancel')}</button>
     </div>
   </div>`;
 }
 
 function permBadges(cmd) {
   const badges = [];
-  if (cmd.ownerOnly) badges.push('<span class="perm-badge perm-owner">Owner Only</span>');
-  if (cmd.adminOnly) badges.push('<span class="perm-badge perm-admin">Admin Only</span>');
-  if (cmd.modPermission) badges.push(`<span class="perm-badge perm-mod">Mod · ${esc(prettyPerm(cmd.modPermission))}</span>`);
+  if (cmd.ownerOnly) badges.push(`<span class="perm-badge perm-owner">${t('b.owner', 'Owner Only')}</span>`);
+  if (cmd.adminOnly) badges.push(`<span class="perm-badge perm-admin">${t('b.admin', 'Admin Only')}</span>`);
+  if (cmd.modPermission) badges.push(`<span class="perm-badge perm-mod">${t('b.mod', 'Mod')} · ${esc(prettyPerm(cmd.modPermission))}</span>`);
   for (const p of cmd.permissions || []) badges.push(`<span class="perm-badge">${esc(prettyPerm(p))}</span>`);
-  if (!badges.length) badges.push('<span class="perm-badge perm-everyone">Everyone</span>');
+  if (!badges.length) badges.push(`<span class="perm-badge perm-everyone">${t('b.everyone', 'Everyone')}</span>`);
   return badges.join('');
 }
 
@@ -560,13 +561,13 @@ function renderCommands() {
 
   const categories = [...new Set(state.commands.map(c => c.category || 'General'))].sort();
   const chips = ['all', ...categories].map(cat =>
-    `<button class="cmd-chip${active === cat ? ' active' : ''}" onclick="setCmdCategory('${esc(cat)}')">${cat === 'all' ? 'All' : esc(cat)}</button>`
+    `<button class="cmd-chip${active === cat ? ' active' : ''}" onclick="setCmdCategory('${esc(cat)}')">${cat === 'all' ? t('cmd.all', 'All') : esc(cat)}</button>`
   ).join('');
 
   // Status filter (only meaningful when a server is selected).
   const statusChips = hasGuild ? `<div class="cmd-chips cmd-status-chips">
     ${['all', 'enabled', 'disabled'].map(s =>
-      `<button class="cmd-chip${status === s ? ' active' : ''}" onclick="setCmdStatus('${s}')">${s[0].toUpperCase() + s.slice(1)}</button>`).join('')}
+      `<button class="cmd-chip${status === s ? ' active' : ''}" onclick="setCmdStatus('${s}')">${t('cmd.st.' + s, s[0].toUpperCase() + s.slice(1))}</button>`).join('')}
   </div>` : '';
 
   const filtered = state.commands.filter(c => {
@@ -579,8 +580,7 @@ function renderCommands() {
   });
   state.cmdFiltered = filtered; // used by the bulk "in view" actions
 
-  document.getElementById('cmd-count').textContent =
-    `${filtered.length} command${filtered.length === 1 ? '' : 's'}`;
+  document.getElementById('cmd-count').textContent = tn('cmd.count', filtered.length);
 
   // Stats + bulk actions for the current view.
   let toolbar = '';
@@ -589,30 +589,30 @@ function renderCommands() {
     const enabledCount = state.commands.length - totalDisabled;
     const viewNames = filtered.map(c => c.name);
     toolbar = `<div class="cmd-bulkbar">
-      <span class="cmd-stats">${svg('check')} ${enabledCount} enabled · ${svg('ban')} ${totalDisabled} disabled</span>
+      <span class="cmd-stats">${t('cmd.stats', '{e} enabled · {d} disabled', { e: `${svg('check')} ${enabledCount}`, d: `${svg('ban')} ${totalDisabled}` })}</span>
       <span class="cmd-bulk">
         <button class="btn btn-secondary btn-sm" ${viewNames.length ? '' : 'disabled'}
-          onclick='bulkToggleCommands(${JSON.stringify(viewNames)}, true)'>Enable all shown</button>
+          onclick='bulkToggleCommands(${JSON.stringify(viewNames)}, true)'>${t('cmd.enableShown', 'Enable all shown')}</button>
         <button class="btn btn-secondary btn-sm" ${viewNames.length ? '' : 'disabled'}
-          onclick='bulkToggleCommands(${JSON.stringify(viewNames)}, false)'>Disable all shown</button>
+          onclick='bulkToggleCommands(${JSON.stringify(viewNames)}, false)'>${t('cmd.disableShown', 'Disable all shown')}</button>
       </span>
     </div>`;
   }
 
   const hint = hasGuild
-    ? '<p class="cmd-toggle-hint">Toggle a command to enable or disable it in the selected server.</p>'
-    : '<p class="cmd-toggle-hint">← Select a server to enable/disable commands.</p>';
+    ? `<p class="cmd-toggle-hint">${t('cmd.hintGuild', 'Toggle a command to enable or disable it in the selected server.')}</p>`
+    : `<p class="cmd-toggle-hint">${t('cmd.hintNoGuild', '← Select a server to enable/disable commands.')}</p>`;
 
   const groups = {};
   for (const c of filtered) (groups[c.category || 'General'] = groups[c.category || 'General'] || []).push(c);
 
   const catActions = cat => hasGuild ? `<span class="cmd-cat-actions">
-      <button class="cmd-cat-btn" onclick="toggleCategoryCommands('${esc(cat)}', true)">Enable all</button>
-      <button class="cmd-cat-btn" onclick="toggleCategoryCommands('${esc(cat)}', false)">Disable all</button>
+      <button class="cmd-cat-btn" onclick="toggleCategoryCommands('${esc(cat)}', true)">${t('cmd.catEnable', 'Enable all')}</button>
+      <button class="cmd-cat-btn" onclick="toggleCategoryCommands('${esc(cat)}', false)">${t('cmd.catDisable', 'Disable all')}</button>
     </span>` : '';
 
   const list = !filtered.length
-    ? '<p style="color:var(--muted);padding:20px">No commands match your filter.</p>'
+    ? `<p style="color:var(--muted);padding:20px">${t('cmd.noMatch', 'No commands match your filter.')}</p>`
     : Object.keys(groups).sort().map(cat => `
         <div class="cmd-category">
           <h3 class="cmd-cat-title">${esc(cat)} <span class="cmd-cat-count">${groups[cat].length}</span>${catActions(cat)}</h3>
@@ -631,15 +631,15 @@ function renderCommandCard(cmd) {
   const opts = (cmd.options || []).map(o => `
     <div class="cmd-opt">
       <span class="cmd-opt-name">${esc(o.name)}${o.required ? '<span class="cmd-opt-req">*</span>' : ''}</span>
-      <span class="cmd-opt-type">${OPTION_TYPES[o.type] || o.type}</span>
-      ${o.autocomplete ? '<span class="cmd-opt-tag">auto</span>' : ''}
-      ${o.choices?.length ? `<span class="cmd-opt-tag">${o.choices.length} choices</span>` : ''}
+      <span class="cmd-opt-type">${OPTION_TYPES[o.type] ? t('ot.' + o.type, OPTION_TYPES[o.type]) : o.type}</span>
+      ${o.autocomplete ? `<span class="cmd-opt-tag">${t('cmd.auto', 'auto')}</span>` : ''}
+      ${o.choices?.length ? `<span class="cmd-opt-tag">${tn('cmd.choices', o.choices.length)}</span>` : ''}
       <span class="cmd-opt-desc">${esc(o.description || '')}</span>
     </div>`).join('');
 
   const disabled = state.cmdDisabled?.has(cmd.name);
   const toggle = state.guildId
-    ? `<label class="cmd-switch" title="${disabled ? 'Disabled' : 'Enabled'}">
+    ? `<label class="cmd-switch" title="${disabled ? t('cmd.disabled', 'Disabled') : t('cmd.enabled', 'Enabled')}">
          <input type="checkbox" ${disabled ? '' : 'checked'} onchange="toggleCommand('${esc(cmd.name)}', this.checked)">
          <span class="cmd-slider"></span>
        </label>`
@@ -780,12 +780,12 @@ async function loadLogConfig() {
   ]);
 
   // Build channel <option> html (grouped by category)
-  let channelOpts = '<option value="">None</option>';
+  let channelOpts = `<option value="" data-i18n="logs.none" data-en="None">${t('logs.none', 'None')}</option>`;
   let curCat = null;
   for (const ch of guild.textChannels) {
     if (ch.category !== curCat) {
       if (curCat !== null) channelOpts += '</optgroup>';
-      channelOpts += `<optgroup label="${esc(ch.category || 'No Category')}">`;
+      channelOpts += `<optgroup label="${esc(ch.category || t('logs.noCategory', 'No Category'))}">`;
       curCat = ch.category;
     }
     channelOpts += `<option value="${ch.id}">#${esc(ch.name)}</option>`;
@@ -798,13 +798,13 @@ async function loadLogConfig() {
 
   let html = '';
   for (const [group, items] of Object.entries(groups)) {
-    html += `<tr class="group-header"><td colspan="3">${group}</td></tr>`;
+    html += `<tr class="group-header"><td colspan="3">${tt('logs.g.' + group, group)}</td></tr>`;
     for (const lt of items) {
       const saved = config[lt.key] || '';
       const opts  = channelOpts.replace(`value="${saved}"`, `value="${saved}" selected`);
       html += `<tr>
         <td><span class="log-key">${lt.key}</span></td>
-        <td><span class="log-desc">${lt.desc}</span></td>
+        <td><span class="log-desc">${tt('logs.d.' + lt.key, lt.desc)}</span></td>
         <td><select id="log-${lt.key}" data-key="${lt.key}">${opts}</select></td>
       </tr>`;
     }
@@ -824,9 +824,9 @@ async function saveLogConfig() {
   });
   try {
     await api('PUT', `/api/guild/${state.guildId}/logs`, updates);
-    setStatus(msg, 'ok', '✅ Saved!');
+    setStatus(msg, 'ok', t('common.saved', 'Saved!'));
   } catch {
-    setStatus(msg, 'err', '❌ Failed to save.');
+    setStatus(msg, 'err', t('common.saveFailed', 'Failed to save.'));
   }
 }
 
@@ -1029,9 +1029,9 @@ async function saveTicketConfig() {
   };
   try {
     await api('PUT', `/api/guild/${state.guildId}/tickets`, payload);
-    setStatus(msg, 'ok', '✅ Saved!');
+    setStatus(msg, 'ok', t('common.saved', 'Saved!'));
   } catch {
-    setStatus(msg, 'err', '❌ Failed to save.');
+    setStatus(msg, 'err', t('common.saveFailed', 'Failed to save.'));
   }
 }
 
@@ -1497,9 +1497,9 @@ async function saveSecurityConfig() {
   try {
     const res = await api('PUT', `/api/guild/${state.guildId}/security`, payload);
     state.security = res.config;
-    setStatus(msg, 'ok', '✅ Saved!');
+    setStatus(msg, 'ok', t('common.saved', 'Saved!'));
   } catch {
-    setStatus(msg, 'err', '❌ Failed to save.');
+    setStatus(msg, 'err', t('common.saveFailed', 'Failed to save.'));
   }
 }
 
@@ -1541,7 +1541,7 @@ async function saveVerification(repost) {
     const res = await api('PUT', `/api/guild/${state.guildId}/verification`, payload);
     setStatus(msg, 'ok', repost ? (res.posted ? '✅ Saved & panel posted!' : '✅ Saved (panel not posted, check the channel).') : '✅ Saved!');
   } catch {
-    setStatus(msg, 'err', '❌ Failed to save.');
+    setStatus(msg, 'err', t('common.saveFailed', 'Failed to save.'));
   }
 }
 
@@ -1746,8 +1746,8 @@ async function saveSocial() {
     };
   }
   const msg = document.getElementById('social-save-msg');
-  try { const r = await api('PUT', `/api/guild/${state.guildId}/social`, { platforms }); state.socialConfig = r.config; setStatus(msg, 'ok', '✅ Saved!'); }
-  catch { setStatus(msg, 'err', '❌ Failed to save.'); }
+  try { const r = await api('PUT', `/api/guild/${state.guildId}/social`, { platforms }); state.socialConfig = r.config; setStatus(msg, 'ok', t('common.saved', 'Saved!')); }
+  catch { setStatus(msg, 'err', t('common.saveFailed', 'Failed to save.')); }
 }
 
 async function socialAdd(pid) {
@@ -1946,8 +1946,8 @@ async function savePollConfig() {
     resultsChannelId: document.getElementById('pollcfg-results').value || null,
     creatorRoleIds: msValues('pollcfg-creators')
   };
-  try { const r = await api('PUT', `/api/guild/${state.guildId}/polls/config`, payload); state.pollConfig = r.config; setStatus(msg, 'ok', '✅ Saved!'); }
-  catch { setStatus(msg, 'err', '❌ Failed to save.'); }
+  try { const r = await api('PUT', `/api/guild/${state.guildId}/polls/config`, payload); state.pollConfig = r.config; setStatus(msg, 'ok', t('common.saved', 'Saved!')); }
+  catch { setStatus(msg, 'err', t('common.saveFailed', 'Failed to save.')); }
 }
 
 async function pollAction(id, op) {
@@ -2106,8 +2106,8 @@ async function saveAltDetect() {
     const res = await api('PUT', `/api/guild/${state.guildId}/altdetect`, payload);
     state.altdetect = res.config;
     renderAltDetect();
-    setStatus(msg, 'ok', '✅ Saved!');
-  } catch { setStatus(msg, 'err', '❌ Failed to save.'); }
+    setStatus(msg, 'ok', t('common.saved', 'Saved!'));
+  } catch { setStatus(msg, 'err', t('common.saveFailed', 'Failed to save.')); }
 }
 
 async function clearAltFlag(userId) {
@@ -2370,9 +2370,9 @@ async function saveLeveling() {
   try {
     const res = await api('PUT', `/api/guild/${state.guildId}/leveling`, collectLeveling());
     state.leveling = res.config;
-    setStatus(msg, 'ok', '✅ Saved!');
+    setStatus(msg, 'ok', t('common.saved', 'Saved!'));
   } catch {
-    setStatus(msg, 'err', '❌ Failed to save.');
+    setStatus(msg, 'err', t('common.saveFailed', 'Failed to save.'));
   }
 }
 
@@ -2399,8 +2399,8 @@ async function saveModerators() {
   const users = (document.getElementById('mods-users').value.match(/\d{16,20}/g)) || [];
   try {
     await api('PUT', `/api/guild/${state.guildId}/moderators`, { roles, users });
-    setStatus(msg, 'ok', '✅ Saved!');
-  } catch { setStatus(msg, 'err', '❌ Failed to save.'); }
+    setStatus(msg, 'ok', t('common.saved', 'Saved!'));
+  } catch { setStatus(msg, 'err', t('common.saveFailed', 'Failed to save.')); }
 }
 
 // ── SETTINGS ──────────────────────────────────────
@@ -2422,9 +2422,9 @@ async function saveSettings() {
   try {
     const res = await api('PUT', `/api/guild/${state.guildId}/prefix`, { prefix: document.getElementById('set-prefix').value });
     document.getElementById('set-prefix').value = res.prefix;
-    setStatus(msg, 'ok', '✅ Saved!');
+    setStatus(msg, 'ok', t('common.saved', 'Saved!'));
   } catch (e) {
-    setStatus(msg, 'err', `❌ ${e.message || 'Failed to save.'}`);
+    setStatus(msg, 'err', e.message || t('common.saveFailed', 'Failed to save.'));
   }
 }
 
@@ -2492,8 +2492,8 @@ async function saveActivity() {
   try {
     const res = await api('PUT', `/api/guild/${state.guildId}/activity`, payload);
     state.activity = res.config;
-    setStatus(msg, 'ok', '✅ Saved!');
-  } catch { setStatus(msg, 'err', '❌ Failed to save.'); }
+    setStatus(msg, 'ok', t('common.saved', 'Saved!'));
+  } catch { setStatus(msg, 'err', t('common.saveFailed', 'Failed to save.')); }
 }
 
 // ── TRUST SCORE ───────────────────────────────────
@@ -2574,8 +2574,8 @@ async function saveTrust() {
   try {
     const res = await api('PUT', `/api/guild/${state.guildId}/trust`, collectTrust());
     state.trust = res.config;
-    setStatus(msg, 'ok', '✅ Saved!');
-  } catch { setStatus(msg, 'err', '❌ Failed to save.'); }
+    setStatus(msg, 'ok', t('common.saved', 'Saved!'));
+  } catch { setStatus(msg, 'err', t('common.saveFailed', 'Failed to save.')); }
 }
 
 // ── AUTOROLES ─────────────────────────────────────
@@ -2610,8 +2610,8 @@ async function saveAutorole() {
   try {
     const r = await api('PUT', `/api/guild/${state.guildId}/autorole`, payload);
     state.autorole = r.config;
-    setStatus(msg, 'ok', '✅ Saved!');
-  } catch { setStatus(msg, 'err', '❌ Failed to save.'); }
+    setStatus(msg, 'ok', t('common.saved', 'Saved!'));
+  } catch { setStatus(msg, 'err', t('common.saveFailed', 'Failed to save.')); }
 }
 
 // ── REACTION ROLES ────────────────────────────────
@@ -2789,7 +2789,7 @@ async function rrSave(id) {
   }
   try {
     await api('PUT', `/api/guild/${state.guildId}/reactionroles/${id}`, payload);
-    setStatus(msg, 'ok', '✅ Saved!');
+    setStatus(msg, 'ok', t('common.saved', 'Saved!'));
     await loadReactionRoles();
   } catch (e) { setStatus(msg, 'err', '❌ ' + e.message); }
 }
@@ -3855,7 +3855,7 @@ function appsSettingsPayload() {
 
 async function appsSaveSettings() {
   const msg = document.getElementById('apps-settings-msg');
-  try { const r = await api('PUT', `/api/guild/${state.guildId}/applications/config`, appsSettingsPayload()); state.appsConfig = r.config; setStatus(msg, 'ok', '✅ Saved!'); }
+  try { const r = await api('PUT', `/api/guild/${state.guildId}/applications/config`, appsSettingsPayload()); state.appsConfig = r.config; setStatus(msg, 'ok', t('common.saved', 'Saved!')); }
   catch (e) { setStatus(msg, 'err', '❌ ' + e.message); }
 }
 
@@ -4106,7 +4106,7 @@ let _premium = null;
 
 async function loadPremium() {
   const body = document.getElementById('premium-body');
-  body.innerHTML = '<p class="muted">Loading…</p>';
+  body.innerHTML = `<p class="muted">${t('common.loading', 'Loading…')}</p>`;
   try {
     _premium = await api('GET', '/api/premium');
     renderPremium();
@@ -4116,23 +4116,23 @@ async function loadPremium() {
 }
 
 function premiumTierLabel(p) {
-  if (p.lifetime) return 'Lifetime';
-  const map = { pro: 'Pro', max: 'Max', complimentary: 'Complimentary' };
-  return map[p.tier] || (p.tier ? p.tier : 'Free');
+  if (p.lifetime) return t('pr.tier.lifetime', 'Lifetime');
+  const map = { pro: 'Pro', max: 'Max', complimentary: t('pr.tier.complimentary', 'Complimentary') };
+  return map[p.tier] || (p.tier ? p.tier : t('pr.tier.free', 'Free'));
 }
 
 // Account card: avatar, Discord display name, @username, user ID and current plan.
 function premiumProfileCard(p) {
   const pf = p.profile || {};
-  const plan = p.active ? premiumChip(premiumTierLabel(p)) : '<span class="hint">Free</span>';
+  const plan = p.active ? premiumChip(premiumTierLabel(p)) : `<span class="hint">${t('pr.tier.free', 'Free')}</span>`;
   return `<div class="card premium-profile">
       ${pf.avatar ? `<img src="${esc(pf.avatar)}" class="premium-profile-avatar" alt="">` : ''}
       <div class="premium-profile-info">
         <div class="premium-profile-name">${esc(pf.displayName || '')}</div>
         <div class="hint">@${esc(pf.handle || '')}</div>
         <div class="premium-profile-meta">
-          <span>User ID: <code>${esc(pf.id || '')}</code></span>
-          <span>Plan: ${plan}</span>
+          <span>${t('pr.userId', 'User ID')}: <code>${esc(pf.id || '')}</code></span>
+          <span>${t('pr.plan', 'Plan')}: ${plan}</span>
         </div>
       </div>
     </div>`;
@@ -4148,7 +4148,7 @@ function renderPremium() {
       <h4>${title}</h4>
       <div class="premium-price">${price}</div>
       <div class="muted">${sub}</div>
-      ${link ? `<a class="btn btn-primary btn-sm premium-buy" href="${esc(link)}" target="_blank" rel="noopener">Buy</a>` : ''}
+      ${link ? `<a class="btn btn-primary btn-sm premium-buy" href="${esc(link)}" target="_blank" rel="noopener">${t('pr.buy', 'Buy')}</a>` : ''}
     </div>`;
 
   // Inactive (free) state — show plans, each with its own Buy button.
@@ -4156,15 +4156,15 @@ function renderPremium() {
     const pr = p.pricing || {};
     body.innerHTML = premiumProfileCard(p) + `
       <div class="premium-card premium-free">
-        <div class="premium-status"><span class="sdot" style="background:var(--muted)"></span> You're on the <strong>Free</strong> plan.</div>
-        <p class="muted">Upgrade to raise limits across polls, reaction roles, autoroles, social alerts, leveling rewards, member counters and applications — and unlock more across every server you manage.</p>
+        <div class="premium-status"><span class="sdot" style="background:var(--muted)"></span> ${t('pr.freePlan', "You're on the <strong>Free</strong> plan.")}</div>
+        <p class="muted">${t('pr.upgrade', 'Upgrade to raise limits across polls, reaction roles, autoroles, social alerts, leveling rewards, member counters and applications — and unlock more across every server you manage.')}</p>
         <div class="premium-plans">
-          ${planCard('Pro', pr.pro ? pr.pro.monthly + '/mo' : '€4.99/mo', '1 server slot', bl.pro || p.upgradeUrl)}
-          ${planCard('Max', pr.max ? pr.max.monthly + '/mo' : '€9.99/mo', '3 server slots', bl.max || p.upgradeUrl)}
-          ${planCard('Lifetime', pr.lifetime ? pr.lifetime.oneTime : '€89.99', '1 slot, forever', bl.lifetime || p.upgradeUrl)}
+          ${planCard('Pro', (pr.pro ? pr.pro.monthly : '€4.99') + t('pr.perMonth', '/mo'), t('pr.slot1', '1 server slot'), bl.pro || p.upgradeUrl)}
+          ${planCard('Max', (pr.max ? pr.max.monthly : '€9.99') + t('pr.perMonth', '/mo'), t('pr.slot3', '3 server slots'), bl.max || p.upgradeUrl)}
+          ${planCard(t('pr.tier.lifetime', 'Lifetime'), pr.lifetime ? pr.lifetime.oneTime : '€89.99', t('pr.slotLife', '1 slot, forever'), bl.lifetime || p.upgradeUrl)}
         </div>
-        <p class="premium-buy-hint muted">After purchase you'll receive a license key — activate it with <code>/activate-premium</code> in the ZenByte server.</p>
-        ${p.upgradeUrl ? `<a class="premium-store-link" href="${esc(p.upgradeUrl)}" target="_blank" rel="noopener">Browse all plans on the store →</a>` : ''}
+        <p class="premium-buy-hint muted">${t('pr.buyHint', "After purchase you'll receive a license key — activate it with <code>/activate-premium</code> in the ZenByte server.")}</p>
+        ${p.upgradeUrl ? `<a class="premium-store-link" href="${esc(p.upgradeUrl)}" target="_blank" rel="noopener">${t('pr.store', 'Browse all plans on the store →')}</a>` : ''}
       </div>`;
     hydrateIcons(body);
     return;
@@ -4173,16 +4173,16 @@ function renderPremium() {
   const assignedIds = new Set(p.assigned.map(g => g.id));
   const free = Math.max(0, p.slotsTotal - p.slotsUsed);
   const expiry = p.lifetime
-    ? 'Never (lifetime)'
-    : (p.expiresAt ? new Date(p.expiresAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '—');
+    ? t('pr.never', 'Never (lifetime)')
+    : (p.expiresAt ? new Date(p.expiresAt).toLocaleDateString(currentLang, { year: 'numeric', month: 'long', day: 'numeric' }) : '—');
 
   const assignedRows = p.assigned.length
     ? p.assigned.map(g => `
         <div class="premium-server">
           <span class="premium-server-name">${g.icon ? `<img src="${esc(g.icon)}" class="premium-server-ico">` : ''}${esc(g.name)}</span>
-          <button class="btn btn-secondary btn-sm" onclick="premiumUnassign('${g.id}')">${svg('x')} Remove</button>
+          <button class="btn btn-secondary btn-sm" onclick="premiumUnassign('${g.id}')">${svg('x')} ${t('common.remove', 'Remove')}</button>
         </div>`).join('')
-    : '<p class="muted">No servers activated yet. Assign one below.</p>';
+    : `<p class="muted">${t('pr.noServers', 'No servers activated yet. Assign one below.')}</p>`;
 
   // Servers the user manages that aren't already using one of their slots.
   const candidates = (p.assignable || []).filter(g => !assignedIds.has(g.id));
@@ -4192,22 +4192,22 @@ function renderPremium() {
              <select id="premium-assign-select">
                ${candidates.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('')}
              </select>
-             <button class="btn btn-primary btn-sm" onclick="premiumAssign()">${svg('plus')} Activate</button>
+             <button class="btn btn-primary btn-sm" onclick="premiumAssign()">${svg('plus')} ${t('pr.activate', 'Activate')}</button>
            </div>`
-        : '<p class="muted">Every server you manage is already activated.</p>')
-    : '<p class="muted">All your slots are in use. Remove a server to free one up.</p>';
+        : `<p class="muted">${t('pr.allActivated', 'Every server you manage is already activated.')}</p>`)
+    : `<p class="muted">${t('pr.slotsFull', 'All your slots are in use. Remove a server to free one up.')}</p>`;
 
   // Lifetime holders can buy additional permanent slots.
   const extraPrice = (p.pricing && p.pricing.lifetime && p.pricing.lifetime.extraSlot) || '€24.99';
   const extraSlotCard = (p.lifetime && bl.extraSlot)
     ? `<div class="premium-card premium-extra">
          <div class="premium-extra-info">
-           <h3>Need more slots?</h3>
-           <p class="muted">Add a permanent extra server slot to your Lifetime plan. After buying, activate the key with <code>/activate-premium</code>.</p>
+           <h3>${t('pr.moreSlots', 'Need more slots?')}</h3>
+           <p class="muted">${t('pr.extraDesc', 'Add a permanent extra server slot to your Lifetime plan. After buying, activate the key with <code>/activate-premium</code>.')}</p>
          </div>
          <div class="premium-extra-buy">
            <div class="premium-price">${esc(extraPrice)}</div>
-           <a class="btn btn-primary btn-sm" href="${esc(bl.extraSlot)}" target="_blank" rel="noopener">${svg('plus')} Buy slot</a>
+           <a class="btn btn-primary btn-sm" href="${esc(bl.extraSlot)}" target="_blank" rel="noopener">${svg('plus')} ${t('pr.buySlot', 'Buy slot')}</a>
          </div>
        </div>`
     : '';
@@ -4215,15 +4215,15 @@ function renderPremium() {
   body.innerHTML = premiumProfileCard(p) + `
     <div class="premium-card">
       <div class="premium-head">
-        <div class="premium-status"><span class="sdot" style="background:var(--green)"></span> <strong>${premiumTierLabel(p)}</strong> · Active</div>
-        <div class="premium-slots">Slots: <strong>${p.slotsUsed} / ${p.slotsTotal}</strong> used</div>
+        <div class="premium-status"><span class="sdot" style="background:var(--green)"></span> <strong>${premiumTierLabel(p)}</strong> · ${t('pr.active', 'Active')}</div>
+        <div class="premium-slots">${t('pr.slots', '', { u: p.slotsUsed, t: p.slotsTotal })}</div>
       </div>
-      <div class="muted premium-expiry">Renews / expires: ${esc(expiry)}</div>
+      <div class="muted premium-expiry">${t('pr.expiry', '', { d: esc(expiry) })}</div>
     </div>
 
     <div class="premium-card">
-      <h3>Activated servers</h3>
-      <p class="muted">Premium features apply to the servers you activate here, using your ${p.slotsTotal} slot${p.slotsTotal === 1 ? '' : 's'}.</p>
+      <h3>${t('pr.activated', 'Activated servers')}</h3>
+      <p class="muted">${tn('pr.applies', p.slotsTotal)}</p>
       <div class="premium-servers">${assignedRows}</div>
       <hr class="premium-hr">
       ${assignControl}
@@ -4243,10 +4243,25 @@ async function premiumAssign() {
 }
 
 async function premiumUnassign(guildId) {
-  if (!confirm('Remove premium from this server? Its limits drop back to the free tier.')) return;
+  if (!confirm(t('pr.confirmRemove', 'Remove premium from this server? Its limits drop back to the free tier.'))) return;
   try {
     const r = await api('POST', '/api/premium/unassign', { guildId });
     _premium = r.status;
     renderPremium();
   } catch (e) { alert(e.message); }
+}
+
+// Called by i18n.js after the language changes: re-render pages built in JS.
+function onLangChanged() {
+  if (_lastStatus) {
+    const st = document.getElementById('ov-status');
+    if (st) st.innerHTML = `<span class="ov-dot${_lastStatus.ready ? '' : ' off'}"></span> ${_lastStatus.ready ? t('ov.online', 'Online') : t('ov.offline', 'Offline')}`;
+    const statusEl = document.getElementById('stat-status');
+    if (statusEl) statusEl.innerHTML = _lastStatus.ready ? `${dot('var(--green)')}${t('ov.online', 'Online')}` : `${dot('var(--red)')}${t('ov.offline', 'Offline')}`;
+  }
+  if (state.commands && state.commands.length && document.getElementById('commands-body')?.innerHTML) renderCommands();
+  if (typeof _premium !== 'undefined' && _premium) renderPremium();
+  document.querySelectorAll('#log-rows optgroup').forEach(g => {
+    if (g.label === 'No Category' || Object.values(I18N).some(d => d['logs.noCategory'] === g.label)) g.label = t('logs.noCategory', 'No Category');
+  });
 }
