@@ -35,6 +35,7 @@ module.exports = {
 
     try {
       await member.roles.remove(role, `Unmuted by ${interaction.user.tag}: ${reason}`);
+      client.store.removeMute(interaction.guild.id, member.id);
       await interaction.reply({ embeds: [embeds.success(`🔊 Unmuted **${member.user.tag}**.`)] });
     } catch {
       await interaction.reply({ embeds: [embeds.error('Failed to unmute that member. Check my role position and permissions.')], ephemeral: true });

@@ -2,31 +2,54 @@ const { SlashCommandBuilder, PermissionFlagsBits, ActionRowBuilder, ButtonBuilde
 const embeds = require('../../utils/embeds');
 const { canModerate } = require('../../utils/moderation');
 const { findMuteRole, createMuteRole, applyMuteOverwrites } = require('../../utils/muteRole');
+const { parseDuration, formatDuration } = require('../../utils/time');
+const muteService = require('../../mute/service');
 
-async function applyMute(member, role, reason, by) {
-  await member.roles.add(role, `Muted by ${by}: ${reason}`);
+const MAX = 365 * 86400000; // 1 year ceiling for a timed mute
+
+function muteEmbed(member, record) {
+  const secs = ms => Math.floor(ms / 1000);
+  const fields = [
+    { name: 'User', value: `${member.user.tag} (\`${member.id}\`)`, inline: true },
+    { name: 'Moderator', value: record.moderatorTag, inline: true },
+    { name: 'Duration', value: record.durationMs ? formatDuration(record.durationMs) : 'Permanent', inline: true }
+  ];
+  if (record.expiresAt) fields.push({ name: 'Expires', value: `<t:${secs(record.expiresAt)}:R>`, inline: true });
+  fields.push({ name: 'Reason', value: record.reason });
+  return embeds.custom({ title: '🔇 Member Muted', color: embeds.COLORS.warn, fields });
 }
 
-function muteEmbed(member, reason, by) {
-  return embeds.custom({
-    title: '🔇 Member Muted',
-    color: embeds.COLORS.warn,
-    fields: [
-      { name: 'User', value: `${member.user.tag} (\`${member.id}\`)`, inline: true },
-      { name: 'Moderator', value: by, inline: true },
-      { name: 'Reason', value: reason }
-    ]
-  });
+// Resolves duration + reason from the options, handling the prefix ambiguity where
+// a non-duration first word (e.g. "?mute @user being rude") is really the reason.
+function resolveDurationAndReason(interaction) {
+  const durationRaw = interaction.options.getString('duration');
+  let reason = interaction.options.getString('reason') || '';
+  let durationMs = null;
+
+  if (durationRaw) {
+    durationMs = parseDuration(durationRaw);
+    if (!durationMs) {
+      if (interaction.isPrefix) {            // not a duration → treat as part of the reason
+        reason = reason ? `${durationRaw} ${reason}` : durationRaw;
+        durationMs = null;
+      } else {
+        return { error: 'Invalid duration. Try `10m`, `2h`, `1d`, or leave it empty for a permanent mute.' };
+      }
+    } else if (durationMs < 1000) {
+      return { error: 'Duration is too short. Use at least `1s`.' };
+    } else if (durationMs > MAX) {
+      return { error: 'Duration is too long. The maximum is 365 days.' };
+    }
+  }
+  return { durationMs, reason: reason || 'No reason provided' };
 }
 
-// Sends a message and returns the resulting Message for both slash and prefix contexts.
 async function sendMessage(ctx, payload) {
   if (ctx.isPrefix) return ctx.reply(payload);
   await ctx.reply(payload);
   return ctx.fetchReply();
 }
 
-// Validates that the bot can hand out `role`. Returns an error string, or null when OK.
 function roleProblem(ctx, role) {
   const me = ctx.guild.members.me;
   if (role.managed || role.id === ctx.guild.id) return 'That role is managed by an integration and cannot be used as a Muted role.';
@@ -34,11 +57,12 @@ function roleProblem(ctx, role) {
   return null;
 }
 
-// Runs when the guild has no Muted role yet: ask the moderator to mention a role
-// to use, or create a fresh red one, then mute the target with whichever they pick.
-async function runSetup(ctx, client, member, reason) {
+// Runs when the guild has no Muted role yet: ask the moderator to mention a role to
+// use, or create a fresh red one, then mute the target with whichever they pick.
+async function runSetup(ctx, client, member, reason, durationMs) {
   const modId = ctx.user.id;
   const channel = ctx.channel;
+  const opts = { moderatorId: ctx.user.id, moderatorTag: ctx.user.tag, reason, durationMs };
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('mutesetup:create').setLabel('Create a new role').setStyle(ButtonStyle.Success),
@@ -60,7 +84,6 @@ async function runSetup(ctx, client, member, reason) {
   const msgCollector  = channel.createMessageCollector({ filter: m => m.author.id === modId && m.mentions.roles.size > 0, time: 60000 });
   const cleanup = () => { done = true; compCollector.stop(); msgCollector.stop(); };
 
-  // Path 1: moderator clicks a button.
   compCollector.on('collect', async i => {
     if (i.customId === 'mutesetup:cancel') {
       cleanup();
@@ -72,14 +95,13 @@ async function runSetup(ctx, client, member, reason) {
       const role = await createMuteRole(ctx.guild, `Muted role created by ${ctx.user.tag}`, client.store);
       const problem = roleProblem(ctx, role);
       if (problem) return i.editReply({ embeds: [embeds.error(`Created the role, but I could not apply it: ${problem}`)] });
-      await applyMute(member, role, reason, ctx.user.tag);
-      await i.editReply({ embeds: [muteEmbed(member, reason, ctx.user.tag)] });
+      const record = await muteService.applyMute(client, ctx.guild, member, role, opts);
+      await i.editReply({ embeds: [muteEmbed(member, record)] });
     } catch {
       await i.editReply({ embeds: [embeds.error('Failed to create the role or mute the member. Check my **Manage Roles** permission.')] }).catch(() => {});
     }
   });
 
-  // Path 2: moderator mentions an existing role to use as the Muted role.
   msgCollector.on('collect', async m => {
     const role = m.mentions.roles.first();
     const problem = roleProblem(ctx, role);
@@ -90,8 +112,8 @@ async function runSetup(ctx, client, member, reason) {
     try {
       client.store.setMuteRoleId(ctx.guild.id, role.id);
       await applyMuteOverwrites(ctx.guild, role, `Configured as Muted role by ${ctx.user.tag}`);
-      await applyMute(member, role, reason, ctx.user.tag);
-      await channel.send({ embeds: [muteEmbed(member, reason, ctx.user.tag)] }).catch(() => {});
+      const record = await muteService.applyMute(client, ctx.guild, member, role, opts);
+      await channel.send({ embeds: [muteEmbed(member, record)] }).catch(() => {});
     } catch {
       await channel.send({ embeds: [embeds.error('Failed to set up that role or mute the member. Check my **Manage Roles** permission and role position.')] }).catch(() => {});
     }
@@ -111,13 +133,16 @@ module.exports = {
     .setDescription('Mute a member so they cannot type in any channel')
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
     .addUserOption(o => o.setName('user').setDescription('Member to mute').setRequired(true))
+    .addStringOption(o => o.setName('duration').setDescription('Optional, e.g. 10m, 2h, 1d (leave empty = permanent)').setRequired(false))
     .addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(false)),
 
   async execute(interaction, client) {
     const member = interaction.options.getMember('user');
-    const reason = interaction.options.getString('reason') || 'No reason provided';
-
     if (!member) return interaction.reply({ embeds: [embeds.error('That user is not a member of this server.')], ephemeral: true });
+
+    const parsed = resolveDurationAndReason(interaction);
+    if (parsed.error) return interaction.reply({ embeds: [embeds.error(parsed.error)], ephemeral: true });
+    const { durationMs, reason } = parsed;
 
     const check = canModerate(interaction.member, member, { store: client.store, action: 'mute' });
     if (!check.ok) return interaction.reply({ embeds: [embeds.error(check.reason)], ephemeral: true });
@@ -129,16 +154,18 @@ module.exports = {
     const role = findMuteRole(interaction.guild, client.store);
 
     // No Muted role yet → ask the moderator to pick or create one.
-    if (!role) return runSetup(interaction, client, member, reason);
+    if (!role) return runSetup(interaction, client, member, reason, durationMs);
 
     const problem = roleProblem(interaction, role);
     if (problem) return interaction.reply({ embeds: [embeds.error(`I can't apply the **Muted** role: ${problem}`)], ephemeral: true });
     if (member.roles.cache.has(role.id))
-      return interaction.reply({ embeds: [embeds.error(`**${member.user.tag}** is already muted.`)], ephemeral: true });
+      return interaction.reply({ embeds: [embeds.error(`**${member.user.tag}** is already muted. Use \`unmute\` first if you want to change the duration.`)], ephemeral: true });
 
     try {
-      await applyMute(member, role, reason, interaction.user.tag);
-      await interaction.reply({ embeds: [muteEmbed(member, reason, interaction.user.tag)] });
+      const record = await muteService.applyMute(client, interaction.guild, member, role, {
+        moderatorId: interaction.user.id, moderatorTag: interaction.user.tag, reason, durationMs
+      });
+      await interaction.reply({ embeds: [muteEmbed(member, record)] });
     } catch {
       await interaction.reply({ embeds: [embeds.error('Failed to mute that member. Check my role position and permissions.')], ephemeral: true });
     }

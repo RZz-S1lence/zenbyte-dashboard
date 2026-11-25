@@ -4,7 +4,6 @@ const embeds = require('../../utils/embeds');
 module.exports = {
   category: 'Moderation',
   cooldown: 3,
-  aliases: ['unmute'],
   modPermission: PermissionFlagsBits.ModerateMembers,
   data: new SlashCommandBuilder()
     .setName('untimeout')

@@ -247,12 +247,19 @@ async function logout() {
 
 // ── Navigation ────────────────────────────────────
 function goto(page) {
+  if (blockIfUnsaved()) return;
   clearAllDirty();
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById(`page-${page}`).classList.add('active');
   document.querySelector(`[data-page="${page}"]`).classList.add('active');
 
+  loadPage(page);
+  closeSidebar();
+}
+
+// Runs the loader for a page. Also used by Discard to reload the server state.
+function loadPage(page) {
   if (page === 'overview')    loadStatus();
   if (page === 'premium')     loadPremium();
   if (page === 'settings'    && state.guildId) loadSettings();
@@ -276,25 +283,82 @@ function goto(page) {
   if (page === 'altdetect'   && state.guildId) loadAltDetect();
   if (page === 'transcripts' && state.guildId) loadTranscripts();
   if (page === 'botlogs') loadBotLogs();
-
-  closeSidebar();
 }
 
 function toggleSidebar() { document.getElementById('dashboard').classList.toggle('sidebar-open'); }
 function closeSidebar()  { document.getElementById('dashboard').classList.remove('sidebar-open'); }
 
 // ── Unsaved-changes tracking ──────────────────────
-// Any edit on the active page lights up its sticky save bar. A successful save
-// (setStatus 'ok') or a fresh page/guild load clears it again.
-function markDirty() {
-  const bar = document.querySelector('.page.active .save-bar');
-  if (bar) bar.classList.add('dirty');
+// Save bars stay hidden until something on their page is edited. Then the bar
+// pops in with Save + Discard. Leaving the page (nav, server switch, apps sub-tab)
+// is blocked until the user saves or discards. Bars marked .always (editors like
+// "Create & Post") are always visible and never block navigation.
+const isVisibleBar = b => !b.classList.contains('always') && !b.closest('.hidden');
+
+function findBarFor(el) {
+  const page = document.querySelector('.page.active');
+  if (!page) return null;
+  for (let n = el instanceof Element ? el : null; n && page.contains(n); n = n.parentElement) {
+    const bars = [...n.querySelectorAll('.save-bar')].filter(b => !b.closest('.hidden'));
+    if (bars.length) return bars.find(b => !b.classList.contains('always')) || null;
+  }
+  return [...page.querySelectorAll('.save-bar')].find(isVisibleBar) || null;
+}
+
+function ensureBarExtras(bar) {
+  if (bar.querySelector('.save-discard')) return;
+  const btns = bar.querySelectorAll(':scope > .btn');
+  const last = btns[btns.length - 1];
+  const discard = document.createElement('button');
+  discard.className = 'btn btn-secondary save-discard';
+  discard.textContent = 'Discard';
+  discard.onclick = discardChanges;
+  const warn = document.createElement('span');
+  warn.className = 'save-warn';
+  warn.textContent = 'You have unsaved changes. Save or discard them first.';
+  if (last) last.after(discard); else bar.prepend(discard);
+  bar.append(warn);
+}
+
+function markDirty(e) {
+  const t = e && e.target;
+  if (t && t.closest && t.closest('.ms-search, [data-no-dirty]')) return;
+  const bar = findBarFor(t || null);
+  if (!bar) return;
+  ensureBarExtras(bar);
+  bar.classList.remove('just-saved');
+  bar.classList.add('dirty');
 }
 function clearAllDirty() {
-  document.querySelectorAll('.save-bar.dirty').forEach(b => b.classList.remove('dirty'));
+  document.querySelectorAll('.save-bar.dirty, .save-bar.warn').forEach(b => b.classList.remove('dirty', 'warn'));
 }
+function dirtyBars() {
+  return [...document.querySelectorAll('.page.active .save-bar.dirty')].filter(b => !b.classList.contains('always'));
+}
+
+// Returns true (and nudges the user) if the active page has unsaved changes.
+function blockIfUnsaved() {
+  const bars = dirtyBars();
+  if (!bars.length) return false;
+  bars.forEach(bar => {
+    bar.classList.add('warn');
+    const btn = bar.querySelector('.btn-primary') || bar.querySelector('.btn');
+    if (btn) { btn.classList.remove('shake'); void btn.offsetWidth; btn.classList.add('shake'); }
+  });
+  closeSidebar();
+  return true;
+}
+
+function discardChanges() {
+  const page = document.querySelector('.page.active');
+  clearAllDirty();
+  if (page) loadPage(page.id.replace(/^page-/, ''));
+}
+
 const _main = document.querySelector('.main-content');
 if (_main) { _main.addEventListener('input', markDirty); _main.addEventListener('change', markDirty); }
+document.addEventListener('animationend', e => { if (e.animationName === 'saveShake') e.target.classList.remove('shake'); });
+window.addEventListener('beforeunload', e => { if (dirtyBars().length) { e.preventDefault(); e.returnValue = ''; } });
 
 // ── Overview ──────────────────────────────────────
 async function loadStatus() {
@@ -638,6 +702,7 @@ function toggleGuildDropdown() {
 }
 
 async function selectGuild(id) {
+  if (blockIfUnsaved()) { document.getElementById('guild-dropdown').classList.add('hidden'); return; }
   clearAllDirty();
   state.guildId   = id;
   state.guildData = null;
@@ -1821,7 +1886,7 @@ function renderPolls() {
         <div class="form-row"><label>Start in (minutes, 0 = now)</label><input type="number" id="poll-schedule" min="0" value="0"></div>
         <div class="form-row"><label>Restrict voting to roles</label><div id="poll-roles"></div></div>
       </div>
-      <div class="save-bar"><button class="btn btn-primary" onclick="createPoll()">Create &amp; Post</button>
+      <div class="save-bar always"><button class="btn btn-primary" onclick="createPoll()">Create &amp; Post</button>
         <span id="poll-create-msg" class="save-status"></span></div>
     </div>
     ${pollListCard('Active &amp; Scheduled', live, true)}
@@ -3164,7 +3229,15 @@ function setStatus(el, type, msg) {
   const ico = type === 'ok' ? svg('check') : type === 'err' ? svg('x') : '';
   el.className = `save-status ${type}`;
   el.innerHTML = `${ico} ${esc(clean)}`;
-  if (type === 'ok') { const bar = el.closest('.save-bar'); if (bar) bar.classList.remove('dirty'); }
+  if (type === 'ok') {
+    const bar = el.closest('.save-bar');
+    if (bar) {
+      bar.classList.remove('dirty', 'warn');
+      bar.classList.add('just-saved');
+      clearTimeout(bar._savedT);
+      bar._savedT = setTimeout(() => bar.classList.remove('just-saved'), 2500);
+    }
+  }
   setTimeout(() => { el.innerHTML = ''; }, 4000);
 }
 
@@ -3351,6 +3424,7 @@ async function loadApplications() {
 }
 
 function appsTab(name) {
+  if (name !== state.appsTabCur && blockIfUnsaved()) return;
   state.appsTabCur = name;
   document.querySelectorAll('.apps-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   ['forms', 'submissions', 'settings'].forEach(t =>
@@ -3459,7 +3533,7 @@ function renderFormBuilder(box) {
         return `<div class="btn-row" style="margin-top:12px;flex-wrap:wrap;align-items:center">${buttons} ${g.hint}</div>`;
       })()}
     </div>
-    <div class="save-bar dirty">
+    <div class="save-bar always">
       <button class="btn btn-primary" onclick="appsSaveForm()">Save Form</button>
       <button class="btn btn-secondary" onclick="appsPreviewForm()">${svg('eye')} Preview</button>
       <button class="btn btn-secondary" onclick="appsCancelEdit()">Cancel</button>
@@ -3954,7 +4028,7 @@ function mcEditorHtml() {
         <span>Enabled</span>
       </div>
 
-      <div class="save-bar">
+      <div class="save-bar always">
         <button class="btn btn-primary" onclick="mcSave()">${editing ? 'Save Changes' : 'Create Counter'}</button>
         <button class="btn btn-secondary" onclick="mcCancelEdit()">Cancel</button>
         <span id="mc-editor-msg" class="save-status"></span>

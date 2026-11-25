@@ -18,6 +18,7 @@ const FILES = {
   commandToggles: path.join(ROOT, 'commandtoggles.json'),
   channelRules:   path.join(ROOT, 'channelrules.json'),
   muteRoles:    path.join(ROOT, 'muteroles.json'),
+  mutes:        path.join(ROOT, 'mutes.json'),
   prefixes:     path.join(ROOT, 'prefixes.json'),
   greetings:    path.join(ROOT, 'greetings.json')
 };
@@ -66,6 +67,10 @@ class Store {
 
     // muteRoles: Map<guildId, roleId>, the role used to mute members in that guild
     this.muteRoles = new Map(Object.entries(loadJson(FILES.muteRoles)));
+
+    // mutes: Map<guildId, { [userId]: { moderatorId, moderatorTag, userTag, reason,
+    //   mutedAt, durationMs, expiresAt } }>. Tracks active mutes for info/list/expiry.
+    this.mutes = new Map(Object.entries(loadJson(FILES.mutes)));
 
     // prefixes: Map<guildId, string>, custom command prefix per guild
     this.prefixes = new Map(Object.entries(loadJson(FILES.prefixes)));
@@ -133,6 +138,40 @@ class Store {
     else this.muteRoles.delete(guildId);
     saveJson(FILES.muteRoles, Object.fromEntries(this.muteRoles));
     return this.getMuteRoleId(guildId);
+  }
+
+  // ── Mute tracking ─────────────────
+  getMutes(guildId) {
+    return this.mutes.get(guildId) || {};
+  }
+
+  getMute(guildId, userId) {
+    return this.getMutes(guildId)[userId] || null;
+  }
+
+  setMute(guildId, userId, record) {
+    const all = { ...this.getMutes(guildId), [userId]: record };
+    this.mutes.set(guildId, all);
+    saveJson(FILES.mutes, Object.fromEntries(this.mutes));
+    return record;
+  }
+
+  removeMute(guildId, userId) {
+    const all = this.getMutes(guildId);
+    if (!all[userId]) return false;
+    delete all[userId];
+    if (Object.keys(all).length) this.mutes.set(guildId, all);
+    else this.mutes.delete(guildId);
+    saveJson(FILES.mutes, Object.fromEntries(this.mutes));
+    return true;
+  }
+
+  // Flat list of every active mute across guilds, for the expiry sweep.
+  listAllMutes() {
+    const out = [];
+    for (const [guildId, byUser] of this.mutes)
+      for (const [userId, record] of Object.entries(byUser)) out.push({ guildId, userId, record });
+    return out;
   }
 
   getPrefix(guildId) {
@@ -249,6 +288,7 @@ class Store {
     if (this.commandToggles.delete(guildId)) saveJson(FILES.commandToggles, Object.fromEntries(this.commandToggles));
     if (this.channelRules.delete(guildId))   saveJson(FILES.channelRules, Object.fromEntries(this.channelRules));
     if (this.muteRoles.delete(guildId))      saveJson(FILES.muteRoles, Object.fromEntries(this.muteRoles));
+    if (this.mutes.delete(guildId))          saveJson(FILES.mutes, Object.fromEntries(this.mutes));
     if (this.prefixes.delete(guildId))       saveJson(FILES.prefixes, Object.fromEntries(this.prefixes));
     if (this.greetings.delete(guildId))      this.saveGreetings();
     this.openTickets.delete(guildId);

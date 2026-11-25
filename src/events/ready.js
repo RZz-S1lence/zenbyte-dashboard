@@ -9,6 +9,7 @@ const social = require('../social/service');
 const memberCounter = require('../membercounter/service');
 const ticketHandler = require('../handlers/tickets');
 const premiumSweep = require('../premium/sweep');
+const muteService = require('../mute/service');
 const logger = require('../utils/logger');
 
 const ROOT = path.join(__dirname, '..', '..');
@@ -42,6 +43,11 @@ module.exports = {
     const socialTimer = setInterval(() => social.sweep(client).catch(() => {}), 180000);
     socialTimer.unref?.();
     setTimeout(() => social.sweep(client).catch(() => {}), 15000);
+
+    // Timed-mute expiry sweep: lift mutes whose duration has elapsed, every 30s.
+    muteService.sweep(client).catch(() => {});
+    const muteTimer = setInterval(() => muteService.sweep(client).catch(() => {}), 30000);
+    muteTimer.unref?.();
 
     // Live member counters: warm-up pass + periodic refresh (rate-limit aware).
     memberCounter.start(client);
