@@ -224,8 +224,9 @@ function renderLangSwitch() {
   const menu = document.getElementById('lang-menu');
   if (!btn || !menu) return;
   const cur = I18N_LANGS[currentLang];
-  btn.innerHTML = `<span class="lang-flag">${cur.flag}</span><span>${cur.name}</span><span class="lang-chevron">▴</span>`;
-  btn.title = t('lang.label', 'Language');
+  btn.innerHTML = `<span class="lang-flag">${cur.flag}</span><span class="lang-chevron">▾</span>`;
+  btn.title = `${t('lang.label', 'Language')}: ${cur.name}`;
+  btn.setAttribute('aria-label', btn.title);
   menu.innerHTML = I18N_ORDER.map(c => `
     <button class="lang-option${c === currentLang ? ' active' : ''}" onclick="setLang('${c}')">
       <span class="lang-flag">${I18N_LANGS[c].flag}</span><span>${I18N_LANGS[c].name}</span>

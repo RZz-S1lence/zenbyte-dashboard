@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ZenByte Dashboard</title>
-  <link rel="stylesheet" href="style.css?v=15">
+  <link rel="stylesheet" href="style.css?v=16">
 </head>
 <body>
 
@@ -68,6 +68,7 @@
     <div class="sidebar-header">
       <img id="sidebar-bot-avatar" class="sidebar-bot-avatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'%3E%3Ccircle cx='18' cy='18' r='18' fill='%235865F2'/%3E%3C/svg%3E" alt="">
       <span>ZenByte</span>
+      <div class="lang-switch"><button id="lang-btn" class="lang-btn" onclick="toggleLangMenu(event)"></button><div id="lang-menu" class="lang-menu hidden"></div></div>
     </div>
 
     <!-- Guild selector -->
@@ -128,7 +129,6 @@
     <div class="sidebar-footer">
       <span id="sidebar-user" class="sidebar-user"></span>
       <a id="sidebar-support" href="#" target="_blank" rel="noopener" class="sidebar-support-link"><span data-icon="chat"></span> <span data-i18n="footer.support">Support Server</span></a>
-      <div class="lang-switch"><div id="lang-menu" class="lang-menu hidden"></div><button id="lang-btn" class="lang-btn" onclick="toggleLangMenu(event)"></button></div>
       <button class="btn-logout" onclick="logout()" data-i18n="footer.logout">Logout</button>
     </div>
   </aside>
@@ -737,7 +737,7 @@
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
-<script src="i18n.js?v=1"></script>
+<script src="i18n.js?v=2"></script>
 <script src="app.js?v=14"></script>
 </body>
 </html>
