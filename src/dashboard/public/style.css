@@ -805,3 +805,26 @@ button .ic, .btn .ic, .apps-tab .ic, .mc-act .ic, .cmd-cat-btn .ic { margin-righ
 .tp-type-row .tp-type-name { flex: 1 1 40%; min-width: 0; }
 .tp-type-row .tp-type-form { flex: 1 1 50%; min-width: 0; }
 .tp-type-row .tp-type-del { flex: 0 0 auto; padding: 8px 10px; }
+
+/* Language switcher (sidebar footer) */
+.lang-switch { position: relative; }
+.lang-btn {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 9px;
+  background: transparent; border: 1px solid var(--border2); color: var(--muted); border-radius: var(--radius-sm);
+  cursor: pointer; font-size: 13px; font-weight: 600; font-family: var(--font); transition: all .18s;
+}
+.lang-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(124,108,245,.10); }
+.lang-chevron { font-size: 10px; opacity: .7; }
+.lang-flag { display: inline-flex; width: 20px; height: 14px; border-radius: 2px; overflow: hidden; flex-shrink: 0; box-shadow: 0 0 0 1px rgba(255,255,255,.12); }
+.lang-flag svg { width: 100%; height: 100%; display: block; }
+.lang-menu {
+  position: absolute; bottom: calc(100% + 6px); left: 0; right: 0; z-index: 100;
+  background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--radius-sm);
+  padding: 5px; box-shadow: 0 10px 30px rgba(0,0,0,.5); animation: saveIn .15s ease-out;
+}
+.lang-option {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: none; background: none;
+  color: var(--text); font-size: 13px; font-weight: 500; font-family: var(--font); border-radius: 6px; cursor: pointer; text-align: left;
+}
+.lang-option:hover { background: rgba(124,108,245,.12); }
+.lang-option.active { color: var(--accent); font-weight: 700; }

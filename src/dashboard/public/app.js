@@ -311,13 +311,16 @@ function ensureBarExtras(bar) {
   const last = btns[btns.length - 1];
   const discard = document.createElement('button');
   discard.className = 'btn btn-secondary save-discard';
+  discard.dataset.i18n = 'save.discard';
   discard.textContent = 'Discard';
   discard.onclick = discardChanges;
   const warn = document.createElement('span');
   warn.className = 'save-warn';
+  warn.dataset.i18n = 'save.warn';
   warn.textContent = 'You have unsaved changes. Save or discard them first.';
   if (last) last.after(discard); else bar.prepend(discard);
   bar.append(warn);
+  if (typeof i18nApply === 'function') i18nApply(bar);
 }
 
 function markDirty(e) {
