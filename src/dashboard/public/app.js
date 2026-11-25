@@ -4178,7 +4178,7 @@ function renderPremium() {
 
   const assignedRows = p.assigned.length
     ? p.assigned.map(g => `
-        <div class="premium-server">
+        <div class="premium-server" data-gid="${g.id}">
           <span class="premium-server-name">${g.icon ? `<img src="${esc(g.icon)}" class="premium-server-ico">` : ''}${esc(g.name)}</span>
           <button class="btn btn-secondary btn-sm" onclick="premiumUnassign('${g.id}')">${svg('x')} ${t('common.remove', 'Remove')}</button>
         </div>`).join('')
@@ -4235,11 +4235,44 @@ function renderPremium() {
 async function premiumAssign() {
   const sel = document.getElementById('premium-assign-select');
   if (!sel || !sel.value) return;
+  const guildId = sel.value;
+  const name = sel.options[sel.selectedIndex]?.text || '';
+  const btn = sel.parentElement?.querySelector('button');
+  if (btn) { btn.disabled = true; btn.classList.add('is-loading'); }
   try {
-    const r = await api('POST', '/api/premium/assign', { guildId: sel.value });
+    const r = await api('POST', '/api/premium/assign', { guildId });
     _premium = r.status;
     renderPremium();
-  } catch (e) { alert(e.message); }
+    // Pop + glow on the freshly added row, then a toast.
+    const row = document.querySelector(`.premium-server[data-gid="${guildId}"]`);
+    if (row) {
+      row.classList.add('just-added');
+      row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      setTimeout(() => row.classList.remove('just-added'), 2200);
+    }
+    showToast(t('pr.added', 'Added {name} to Premium', { name: esc(name) }));
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.classList.remove('is-loading'); }
+    alert(e.message);
+  }
+}
+
+// Small toast in the bottom-right corner. type: 'ok' | 'err'.
+function showToast(html, type = 'ok') {
+  let wrap = document.getElementById('toast-wrap');
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.id = 'toast-wrap';
+    document.body.appendChild(wrap);
+  }
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.innerHTML = `<span class="toast-ico">${svg(type === 'ok' ? 'check' : 'x')}</span><span>${html}</span>`;
+  wrap.appendChild(el);
+  setTimeout(() => {
+    el.classList.add('toast-out');
+    el.addEventListener('animationend', () => el.remove(), { once: true });
+  }, 3500);
 }
 
 async function premiumUnassign(guildId) {

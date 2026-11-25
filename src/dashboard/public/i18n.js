@@ -189,6 +189,7 @@ const I18N = {
 // Plural keys use Intl.PluralRules forms: key.one / key.few / key.many / key.other.
 const I18N_R2 = {
   en: {
+    'pr.added': 'Added <strong>{name}</strong> to Premium',
     'cmd.count.one': '{n} command', 'cmd.count.other': '{n} commands',
     'cmd.stats': '{e} enabled · {d} disabled',
     'cr.onlyIn.one': 'Only in {n} channel', 'cr.onlyIn.other': 'Only in {n} channels',
@@ -199,6 +200,7 @@ const I18N_R2 = {
     'pr.applies.other': 'Premium features apply to the servers you activate here, using your {n} slots.',
   },
   de: {
+    'pr.added': '<strong>{name}</strong> wurde zu Premium hinzugefügt',
     'common.selectServer': '← Wähle links in der Sidebar einen Server aus, um loszulegen.',
     'common.loading': 'Lädt…', 'common.saved': 'Gespeichert!', 'common.saveFailed': 'Speichern fehlgeschlagen.',
     'common.save': 'Speichern', 'common.cancel': 'Abbrechen', 'common.remove': 'Entfernen',
@@ -272,6 +274,7 @@ const I18N_R2 = {
     'pr.confirmRemove': 'Premium von diesem Server entfernen? Seine Limits fallen dann auf den kostenlosen Plan zurück.',
   },
   fr: {
+    'pr.added': '<strong>{name}</strong> a été ajouté à Premium',
     'common.selectServer': '← Sélectionnez un serveur dans la barre latérale pour commencer.',
     'common.loading': 'Chargement…', 'common.saved': 'Enregistré !', 'common.saveFailed': "Échec de l'enregistrement.",
     'common.save': 'Enregistrer', 'common.cancel': 'Annuler', 'common.remove': 'Retirer',
@@ -345,6 +348,7 @@ const I18N_R2 = {
     'pr.confirmRemove': "Retirer Premium de ce serveur ? Ses limites reviendront à celles de l'offre gratuite.",
   },
   ru: {
+    'pr.added': 'Сервер <strong>{name}</strong> добавлен в Premium',
     'common.selectServer': '← Выберите сервер на боковой панели, чтобы начать.',
     'common.loading': 'Загрузка…', 'common.saved': 'Сохранено!', 'common.saveFailed': 'Не удалось сохранить.',
     'common.save': 'Сохранить', 'common.cancel': 'Отмена', 'common.remove': 'Убрать',
@@ -417,6 +421,7 @@ const I18N_R2 = {
     'pr.confirmRemove': 'Убрать Premium с этого сервера? Его лимиты вернутся к бесплатному тарифу.',
   },
   es: {
+    'pr.added': '<strong>{name}</strong> se añadió a Premium',
     'common.selectServer': '← Selecciona un servidor en la barra lateral para empezar.',
     'common.loading': 'Cargando…', 'common.saved': '¡Guardado!', 'common.saveFailed': 'No se pudo guardar.',
     'common.save': 'Guardar', 'common.cancel': 'Cancelar', 'common.remove': 'Quitar',
