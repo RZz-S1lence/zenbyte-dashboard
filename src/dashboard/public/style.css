@@ -891,8 +891,14 @@ button .ic, .btn .ic, .apps-tab .ic, .mc-act .ic, .cmd-cat-btn .ic { margin-righ
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-sm);
   color: var(--muted); cursor: pointer; transition: all .18s; padding: 0;
 }
-.refresh-btn svg { width: 16px; height: 16px; }
+.refresh-btn .ic { width: 16px; height: 16px; margin: 0; display: block; }
 .refresh-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--card2); }
 .refresh-btn:disabled { cursor: default; opacity: .7; }
 .refresh-btn.spinning svg { animation: refreshSpin .7s linear infinite; }
 @keyframes refreshSpin { to { transform: rotate(360deg); } }
+
+/* Logo, language and server picker stay pinned while the nav scrolls */
+.sidebar-top {
+  position: sticky; top: 0; z-index: 50; flex-shrink: 0;
+  background: var(--sidebar); box-shadow: 0 6px 12px -8px rgba(0,0,0,.6);
+}
