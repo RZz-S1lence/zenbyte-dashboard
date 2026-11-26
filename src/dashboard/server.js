@@ -6,6 +6,7 @@ const http    = require('http');
 const crypto  = require('crypto');
 const path    = require('path');
 const fs      = require('fs');
+const zlib    = require('zlib');
 const { attachChat } = require('./chat');
 const { PermissionsBitField } = require('discord.js');
 
@@ -92,7 +93,30 @@ module.exports = function startDashboard(client) {
   app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 
   app.use(express.json({ limit: '1mb' }));
-  app.use(express.static(path.join(__dirname, 'public')));
+  // Serve the big dashboard files (app.js, i18n.js, style.css, ...) gzipped. They
+  // shrink to ~20% of their size, which keeps them fast and reliable through the
+  // Cloudflare tunnel. Compressed copies are cached in memory per file version.
+  const PUBLIC_DIR = path.join(__dirname, 'public');
+  const gzCache = new Map();
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' || !/\.(js|css|html)$/.test(req.path)) return next();
+    if (!/\bgzip\b/.test(req.headers['accept-encoding'] || '')) return next();
+    const file = path.join(PUBLIC_DIR, path.normalize(decodeURIComponent(req.path)));
+    if (!file.startsWith(PUBLIC_DIR + path.sep)) return next();
+    fs.stat(file, (err, st) => {
+      if (err || !st.isFile()) return next();
+      let hit = gzCache.get(file);
+      if (!hit || hit.mtime !== st.mtimeMs) {
+        try { hit = { mtime: st.mtimeMs, buf: zlib.gzipSync(fs.readFileSync(file), { level: 9 }) }; }
+        catch { return next(); }
+        gzCache.set(file, hit);
+      }
+      res.type(path.extname(file));
+      res.set({ 'Content-Encoding': 'gzip', 'Vary': 'Accept-Encoding', 'Cache-Control': 'public, max-age=300' });
+      res.send(hit.buf);
+    });
+  });
+  app.use(express.static(PUBLIC_DIR));
   app.use(sessionMiddleware);
 
   // ── Public legal pages (no login — must be reachable by Paddle reviewers) ──

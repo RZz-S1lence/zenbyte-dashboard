@@ -1,5 +1,7 @@
 tunnel: zenbyte-dashboard
 credentials-file: ./tunnel-credentials.json
+# QUIC (UDP) keeps timing out on the host, so use HTTP/2 over TCP instead.
+protocol: http2
 
 ingress:
   - hostname: zenbyte-dashboard.de
