@@ -16,7 +16,6 @@ const CATEGORIES = [
   { key: 'Applications', blurb: 'Member application forms and staff review.' },
   { key: 'Leveling',     blurb: 'XP, levels and rank cards.' },
   { key: 'Activity',     blurb: 'Track member activity and view leaderboards.' },
-  { key: 'Trust',        blurb: 'Member trust scoring and leaderboards.' },
   { key: 'Polls',        blurb: 'Build and manage polls.' },
   { key: 'Social',       blurb: 'Live and post notifications for creators.' },
   { key: 'System',       blurb: 'Bot info and utilities.' }

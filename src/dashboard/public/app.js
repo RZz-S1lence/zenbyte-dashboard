@@ -20,7 +20,6 @@ const state = {
   leveling:     null, // current leveling config
   levelingMeta: null, // { curves, announceModes }
   activity:     null, // current activity config
-  trust:        null, // current trust config
   altdetect:    null, // current alt detection config
   altMeta:      null, // { signals, presets, actions, flags, pending }
   pollConfig:   null, // current poll settings
@@ -276,7 +275,6 @@ function loadPage(page) {
   if (page === 'autorole'    && state.guildId) loadAutorole();
   if (page === 'reactionroles' && state.guildId) loadReactionRoles();
   if (page === 'activity'    && state.guildId) loadActivity();
-  if (page === 'trust'       && state.guildId) loadTrust();
   if (page === 'moderators'  && state.guildId) loadModerators();
   if (page === 'security'    && state.guildId) loadSecurityConfig();
   if (page === 'verification' && state.guildId) loadVerification();
@@ -734,7 +732,6 @@ async function selectGuild(id) {
   if (activePage === 'tickets')     await loadTicketConfig();
   if (activePage === 'leveling')    await loadLeveling();
   if (activePage === 'activity')    await loadActivity();
-  if (activePage === 'trust')       await loadTrust();
   if (activePage === 'moderators')  await loadModerators();
   if (activePage === 'security')    await loadSecurityConfig();
   if (activePage === 'verification') await loadVerification();
@@ -2492,88 +2489,6 @@ async function saveActivity() {
   try {
     const res = await api('PUT', `/api/guild/${state.guildId}/activity`, payload);
     state.activity = res.config;
-    setStatus(msg, 'ok', t('common.saved', 'Saved!'));
-  } catch { setStatus(msg, 'err', t('common.saveFailed', 'Failed to save.')); }
-}
-
-// ── TRUST SCORE ───────────────────────────────────
-async function loadTrust() {
-  hide('trust-body'); hide('trust-save-bar');
-  if (!state.guildId) { show('trust-no-guild'); return; }
-  hide('trust-no-guild');
-  const { config } = await api('GET', `/api/guild/${state.guildId}/trust`);
-  state.trust = config;
-  renderTrust();
-  show('trust-body'); show('trust-save-bar');
-}
-
-function renderTrust() {
-  const c = state.trust;
-  const tierRows = c.tiers.map((t, i) => `
-    <div class="lv-row" data-i="${i}">
-      <input type="text" class="tr-tier-name" placeholder="Tier name" value="${esc(t.name)}" style="flex:1;min-width:140px">
-      <span>at score ≥</span>
-      <input type="number" class="tr-tier-min" min="0" max="100" value="${t.min}" style="width:80px">
-      <button class="btn btn-secondary lv-del" onclick="trustDelTier(${i})">${svg('x')}</button>
-    </div>`).join('') || '<p class="lv-empty">No tiers.</p>';
-
-  document.getElementById('trust-body').innerHTML = `
-    <div class="card">
-      <label class="sec-switch sec-master"><input type="checkbox" id="tr-enabled" ${chk(c.enabled)}>
-        <span><strong>Enable Trust Score</strong></span></label>
-    </div>
-    <div class="card">
-      <h3>Signal Weights</h3>
-      <p class="hint" style="margin-bottom:14px">Relative importance of each positive signal (0 disables it).</p>
-      <div class="card-grid">
-        <div class="form-row"><label>Account Age</label><input type="number" id="tr-w-age" min="0" step="0.5" value="${c.weights.accountAge}"></div>
-        <div class="form-row"><label>Server Tenure</label><input type="number" id="tr-w-tenure" min="0" step="0.5" value="${c.weights.tenure}"></div>
-        <div class="form-row"><label>Activity</label><input type="number" id="tr-w-activity" min="0" step="0.5" value="${c.weights.activity}"></div>
-        <div class="form-row"><label>Level</label><input type="number" id="tr-w-level" min="0" step="0.5" value="${c.weights.level}"></div>
-        <div class="form-row"><label>Verified</label><input type="number" id="tr-w-verified" min="0" step="0.5" value="${c.weights.verified}"></div>
-      </div>
-    </div>
-    <div class="card">
-      <h3>Caps &amp; Penalties</h3>
-      <div class="card-grid">
-        <div class="form-row"><label>Activity score for full marks</label><input type="number" id="tr-cap-activity" min="1" value="${c.caps.activity}"></div>
-        <div class="form-row"><label>Level for full marks</label><input type="number" id="tr-cap-level" min="1" value="${c.caps.level}"></div>
-        <div class="form-row"><label>Points lost per warning</label><input type="number" id="tr-warnpen" min="0" max="100" value="${c.warningPenalty}"></div>
-      </div>
-    </div>
-    <div class="card">
-      <h3>Tiers</h3>
-      <p class="hint" style="margin-bottom:12px">Named bands shown on the trust card, by minimum score.</p>
-      <div id="tr-tiers">${tierRows}</div>
-      <button class="btn btn-secondary" style="margin-top:10px" onclick="trustAddTier()">+ Add Tier</button>
-    </div>`;
-}
-
-function collectTrust() {
-  const c = state.trust;
-  c.enabled = boolv('tr-enabled');
-  c.weights = {
-    accountAge: numv('tr-w-age', 1), tenure: numv('tr-w-tenure', 1), activity: numv('tr-w-activity', 2),
-    level: numv('tr-w-level', 1), verified: numv('tr-w-verified', 1)
-  };
-  c.caps = { activity: numv('tr-cap-activity', 5000), level: numv('tr-cap-level', 30) };
-  c.warningPenalty = numv('tr-warnpen', 10);
-  c.tiers = [...document.querySelectorAll('#tr-tiers .lv-row')].map(r => ({
-    name: r.querySelector('.tr-tier-name').value.trim(),
-    min:  Number(r.querySelector('.tr-tier-min').value) || 0
-  })).filter(t => t.name);
-  return c;
-}
-
-function trustAddTier() { collectTrust(); state.trust.tiers.push({ name: 'New Tier', min: 0 }); renderTrust(); }
-function trustDelTier(i) { collectTrust(); state.trust.tiers.splice(i, 1); renderTrust(); }
-
-async function saveTrust() {
-  if (!state.guildId) return;
-  const msg = document.getElementById('trust-save-msg');
-  try {
-    const res = await api('PUT', `/api/guild/${state.guildId}/trust`, collectTrust());
-    state.trust = res.config;
     setStatus(msg, 'ok', t('common.saved', 'Saved!'));
   } catch { setStatus(msg, 'err', t('common.saveFailed', 'Failed to save.')); }
 }

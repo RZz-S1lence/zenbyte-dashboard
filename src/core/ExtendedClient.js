@@ -3,7 +3,6 @@ const { intents } = require('../config');
 const Store = require('../database/store');
 const { LevelStore } = require('../leveling/store');
 const { ActivityStore } = require('../activity/store');
-const { TrustStore } = require('../trust/store');
 const { AltStore } = require('../altdetect/store');
 const { PollStore } = require('../polls/store');
 const { SocialStore } = require('../social/store');
@@ -28,7 +27,6 @@ class ExtendedClient extends Client {
     this.store     = new Store();
     this.levels    = new LevelStore();
     this.activity  = new ActivityStore();
-    this.trust     = new TrustStore();
     this.altdetect = new AltStore();
     this.polls     = new PollStore();
     this.social    = new SocialStore();

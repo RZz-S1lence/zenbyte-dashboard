@@ -807,15 +807,6 @@ module.exports = function startDashboard(client) {
     res.json({ success: true, config });
   });
 
-  // ── Trust ─────────────────────────────────────
-  app.get('/api/guild/:id/trust', requireAuth, guildGuard, (req, res) => {
-    res.json({ config: client.trust.getConfig(req.params.id) });
-  });
-
-  app.put('/api/guild/:id/trust', requireAuth, guildGuard, (req, res) => {
-    res.json({ success: true, config: client.trust.setConfig(req.params.id, req.body || {}) });
-  });
-
   // ── Alt Detection ─────────────────────────────
   app.get('/api/guild/:id/altdetect', requireAuth, guildGuard, (req, res) => {
     res.json({
