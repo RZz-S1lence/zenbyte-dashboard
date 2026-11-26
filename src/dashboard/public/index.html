@@ -112,6 +112,7 @@
 
       <div class="nav-section" data-i18n="nav.modsafety">Moderation &amp; Safety</div>
       <a class="nav-item" data-page="moderators" onclick="goto('moderators')"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg></span> <span data-i18n="page.moderators">Moderators</span></a>
+      <a class="nav-item" data-page="automod" onclick="goto('automod')"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></span> <span data-i18n="page.automod">AutoMod</span></a>
       <a class="nav-item" data-page="security" onclick="goto('security')"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span> <span data-i18n="page.security">Anti-Nuke</span></a>
       <a class="nav-item" data-page="verification" onclick="goto('verification')"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span> <span data-i18n="page.verification">Verification</span></a>
       <a class="nav-item" data-page="altdetect" onclick="goto('altdetect')"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span> <span data-i18n="page.altdetect">Alt Detection</span></a>
@@ -458,6 +459,21 @@
       </div>
     </div>
 
+    <!-- ─── AUTOMOD ─── -->
+    <div id="page-automod" class="page">
+      <div class="page-header">
+        <h2 data-i18n="page.automod">AutoMod</h2>
+        <p data-i18n-html="sub.automod">Automatically remove spam, invite links, blocked words and other unwanted messages, and punish repeat offenders.</p>
+      </div>
+      <div id="automod-no-guild" class="no-guild-msg" data-i18n="common.selectServer">← Select a server from the sidebar to get started.</div>
+      <div id="automod-body" class="hidden"></div>
+      <div id="automod-save-bar" class="save-bar hidden">
+        <button class="btn btn-primary" onclick="saveAutoMod()" data-i18n="save.changes">Save Changes</button>
+        <span class="save-hint">Unsaved changes</span>
+        <span id="automod-save-msg" class="save-status"></span>
+      </div>
+    </div>
+
     <!-- ─── ANTI-NUKE / SECURITY ─── -->
     <div id="page-security" class="page">
       <div class="page-header">
@@ -719,7 +735,7 @@
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
-<script src="i18n.js?v=9"></script>
-<script src="app.js?v=21"></script>
+<script src="i18n.js?v=10"></script>
+<script src="app.js?v=22"></script>
 </body>
 </html>

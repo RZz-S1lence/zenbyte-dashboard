@@ -713,6 +713,38 @@ module.exports = function startDashboard(client) {
     res.json({ success: true });
   });
 
+  // ── AutoMod ───────────────────────────────────
+  const automodConfig = require('../automod/config');
+
+  app.get('/api/guild/:id/automod', requireAuth, guildGuard, (req, res) => {
+    const prem = premiumStore.isGuildPremium(req.params.id);
+    res.json({
+      config: client.automod.get(req.params.id),
+      premium: prem,
+      meta: {
+        filters: automodConfig.FILTERS,
+        actions: automodConfig.ACTIONS,
+        presets: automodConfig.PRESETS,
+        wordLists: { de: automodConfig.WORD_LISTS.de.length, en: automodConfig.WORD_LISTS.en.length },
+        wordCap: guildLimit(req.params.id, 'automodWords'),
+        maxRegex: automodConfig.MAX_REGEX
+      }
+    });
+  });
+
+  app.put('/api/guild/:id/automod', requireAuth, guildGuard, (req, res) => {
+    const gid = req.params.id;
+    const prem = premiumStore.isGuildPremium(gid);
+    const words = req.body?.filters?.words?.words;
+    if (Array.isArray(words)) {
+      const unique = new Set(words.map(w => String(w || '').trim().toLowerCase()).filter(Boolean)).size;
+      const blk = limitBlock(gid, 'automodWords', unique);
+      if (blk) return res.status(blk.status).json(blk.body);
+    }
+    const config = automodConfig.mergeConfig(req.body || {}, { isPremium: prem, wordCap: guildLimit(gid, 'automodWords') });
+    res.json({ success: true, config: client.automod.set(gid, config) });
+  });
+
   // ── Moderators (mod users + roles) ────────────
   app.get('/api/guild/:id/moderators', requireAuth, guildGuard, (req, res) => {
     const m = client.store.moderators.get(req.params.id) || { users: [], roles: [] };

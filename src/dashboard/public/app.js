@@ -277,6 +277,7 @@ function loadPage(page) {
   if (page === 'activity'    && state.guildId) loadActivity();
   if (page === 'moderators'  && state.guildId) loadModerators();
   if (page === 'security'    && state.guildId) loadSecurityConfig();
+  if (page === 'automod'     && state.guildId) loadAutoMod();
   if (page === 'verification' && state.guildId) loadVerification();
   if (page === 'altdetect'   && state.guildId) loadAltDetect();
   if (page === 'transcripts' && state.guildId) loadTranscripts();
@@ -734,6 +735,7 @@ async function selectGuild(id) {
   if (activePage === 'activity')    await loadActivity();
   if (activePage === 'moderators')  await loadModerators();
   if (activePage === 'security')    await loadSecurityConfig();
+  if (activePage === 'automod')     await loadAutoMod();
   if (activePage === 'verification') await loadVerification();
   if (activePage === 'autorole')    await loadAutorole();
   if (activePage === 'reactionroles') await loadReactionRoles();
@@ -1498,6 +1500,247 @@ async function saveSecurityConfig() {
   } catch {
     setStatus(msg, 'err', t('common.saveFailed', 'Failed to save.'));
   }
+}
+
+// ── AUTOMOD ───────────────────────────────────────
+async function loadAutoMod() {
+  hide('automod-body'); hide('automod-save-bar');
+  if (!state.guildId) { show('automod-no-guild'); return; }
+  hide('automod-no-guild');
+  await ensureGuildData();
+  const data = await api('GET', `/api/guild/${state.guildId}/automod`);
+  state.automod = data.config;
+  state.automodMeta = data.meta;
+  state.automodPrem = !!data.premium;
+  renderAutoMod();
+  show('automod-body'); show('automod-save-bar');
+}
+
+const AM_ACTION_EN = { delete: 'Delete message', warn: 'Delete + warn', timeout: 'Delete + timeout', kick: 'Delete + kick', ban: 'Delete + ban' };
+const AM_PARAM_EN = { maxMessages: 'Messages', perSeconds: 'Within (seconds)', maxDuplicates: 'Identical messages in a row', percent: 'Caps percentage (%)', minLength: 'Minimum length (letters)', maxMentions: 'Max mentions', maxEmojis: 'Max emojis', maxRepeat: 'Max repeated characters', maxLines: 'Max lines' };
+const AM_FILTER_DESC_EN = {
+  spam: 'Too many messages in a short time.',
+  duplicates: 'The same message sent several times in a row.',
+  invites: 'Invite links to other Discord servers.',
+  links: 'Any link that is not on the allowed list.',
+  words: 'Your own blocked words plus ready-made insult lists.',
+  caps: 'Messages written mostly in capital letters.',
+  mentions: 'Too many mentions in one message, or @everyone / @here.',
+  emojis: 'Too many emojis in one message.',
+  chars: 'Long runs of the same character or lots of line breaks.'
+};
+const amLines = v => String(v || '').split(/[\n,]/).map(x => x.trim()).filter(Boolean);
+
+function amActionOpts(sel) {
+  return state.automodMeta.actions.map(a =>
+    `<option value="${a}"${a === sel ? ' selected' : ''} data-i18n="am.act.${a}" data-en="${AM_ACTION_EN[a]}">${tA('am.act.' + a, AM_ACTION_EN[a])}</option>`).join('');
+}
+
+function amPremLock() {
+  return `<p class="hint">${premiumChip()} ${tt('am.premOnly', 'Activate Premium on this server to use this.')}</p>`;
+}
+
+function amFilterCard(meta) {
+  const f = state.automod.filters[meta.key];
+  const prem = state.automodPrem;
+  const k = meta.key;
+  const params = meta.params.map(p => `
+    <div class="form-row"><label>${tt('am.p.' + p.key, AM_PARAM_EN[p.key])}</label>
+      <input type="number" id="am-${k}-${p.key}" min="${p.min}" max="${p.max}" value="${f[p.key]}"></div>`).join('');
+
+  let extra = '';
+  if (k === 'invites') extra = `<label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="am-invites-own" ${chk(f.allowOwnServer)}><span>${tt('am.allowOwn', 'Allow invites to this server')}</span></label>`;
+  if (k === 'mentions') extra = `<label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="am-mentions-everyone" ${chk(f.blockEveryone)}><span>${tt('am.blockEveryone', 'Block @everyone and @here from members without permission')}</span></label>`;
+  if (k === 'links') extra = `<div class="form-row"><label>${tt('am.allowedDomains', 'Allowed websites')}</label>
+      <textarea id="am-links-domains" rows="3" placeholder="youtube.com">${esc(f.allowedDomains.join('\n'))}</textarea>
+      <span class="hint">${tt('am.allowedDomainsHint', 'One domain per line. Subdomains are included automatically. Discord links are always allowed.')}</span></div>`;
+  if (k === 'words') {
+    const cap = state.automodMeta.wordCap;
+    const wl = state.automodMeta.wordLists;
+    extra = `
+      <div class="form-row"><label>${tt('am.words', 'Blocked words')} <span class="hint" id="am-words-count">${f.words.length}/${cap}</span></label>
+        <textarea id="am-words-list" rows="5" placeholder="${tA('am.wordsPh', 'One word or phrase per line')}" oninput="amWordCount()">${esc(f.words.join('\n'))}</textarea>
+        <span class="hint">${tx('am.wordsHint', 'Not case sensitive. Simple tricks like 4 for a or 0 for o are caught automatically. Free servers: up to {f} words, {chip} up to {p}.', { vars: { f: '150', p: '1000', chip: premiumChip() } })}</span></div>
+      <label class="sec-switch"><input type="checkbox" id="am-words-whole" ${chk(f.wholeWord)}><span>${tt('am.wholeWord', 'Only match whole words (recommended)')}</span></label>
+      <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="am-words-de" ${chk(f.listDe)}><span>${tx('am.listDe', 'Built-in German insult list ({n} words)', { vars: { n: wl.de } })}</span></label>
+      <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="am-words-en" ${chk(f.listEn)}><span>${tx('am.listEn', 'Built-in English insult list ({n} words)', { vars: { n: wl.en } })}</span></label>
+      <div class="form-row" style="margin-top:12px"><label>${tt('am.regex', 'Regex patterns')} ${premiumChip()}</label>
+        ${prem ? `<textarea id="am-words-regex" rows="3" placeholder="h[\\W_]*u[\\W_]*r[\\W_]*e">${esc(f.regex.join('\n'))}</textarea>
+        <span class="hint">${tx('am.regexHint', 'One pattern per line, up to {n}. Checked against the original message, not case sensitive.', { vars: { n: state.automodMeta.maxRegex } })}</span>` : amPremLock()}
+      </div>`;
+  }
+
+  const exempt = prem
+    ? `<div class="card-grid" style="margin-top:8px">
+         <div class="form-row"><label>${tt('am.fExRoles', 'Ignore roles for this filter')}</label><div id="am-${k}-exr"></div></div>
+         <div class="form-row"><label>${tt('am.fExCh', 'Ignore channels for this filter')}</label><div id="am-${k}-exc"></div></div>
+       </div>`
+    : `<div style="margin-top:8px"><span class="hint">${premiumChip()} ${tt('am.fExLocked', 'Per-filter exceptions need Premium.')}</span></div>`;
+
+  return `
+    <div class="card am-filter" data-key="${k}">
+      <label class="sec-switch sec-master"><input type="checkbox" id="am-${k}-on" ${chk(f.enabled)}>
+        <span><strong>${tt('am.f.' + k, meta.label)}</strong></span></label>
+      <p class="hint" style="margin:6px 0 12px">${tt('am.fd.' + k, AM_FILTER_DESC_EN[k])}</p>
+      <div class="card-grid">
+        ${params}
+        <div class="form-row"><label>${tt('am.action', 'Action')}</label><select id="am-${k}-action">${amActionOpts(f.action)}</select></div>
+        <div class="form-row"><label>${tt('am.timeoutMin', 'Timeout length (minutes)')}</label><input type="number" id="am-${k}-tmin" min="1" max="40320" value="${f.timeoutMinutes}"></div>
+      </div>
+      ${extra}
+      ${exempt}
+    </div>`;
+}
+
+function amPresetButtons() {
+  const cur = state.automod.preset;
+  return Object.keys(state.automodMeta.presets).map(name =>
+    `<button class="btn ${cur === name ? 'btn-primary' : 'btn-secondary'}" onclick="applyAutoModPreset('${name}')">${tt('alt.preset.' + name, name)}</button>`).join('')
+    + (cur === 'custom' ? `<span class="hint" style="align-self:center">${tt('alt.custom', 'Custom settings')}</span>` : '');
+}
+
+function amOverrideRows() {
+  const list = state.automod.roleOverrides || [];
+  if (!list.length) return `<p class="lv-empty">${tt('am.noOverrides', 'No role rules yet.')}</p>`;
+  return list.map((o, i) => `
+    <div class="lv-row am-ovr" data-i="${i}">
+      <select class="am-ovr-role">${lvRoleOpts(o.roleId)}</select>
+      <select class="am-ovr-action">${amActionOpts(o.action)}</select>
+      <input type="number" class="am-ovr-min" min="1" max="40320" value="${o.timeoutMinutes}" style="width:90px" title="${tA('am.timeoutMin', 'Timeout length (minutes)')}">
+      <button class="btn btn-secondary lv-del" onclick="amDelOverride(${i})">${svg('x')}</button>
+    </div>`).join('');
+}
+
+function renderAutoMod() {
+  const c = state.automod;
+  const prem = state.automodPrem;
+  document.getElementById('automod-body').innerHTML = `
+    <div class="card">
+      <label class="sec-switch sec-master"><input type="checkbox" id="am-enabled" ${chk(c.enabled)}>
+        <span>${tx('am.enable', '<strong>Enable AutoMod</strong>. When off, no messages are checked.')}</span></label>
+    </div>
+    <div class="card">
+      <h3>${tt('alt.sensitivity', 'Sensitivity')}</h3>
+      <p class="hint" style="margin-bottom:12px">${tt('am.presetHint', 'Presets switch filters on or off and set their limits and actions. Your word lists, channels and roles are kept.')}</p>
+      <div class="btn-row" id="am-presets">${amPresetButtons()}</div>
+    </div>
+    <div class="card">
+      <h3>${tt('am.general', 'General')}</h3>
+      <div class="card-grid">
+        <div class="form-row"><label>${tt('am.logCh', 'AutoMod Log Channel')}</label><select id="am-log"></select>
+          <span class="hint">${tt('am.logHint', 'Every removed message is logged here with the reason and action.')}</span></div>
+      </div>
+      <label class="sec-switch"><input type="checkbox" id="am-notify" ${chk(c.notify)}><span>${tt('am.notify', 'Post a short notice in the channel (deletes itself after a few seconds)')}</span></label>
+      <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="am-ignoremods" ${chk(c.ignoreMods)}><span>${tt('am.ignoreMods', 'Ignore moderators (from the Moderators tab and anyone with Manage Messages)')}</span></label>
+      <p class="hint" style="margin-top:8px">${tt('am.adminHint', 'Admins and the server owner are always ignored.')}</p>
+      <div class="card-grid" style="margin-top:12px">
+        <div class="form-row"><label>${tt('am.exRoles', 'Ignored roles')}</label><div id="am-exroles"></div></div>
+        <div class="form-row"><label>${tt('am.exCh', 'Ignored channels')}</label><div id="am-exch"></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>${tt('am.overrides', 'Actions per role')} ${premiumChip()}</h3>
+      <p class="hint" style="margin-bottom:12px">${tt('am.overridesHint', 'Members with one of these roles get this action instead of the filter\'s own action. The first matching rule wins.')}</p>
+      ${prem ? `<div id="am-overrides">${amOverrideRows()}</div>
+        <button class="btn btn-secondary" style="margin-top:8px" onclick="amAddOverride()">${tt('am.addOverride', '+ Add role rule')}</button>` : amPremLock()}
+    </div>
+    <h3 style="margin:24px 4px 8px">${tt('am.filters', 'Filters')}</h3>
+    ${state.automodMeta.filters.map(amFilterCard).join('')}`;
+
+  fillSelect('am-log', state.guildData.textChannels, c.logChannelId, n => `#${n.name}`);
+  msInit('am-exroles', roleItems(), c.exemptRoleIds);
+  msInit('am-exch', channelItems(), c.exemptChannelIds);
+  if (prem) for (const meta of state.automodMeta.filters) {
+    msInit(`am-${meta.key}-exr`, roleItems(), c.filters[meta.key].exemptRoleIds);
+    msInit(`am-${meta.key}-exc`, channelItems(), c.filters[meta.key].exemptChannelIds);
+  }
+  // Editing any filter value turns the preset into "Custom".
+  document.getElementById('automod-body').oninput = e => {
+    if (e.target.closest('.am-filter') && state.automod.preset !== 'custom') {
+      state.automod.preset = 'custom';
+      document.getElementById('am-presets').innerHTML = amPresetButtons();
+    }
+  };
+}
+
+function amWordCount() {
+  const n = new Set(amLines(document.getElementById('am-words-list').value).map(w => w.toLowerCase())).size;
+  const el = document.getElementById('am-words-count');
+  el.textContent = `${n}/${state.automodMeta.wordCap}`;
+  el.style.color = n > state.automodMeta.wordCap ? 'var(--red)' : '';
+}
+
+function collectAutoMod() {
+  const c = state.automod;
+  const v = id => document.getElementById(id);
+  c.enabled = boolv('am-enabled');
+  c.logChannelId = v('am-log').value || null;
+  c.notify = boolv('am-notify');
+  c.ignoreMods = boolv('am-ignoremods');
+  c.exemptRoleIds = msValues('am-exroles');
+  c.exemptChannelIds = msValues('am-exch');
+  if (state.automodPrem && v('am-overrides')) {
+    c.roleOverrides = [...document.querySelectorAll('#am-overrides .am-ovr')].map(r => ({
+      roleId: r.querySelector('.am-ovr-role').value,
+      action: r.querySelector('.am-ovr-action').value,
+      timeoutMinutes: Number(r.querySelector('.am-ovr-min').value) || 10
+    })).filter(o => o.roleId);
+  }
+  for (const meta of state.automodMeta.filters) {
+    const k = meta.key, f = c.filters[k];
+    f.enabled = boolv(`am-${k}-on`);
+    f.action = v(`am-${k}-action`).value;
+    f.timeoutMinutes = numv(`am-${k}-tmin`, f.timeoutMinutes);
+    for (const p of meta.params) f[p.key] = numv(`am-${k}-${p.key}`, f[p.key]);
+    if (state.automodPrem && v(`am-${k}-exr`)) { f.exemptRoleIds = msValues(`am-${k}-exr`); f.exemptChannelIds = msValues(`am-${k}-exc`); }
+  }
+  c.filters.invites.allowOwnServer = boolv('am-invites-own');
+  c.filters.mentions.blockEveryone = boolv('am-mentions-everyone');
+  c.filters.links.allowedDomains = amLines(v('am-links-domains').value);
+  const w = c.filters.words;
+  w.words = amLines(v('am-words-list').value);
+  w.wholeWord = boolv('am-words-whole');
+  w.listDe = boolv('am-words-de');
+  w.listEn = boolv('am-words-en');
+  if (v('am-words-regex')) w.regex = String(v('am-words-regex').value || '').split('\n').map(x => x.trim()).filter(Boolean);
+  return c;
+}
+
+function applyAutoModPreset(name) {
+  collectAutoMod();
+  const preset = state.automodMeta.presets[name] || {};
+  for (const [k, vals] of Object.entries(preset)) Object.assign(state.automod.filters[k], vals);
+  state.automod.preset = name;
+  renderAutoMod();
+  markDirty();
+}
+
+function amAddOverride() {
+  collectAutoMod();
+  state.automod.roleOverrides.push({ roleId: state.guildData?.roles?.[0]?.id || '', action: 'timeout', timeoutMinutes: 10 });
+  document.getElementById('am-overrides').innerHTML = amOverrideRows();
+  markDirty();
+}
+function amDelOverride(i) {
+  collectAutoMod();
+  state.automod.roleOverrides.splice(i, 1);
+  document.getElementById('am-overrides').innerHTML = amOverrideRows();
+  markDirty();
+}
+
+async function saveAutoMod() {
+  if (!state.guildId) return;
+  const msg = document.getElementById('automod-save-msg');
+  const payload = collectAutoMod();
+  const cap = state.automodMeta.wordCap;
+  if (new Set(payload.filters.words.words.map(w => w.toLowerCase())).size > cap)
+    return setStatus(msg, 'err', tA('am.tooManyWords', 'Too many blocked words. This server can have up to {n}.', { n: cap }));
+  try {
+    const res = await api('PUT', `/api/guild/${state.guildId}/automod`, payload);
+    state.automod = res.config;
+    setStatus(msg, 'ok', tA('common.saved', 'Saved!'));
+    renderAutoMod();
+  } catch (e) { setStatus(msg, 'err', e.message || tA('common.saveFailed', 'Failed to save.')); }
 }
 
 // ── VERIFICATION ──────────────────────────────────

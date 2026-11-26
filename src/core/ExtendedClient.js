@@ -11,6 +11,7 @@ const { ReactionRoleStore } = require('../reactionrole/store');
 const { AutoResponseStore } = require('../autoresponse/store');
 const { ApplicationStore } = require('../applications/store');
 const { MemberCounterStore } = require('../membercounter/store');
+const { AutoModStore } = require('../automod/store');
 const { getPremiumStore } = require('../premium');
 const loadCommands = require('./loadCommands');
 const loadEvents = require('./loadEvents');
@@ -35,6 +36,7 @@ class ExtendedClient extends Client {
     this.autoresponses = new AutoResponseStore();
     this.applications  = new ApplicationStore();
     this.memberCounters = new MemberCounterStore();
+    this.automod        = new AutoModStore();
     this.premium        = getPremiumStore();
 
     // Backwards-compatible aliases so the dashboard layer can read/write through

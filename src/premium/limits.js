@@ -14,7 +14,8 @@ const LIMITS = {
   applicationQuestions: { free: 8,  premium: 25, label: 'questions per application form', unit: 'questions' },
   ticketPanels:         { free: 2,  premium: 10, label: 'ticket panels',                  unit: 'panels' },
   ticketForms:          { free: 2,  premium: 10, label: 'ticket forms',                   unit: 'forms' },
-  autoResponses:        { free: 5,  premium: 50, label: 'auto responses',                 unit: 'responses' }
+  autoResponses:        { free: 5,  premium: 50, label: 'auto responses',                 unit: 'responses' },
+  automodWords:         { free: 150, premium: 1000, label: 'AutoMod blocked words',      unit: 'words' }
 };
 
 // The effective cap for a feature given whether the guild is premium.
