@@ -1544,8 +1544,8 @@ async function saveVerification(repost) {
 
 // ── WELCOME & LEAVE ───────────────────────────────
 const GREET_META = {
-  welcome: { title: 'Welcome Message', blurb: 'Posted when a member joins the server.' },
-  leave:   { title: 'Leave Message',   blurb: 'Posted when a member leaves the server.' }
+  welcome: { key: 'welcome', title: 'Welcome Message', blurb: 'Posted when a member joins the server.' },
+  leave:   { key: 'leave',   title: 'Leave Message',   blurb: 'Posted when a member leaves the server.' }
 };
 
 async function loadGreetings() {
@@ -1567,47 +1567,47 @@ function renderGreetSection(which) {
   const meta = GREET_META[which];
   const isEmbed = cfg.mode === 'embed';
   const thumbMode = cfg.embed.thumbnail === 'avatar' ? 'avatar' : (cfg.embed.thumbnail ? 'url' : 'none');
-  const textLabel = isEmbed ? 'Text above the embed (optional)' : 'Message text';
+  const textLabel = isEmbed ? tt('gr.textAbove', 'Text above the embed (optional)') : tt('gr.msgText', 'Message text');
   document.getElementById(`greet-${which}-section`).innerHTML = `
     <div class="card">
       <label class="sec-switch sec-master">
         <input type="checkbox" id="g-${which}-enabled" ${cfg.enabled ? 'checked' : ''}>
-        <span><strong>Enable ${meta.title}</strong></span>
+        <span><strong>${tt('gr.enable.' + meta.key, 'Enable ' + meta.title)}</strong></span>
       </label>
-      <p class="hint" style="margin:6px 0 14px">${meta.blurb}</p>
+      <p class="hint" style="margin:6px 0 14px">${tt('gr.blurb.' + meta.key, meta.blurb)}</p>
       <div class="card-grid">
-        <div class="form-row"><label>Channel</label><select id="g-${which}-channel">${lvChannelOpts(cfg.channelId || '')}</select></div>
-        <div class="form-row"><label>Message style</label>
+        <div class="form-row"><label>${tt('gr.channel', "Channel")}</label><select id="g-${which}-channel">${lvChannelOpts(cfg.channelId || '')}</select></div>
+        <div class="form-row"><label>${tt('gr.message_style', "Message style")}</label>
           <select id="g-${which}-mode" onchange="greetModeChanged('${which}')">
-            <option value="embed"${isEmbed ? ' selected' : ''}>Embed</option>
-            <option value="text"${!isEmbed ? ' selected' : ''}>Plain text</option>
+            <option value="embed"${isEmbed ? ' selected' : ''}>${tt('gr.embed', "Embed")}</option>
+            <option value="text"${!isEmbed ? ' selected' : ''}>${tt('gr.plain_text', "Plain text")}</option>
           </select>
         </div>
       </div>
       <div class="form-row"><label>${textLabel}</label><textarea id="g-${which}-text" maxlength="2000" placeholder="Welcome {user} to {server}!">${esc(cfg.text || '')}</textarea></div>
       <div id="g-${which}-embed" class="${isEmbed ? '' : 'hidden'}">
         <div class="card-grid">
-          <div class="form-row"><label>Embed title</label><input type="text" id="g-${which}-title" maxlength="256" value="${esc(cfg.embed.title)}" placeholder="Welcome!"></div>
-          <div class="form-row"><label>Color</label><div class="color-row"><input type="color" id="g-${which}-color" value="${/^#[0-9a-fA-F]{6}$/.test(cfg.embed.color) ? cfg.embed.color : '#5865F2'}"></div></div>
+          <div class="form-row"><label>${tt('gr.embed_title', "Embed title")}</label><input type="text" id="g-${which}-title" maxlength="256" value="${esc(cfg.embed.title)}" placeholder="${tA('gr.welcome', "Welcome!")}"></div>
+          <div class="form-row"><label>${tt('gr.color', "Color")}</label><div class="color-row"><input type="color" id="g-${which}-color" value="${/^#[0-9a-fA-F]{6}$/.test(cfg.embed.color) ? cfg.embed.color : '#5865F2'}"></div></div>
         </div>
-        <div class="form-row"><label>Embed description</label><textarea id="g-${which}-desc" maxlength="4000" placeholder="Glad to have you, {username}. You are member number {membercount}.">${esc(cfg.embed.description)}</textarea></div>
+        <div class="form-row"><label>${tt('gr.embed_description', "Embed description")}</label><textarea id="g-${which}-desc" maxlength="4000" placeholder="Glad to have you, {username}. You are member number {membercount}.">${esc(cfg.embed.description)}</textarea></div>
         <div class="card-grid">
-          <div class="form-row"><label>Thumbnail</label>
+          <div class="form-row"><label>${tt('gr.thumbnail', "Thumbnail")}</label>
             <select id="g-${which}-thumb-mode" onchange="greetThumbChanged('${which}')">
-              <option value="none"${thumbMode === 'none' ? ' selected' : ''}>None</option>
-              <option value="avatar"${thumbMode === 'avatar' ? ' selected' : ''}>Member avatar</option>
-              <option value="url"${thumbMode === 'url' ? ' selected' : ''}>Custom URL</option>
+              <option value="none"${thumbMode === 'none' ? ' selected' : ''} data-i18n="logs.none" data-en="None">${tA('logs.none', 'None')}</option>
+              <option value="avatar"${thumbMode === 'avatar' ? ' selected' : ''}>${tt('gr.member_avatar', "Member avatar")}</option>
+              <option value="url"${thumbMode === 'url' ? ' selected' : ''}>${tt('gr.custom_url', "Custom URL")}</option>
             </select>
           </div>
-          <div class="form-row"><label>Footer text</label><input type="text" id="g-${which}-footer" maxlength="2048" value="${esc(cfg.embed.footer)}"></div>
+          <div class="form-row"><label>${tt('gr.footer_text', "Footer text")}</label><input type="text" id="g-${which}-footer" maxlength="2048" value="${esc(cfg.embed.footer)}"></div>
         </div>
-        <div class="form-row ${thumbMode === 'url' ? '' : 'hidden'}" id="g-${which}-thumb-url-row"><label>Thumbnail URL</label><input type="text" id="g-${which}-thumb-url" maxlength="500" value="${esc(thumbMode === 'url' ? cfg.embed.thumbnail : '')}" placeholder="https://example.com/image.png"></div>
-        <div class="form-row"><label>Banner image URL</label><input type="text" id="g-${which}-image" maxlength="500" value="${esc(cfg.embed.image)}" placeholder="https://example.com/banner.png"></div>
-        <label class="sec-switch" style="margin-top:4px"><input type="checkbox" id="g-${which}-ts" ${cfg.embed.showTimestamp ? 'checked' : ''}><span>Show a timestamp on the embed</span></label>
+        <div class="form-row ${thumbMode === 'url' ? '' : 'hidden'}" id="g-${which}-thumb-url-row"><label>${tt('gr.thumbnail_url', "Thumbnail URL")}</label><input type="text" id="g-${which}-thumb-url" maxlength="500" value="${esc(thumbMode === 'url' ? cfg.embed.thumbnail : '')}" placeholder="https://example.com/image.png"></div>
+        <div class="form-row"><label>${tt('gr.banner_image_url', "Banner image URL")}</label><input type="text" id="g-${which}-image" maxlength="500" value="${esc(cfg.embed.image)}" placeholder="https://example.com/banner.png"></div>
+        <label class="sec-switch" style="margin-top:4px"><input type="checkbox" id="g-${which}-ts" ${cfg.embed.showTimestamp ? 'checked' : ''}><span>${tt('gr.show_a_timestamp_on_the_embed', "Show a timestamp on the embed")}</span></label>
       </div>
-      <div class="hint" style="margin-top:12px">Placeholders: <code>{user}</code> mention, <code>{username}</code>, <code>{tag}</code>, <code>{server}</code>, <code>{membercount}</code>.</div>
+      <div class="hint" style="margin-top:12px">${tx('gr.placeholders', 'Placeholders: {user} mention, {username}, {tag}, {server}, {membercount}.', { vars: { user: '<code>{user}</code>', username: '<code>{username}</code>', tag: '<code>{tag}</code>', server: '<code>{server}</code>', membercount: '<code>{membercount}</code>' } })}</div>
       <div class="btn-row" style="margin-top:12px;align-items:center">
-        <button class="btn btn-secondary" onclick="testGreeting('${which}')">Send test message</button>
+        <button class="btn btn-secondary" onclick="testGreeting('${which}')">${tt('gr.send_test_message', "Send test message")}</button>
         <span id="g-${which}-test-msg" class="save-status"></span>
       </div>
     </div>`;
@@ -1643,10 +1643,10 @@ async function saveGreetings() {
   try {
     const res = await api('PUT', `/api/guild/${state.guildId}/greetings`, state.greetings);
     state.greetings = res.config;
-    setStatus(msg, 'ok', 'Saved');
+    setStatus(msg, 'ok', tA('common.saved', 'Saved!'));
     renderGreetSection('welcome');
     renderGreetSection('leave');
-  } catch (e) { setStatus(msg, 'err', e.message || 'Failed to save.'); }
+  } catch (e) { setStatus(msg, 'err', e.message || tA('common.saveFailed', 'Failed to save.')); }
 }
 
 async function testGreeting(which) {
@@ -1654,12 +1654,12 @@ async function testGreeting(which) {
   collectGreetSection('welcome');
   collectGreetSection('leave');
   const msg = document.getElementById(`g-${which}-test-msg`);
-  if (!state.greetings[which].channelId) return setStatus(msg, 'err', 'Pick a channel first.');
+  if (!state.greetings[which].channelId) return setStatus(msg, 'err', tA('gr.pickChannel', 'Pick a channel first.'));
   try {
     const res = await api('PUT', `/api/guild/${state.guildId}/greetings`, { ...state.greetings, test: which });
     state.greetings = res.config;
-    setStatus(msg, res.tested ? 'ok' : 'err', res.tested ? 'Test sent to the channel.' : 'Could not send. Check the channel and my permissions.');
-  } catch (e) { setStatus(msg, 'err', e.message || 'Failed.'); }
+    setStatus(msg, res.tested ? 'ok' : 'err', res.tested ? tA('gr.testSent', 'Test sent to the channel.') : tA('gr.testFail', 'Could not send. Check the channel and my permissions.'));
+  } catch (e) { setStatus(msg, 'err', e.message || tA('common.failed', 'Failed.')); }
 }
 
 // ── SOCIAL ALERTS ─────────────────────────────────
@@ -2677,7 +2677,7 @@ async function rrCreate() {
     managed:   source === 'bot',
     mappings:  rrCollectMaps('rr-new-maps')
   };
-  if (!payload.channelId) return setStatus(msg, 'err', '❌ Pick a channel.');
+  if (!payload.channelId) return setStatus(msg, 'err', tA('poll.pickChannel', 'Pick a channel.'));
   if (source === 'bot') {
     payload.embed = boolv('rr-new-embed');
     payload.title = document.getElementById('rr-new-title').value.trim() || null;
@@ -2711,17 +2711,22 @@ async function rrSave(id) {
     await api('PUT', `/api/guild/${state.guildId}/reactionroles/${id}`, payload);
     setStatus(msg, 'ok', t('common.saved', 'Saved!'));
     await loadReactionRoles();
-  } catch (e) { setStatus(msg, 'err', '❌ ' + e.message); }
+  } catch (e) { setStatus(msg, 'err', e.message); }
 }
 
 async function rrDelete(id) {
   if (!confirm('Delete this reaction-role panel? If the bot posted the message, it will be deleted too.')) return;
   try { await api('DELETE', `/api/guild/${state.guildId}/reactionroles/${id}`); await loadReactionRoles(); }
-  catch (e) { alert('Failed to delete: ' + e.message); }
+  catch (e) { alert(tA('ar.delFailed', 'Failed to delete: ') + e.message); }
 }
 
 // ── AUTO RESPONSES ────────────────────────────────
-const ARSP_MATCH_LABELS = { exact: 'Exact match', contains: 'Contains', starts: 'Starts with', ends: 'Ends with' };
+const ARSP_MATCH_LABELS = {
+  get exact()    { return tA('ar.match.exact', 'Exact match'); },
+  get contains() { return tA('ar.match.contains', 'Contains'); },
+  get starts()   { return tA('ar.match.starts', 'Starts with'); },
+  get ends()     { return tA('ar.match.ends', 'Ends with'); }
+};
 
 async function loadAutoResponses() {
   hide('arsp-body');
@@ -2750,44 +2755,44 @@ function arspBlankRule() {
 function renderAutoResponses() {
   if (state.arspEditing) return renderArspEditor();
   const gate = premiumGate('autoResponses', state.arspRules.length);
-  const newBtn = gateCreateButton(gate, 'New Response', 'arspNew()', 'autoResponses', { icon: svg('plus') });
+  const newBtn = gateCreateButton(gate, tt('ar.new', 'New Response'), 'arspNew()', 'autoResponses', { icon: svg('plus') });
 
   const rows = state.arspRules.length
     ? state.arspRules.map(arspRuleCard).join('')
-    : '<p class="hint" style="padding:16px">No auto responses yet. Create one to reply automatically when a message matches a trigger.</p>';
+    : `<p class="hint" style="padding:16px">${tt('ar.no_auto_responses_yet_create_one_to_repl', "No auto responses yet. Create one to reply automatically when a message matches a trigger.")}</p>`;
 
   document.getElementById('arsp-body').innerHTML = `
     <div class="card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      <div style="flex:1;min-width:200px"><strong>${state.arspRules.length}</strong> auto response${state.arspRules.length === 1 ? '' : 's'} configured. ${gate.hint}</div>
+      <div style="flex:1;min-width:200px">${tx('ar.count', '', { n: state.arspRules.length })} ${gate.hint}</div>
       ${newBtn}
     </div>
     <div class="arsp-list">${rows}</div>`;
 }
 
 function arspRuleCard(r) {
-  const typeTag = r.responseType === 'embed' ? 'Embed' : 'Text';
+  const typeTag = r.responseType === 'embed' ? tt('ar.tagEmbed', 'Embed') : tt('ar.tagText', 'Text');
   const summary = r.responseType === 'embed'
-    ? (r.embed.title || r.embed.description || 'Rich embed').slice(0, 80)
+    ? (r.embed.title || r.embed.description || tA('ar.rich_embed', 'Rich embed')).slice(0, 80)
     : (r.text || '').slice(0, 80);
   return `<div class="card arsp-rule">
     <div class="arsp-rule-head">
       <div class="arsp-rule-meta">
-        <label class="sec-switch" title="Enable or disable this response">
+        <label class="sec-switch" title="${tA('ar.enable_or_disable_this_response', "Enable or disable this response")}">
           <input type="checkbox" ${chk(r.enabled)} onchange="arspToggle('${r.id}', this.checked)"><span></span>
         </label>
         <div>
-          <div class="arsp-rule-title">${esc(r.name || r.trigger || 'Untitled')}</div>
-          <div class="hint">${ARSP_MATCH_LABELS[r.match] || r.match}${r.caseSensitive ? ', case sensitive' : ''} · ${typeTag}</div>
+          <div class="arsp-rule-title">${esc(r.name || r.trigger || tA('ar.untitled', 'Untitled'))}</div>
+          <div class="hint">${ARSP_MATCH_LABELS[r.match] || r.match}${r.caseSensitive ? ', ' + tA('ar.caseLower', 'case sensitive') : ''} · ${typeTag}</div>
         </div>
       </div>
       <div class="btn-row">
-        <button class="btn btn-secondary" onclick="arspEdit('${r.id}')">Edit</button>
-        <button class="btn btn-secondary" onclick="arspDelete('${r.id}')">Delete</button>
+        <button class="btn btn-secondary" onclick="arspEdit('${r.id}')">${tt('ar.edit', "Edit")}</button>
+        <button class="btn btn-secondary" onclick="arspDelete('${r.id}')">${tt('ar.delete', "Delete")}</button>
       </div>
     </div>
     <div class="arsp-rule-body">
-      <div><span class="hint">Trigger</span><div class="arsp-trigger">${esc(r.trigger || '(none)')}</div></div>
-      <div><span class="hint">Responds with</span><div>${esc(summary) || '<span class="hint">(empty)</span>'}</div></div>
+      <div><span class="hint">${tt('ar.trigger', "Trigger")}</span><div class="arsp-trigger">${esc(r.trigger || tA('ar.none', '(none)'))}</div></div>
+      <div><span class="hint">${tt('ar.responds_with', "Responds with")}</span><div>${esc(summary) || `<span class="hint">${tt('ar.empty', "(empty)")}</span>`}</div></div>
     </div>
   </div>`;
 }
@@ -2813,59 +2818,59 @@ function renderArspEditor() {
   const r = state.arspEditing;
   const isEmbed = r.responseType === 'embed';
   const matchOpts = (state.arspMeta.matchModes || []).map(m =>
-    `<option value="${m.value}" ${r.match === m.value ? 'selected' : ''}>${esc(m.label)}</option>`).join('');
+    `<option value="${m.value}" ${r.match === m.value ? 'selected' : ''} data-i18n="ar.match.${m.value}" data-en="${esc(m.label)}">${esc(tA('ar.match.' + m.value, m.label))}</option>`).join('');
 
   document.getElementById('arsp-body').innerHTML = `
     <div class="arsp-editor">
       <div class="arsp-editor-main">
         <div class="card">
-          <h3>${r.id ? 'Edit Auto Response' : 'New Auto Response'}</h3>
+          <h3>${r.id ? tt('ar.editTitle', 'Edit Auto Response') : tt('ar.newTitle', 'New Auto Response')}</h3>
           <div class="card-grid">
-            <div class="form-row"><label>Name (optional)</label>
-              <input type="text" id="arsp-name" maxlength="80" value="${esc(r.name)}" placeholder="Internal label" oninput="arspCollect()"></div>
-            <div class="form-row"><label>Match type</label>
+            <div class="form-row"><label>${tt('ar.name_optional', "Name (optional)")}</label>
+              <input type="text" id="arsp-name" maxlength="80" value="${esc(r.name)}" placeholder="${tA('ar.internal_label', "Internal label")}" oninput="arspCollect()"></div>
+            <div class="form-row"><label>${tt('ar.match_type', "Match type")}</label>
               <select id="arsp-match" onchange="arspCollect()">${matchOpts}</select></div>
           </div>
-          <div class="form-row"><label>Trigger phrase</label>
-            <input type="text" id="arsp-trigger" maxlength="200" value="${esc(r.trigger)}" placeholder="e.g. how do I open a ticket" oninput="arspCollect()"></div>
-          <label class="sec-switch"><input type="checkbox" id="arsp-case" ${chk(r.caseSensitive)} onchange="arspCollect()"><span>Case sensitive</span></label>
+          <div class="form-row"><label>${tt('ar.trigger_phrase', "Trigger phrase")}</label>
+            <input type="text" id="arsp-trigger" maxlength="200" value="${esc(r.trigger)}" placeholder="${tA('ar.e_g_how_do_i_open_a_ticket', "e.g. how do I open a ticket")}" oninput="arspCollect()"></div>
+          <label class="sec-switch"><input type="checkbox" id="arsp-case" ${chk(r.caseSensitive)} onchange="arspCollect()"><span>${tt('ar.case_sensitive', "Case sensitive")}</span></label>
         </div>
 
         <div class="card">
           <div class="arsp-type-tabs">
-            <button class="arsp-tab ${isEmbed ? '' : 'active'}" onclick="arspSetType('text')">Plain text</button>
-            <button class="arsp-tab ${isEmbed ? 'active' : ''}" onclick="arspSetType('embed')">Rich embed</button>
+            <button class="arsp-tab ${isEmbed ? '' : 'active'}" onclick="arspSetType('text')">${tt('ar.plain_text', "Plain text")}</button>
+            <button class="arsp-tab ${isEmbed ? 'active' : ''}" onclick="arspSetType('embed')">${tt('ar.rich_embed', "Rich embed")}</button>
           </div>
           ${isEmbed ? arspEmbedEditorHtml(r) : arspTextEditorHtml(r)}
         </div>
 
         <div class="card">
-          <h3>Behaviour</h3>
+          <h3>${tt('ar.behaviour', "Behaviour")}</h3>
           <div class="card-grid">
-            <label class="sec-switch"><input type="checkbox" id="arsp-reply" ${chk(r.reply)} onchange="arspCollect()"><span>Reply to the triggering message</span></label>
-            <label class="sec-switch"><input type="checkbox" id="arsp-delete" ${chk(r.deleteTrigger)} onchange="arspCollect()"><span>Delete the triggering message</span></label>
+            <label class="sec-switch"><input type="checkbox" id="arsp-reply" ${chk(r.reply)} onchange="arspCollect()"><span>${tt('ar.reply_to_the_triggering_message', "Reply to the triggering message")}</span></label>
+            <label class="sec-switch"><input type="checkbox" id="arsp-delete" ${chk(r.deleteTrigger)} onchange="arspCollect()"><span>${tt('ar.delete_the_triggering_message', "Delete the triggering message")}</span></label>
           </div>
           <div class="card-grid">
-            <div class="form-row"><label>Cooldown (seconds)</label>
+            <div class="form-row"><label>${tt('ar.cooldown_seconds', "Cooldown (seconds)")}</label>
               <input type="number" id="arsp-cooldown" min="0" max="3600" value="${r.cooldownSec || 0}" oninput="arspCollect()">
-              <span class="hint">Minimum time between responses for this rule. 0 means no cooldown.</span></div>
+              <span class="hint">${tt('ar.minimum_time_between_responses_for_this_', "Minimum time between responses for this rule. 0 means no cooldown.")}</span></div>
           </div>
           <div class="card-grid">
-            <div class="form-row"><label>Only in these channels (optional)</label><div id="arsp-channels"></div></div>
-            <div class="form-row"><label>Ignore these roles (optional)</label><div id="arsp-ignoreroles"></div></div>
+            <div class="form-row"><label>${tt('ar.only_in_these_channels_optional', "Only in these channels (optional)")}</label><div id="arsp-channels"></div></div>
+            <div class="form-row"><label>${tt('ar.ignore_these_roles_optional', "Ignore these roles (optional)")}</label><div id="arsp-ignoreroles"></div></div>
           </div>
         </div>
 
         <div class="btn-row" style="margin-top:14px;align-items:center">
-          <button class="btn btn-primary" onclick="arspSave()">${r.id ? 'Save Changes' : 'Create Response'}</button>
-          <button class="btn btn-secondary" onclick="arspCancel()">Cancel</button>
+          <button class="btn btn-primary" onclick="arspSave()">${r.id ? tt('save.changes', 'Save Changes') : tt('ar.create', 'Create Response')}</button>
+          <button class="btn btn-secondary" onclick="arspCancel()">${tt('ar.cancel', "Cancel")}</button>
           <span id="arsp-save-msg" class="save-status"></span>
         </div>
       </div>
 
       <div class="arsp-editor-side">
         <div class="card">
-          <h3>Live preview</h3>
+          <h3>${tt('ar.live_preview', "Live preview")}</h3>
           <div id="arsp-preview" class="arsp-preview"></div>
           <span class="hint">Placeholders: {user} {username} {server} {channel} {memberCount}</span>
         </div>
@@ -2878,41 +2883,41 @@ function renderArspEditor() {
 }
 
 function arspTextEditorHtml(r) {
-  return `<div class="form-row"><label>Response text</label>
-    <textarea id="arsp-text" rows="4" maxlength="2000" placeholder="What the bot should say" oninput="arspCollect()">${esc(r.text)}</textarea></div>`;
+  return `<div class="form-row"><label>${tt('ar.response_text', "Response text")}</label>
+    <textarea id="arsp-text" rows="4" maxlength="2000" placeholder="${tA('ar.what_the_bot_should_say', "What the bot should say")}" oninput="arspCollect()">${esc(r.text)}</textarea></div>`;
 }
 
 function arspEmbedEditorHtml(r) {
   const e = r.embed;
   const fieldRows = (e.fields || []).map((f, i) => `
     <div class="arsp-field-row" data-i="${i}">
-      <input type="text" class="arsp-f-name" maxlength="256" placeholder="Field name" value="${esc(f.name)}" oninput="arspCollect()">
-      <input type="text" class="arsp-f-value" maxlength="1024" placeholder="Field value" value="${esc(f.value)}" oninput="arspCollect()">
-      <label class="arsp-f-inline"><input type="checkbox" class="arsp-f-inlinecb" ${chk(f.inline)} onchange="arspCollect()"> Inline</label>
+      <input type="text" class="arsp-f-name" maxlength="256" placeholder="${tA('ar.field_name', "Field name")}" value="${esc(f.name)}" oninput="arspCollect()">
+      <input type="text" class="arsp-f-value" maxlength="1024" placeholder="${tA('ar.field_value', "Field value")}" value="${esc(f.value)}" oninput="arspCollect()">
+      <label class="arsp-f-inline"><input type="checkbox" class="arsp-f-inlinecb" ${chk(f.inline)} onchange="arspCollect()"> ${tt('ar.inline', "Inline")}</label>
       <button class="btn btn-secondary" onclick="arspRemoveField(${i})">${svg('x')}</button>
-    </div>`).join('') || '<p class="hint">No fields yet.</p>';
+    </div>`).join('') || `<p class="hint">${tt('ar.no_fields_yet', "No fields yet.")}</p>`;
 
   return `
     <div class="card-grid">
-      <div class="form-row"><label>Author name</label><input type="text" id="arsp-e-author" maxlength="256" value="${esc(e.author.name)}" oninput="arspCollect()"></div>
-      <div class="form-row"><label>Author icon URL</label><input type="text" id="arsp-e-authoricon" value="${esc(e.author.iconUrl)}" placeholder="https://" oninput="arspCollect()"></div>
+      <div class="form-row"><label>${tt('ar.author_name', "Author name")}</label><input type="text" id="arsp-e-author" maxlength="256" value="${esc(e.author.name)}" oninput="arspCollect()"></div>
+      <div class="form-row"><label>${tt('ar.author_icon_url', "Author icon URL")}</label><input type="text" id="arsp-e-authoricon" value="${esc(e.author.iconUrl)}" placeholder="https://" oninput="arspCollect()"></div>
     </div>
-    <div class="form-row"><label>Title</label><input type="text" id="arsp-e-title" maxlength="256" value="${esc(e.title)}" oninput="arspCollect()"></div>
-    <div class="form-row"><label>Title link URL (optional)</label><input type="text" id="arsp-e-url" value="${esc(e.url)}" placeholder="https://" oninput="arspCollect()"></div>
-    <div class="form-row"><label>Description</label><textarea id="arsp-e-desc" rows="4" maxlength="4000" oninput="arspCollect()">${esc(e.description)}</textarea></div>
+    <div class="form-row"><label>${tt('ar.title', "Title")}</label><input type="text" id="arsp-e-title" maxlength="256" value="${esc(e.title)}" oninput="arspCollect()"></div>
+    <div class="form-row"><label>${tt('ar.title_link_url_optional', "Title link URL (optional)")}</label><input type="text" id="arsp-e-url" value="${esc(e.url)}" placeholder="https://" oninput="arspCollect()"></div>
+    <div class="form-row"><label>${tt('ar.description', "Description")}</label><textarea id="arsp-e-desc" rows="4" maxlength="4000" oninput="arspCollect()">${esc(e.description)}</textarea></div>
     <div class="card-grid">
-      <div class="form-row"><label>Color</label>
+      <div class="form-row"><label>${tt('ar.color', "Color")}</label>
         <div class="color-row"><input type="color" id="arsp-e-color" value="${/^#[0-9a-fA-F]{6}$/.test(e.color) ? e.color : '#5865F2'}" oninput="arspCollect()"></div></div>
-      <div class="form-row"><label>Thumbnail URL</label><input type="text" id="arsp-e-thumb" value="${esc(e.thumbnail.url)}" placeholder="https://" oninput="arspCollect()"></div>
+      <div class="form-row"><label>${tt('ar.thumbnail_url', "Thumbnail URL")}</label><input type="text" id="arsp-e-thumb" value="${esc(e.thumbnail.url)}" placeholder="https://" oninput="arspCollect()"></div>
     </div>
-    <div class="form-row"><label>Image URL</label><input type="text" id="arsp-e-image" value="${esc(e.image.url)}" placeholder="https://" oninput="arspCollect()"></div>
-    <div class="form-row"><label>Fields</label><div id="arsp-fields">${fieldRows}</div>
-      <div style="margin-top:8px"><button class="btn btn-secondary" onclick="arspAddField()">+ Add field</button></div></div>
+    <div class="form-row"><label>${tt('ar.image_url', "Image URL")}</label><input type="text" id="arsp-e-image" value="${esc(e.image.url)}" placeholder="https://" oninput="arspCollect()"></div>
+    <div class="form-row"><label>${tt('ar.fields', "Fields")}</label><div id="arsp-fields">${fieldRows}</div>
+      <div style="margin-top:8px"><button class="btn btn-secondary" onclick="arspAddField()">${tt('ar.add_field', "+ Add field")}</button></div></div>
     <div class="card-grid">
-      <div class="form-row"><label>Footer text</label><input type="text" id="arsp-e-footer" maxlength="2048" value="${esc(e.footer.text)}" oninput="arspCollect()"></div>
-      <div class="form-row"><label>Footer icon URL</label><input type="text" id="arsp-e-footericon" value="${esc(e.footer.iconUrl)}" placeholder="https://" oninput="arspCollect()"></div>
+      <div class="form-row"><label>${tt('ar.footer_text', "Footer text")}</label><input type="text" id="arsp-e-footer" maxlength="2048" value="${esc(e.footer.text)}" oninput="arspCollect()"></div>
+      <div class="form-row"><label>${tt('ar.footer_icon_url', "Footer icon URL")}</label><input type="text" id="arsp-e-footericon" value="${esc(e.footer.iconUrl)}" placeholder="https://" oninput="arspCollect()"></div>
     </div>
-    <label class="sec-switch"><input type="checkbox" id="arsp-e-timestamp" ${chk(e.timestamp)} onchange="arspCollect()"><span>Show current timestamp</span></label>`;
+    <label class="sec-switch"><input type="checkbox" id="arsp-e-timestamp" ${chk(e.timestamp)} onchange="arspCollect()"><span>${tt('ar.show_current_timestamp', "Show current timestamp")}</span></label>`;
 }
 
 // Reads editor DOM into state.arspEditing without re-rendering inputs (keeps focus).
@@ -2976,11 +2981,11 @@ function arspPreviewHtml(r) {
   if (r.responseType === 'text') {
     const t = (r.text || '').trim();
     return t ? `<div class="arsp-preview-text">${esc(t).replace(/\n/g, '<br>')}</div>`
-             : '<span class="hint">Nothing to preview yet.</span>';
+             : `<span class="hint">${tt('ar.nothing_to_preview_yet', "Nothing to preview yet.")}</span>`;
   }
   const e = r.embed;
   const has = e.title || e.description || e.author.name || e.footer.text || e.image.url || e.thumbnail.url || (e.fields || []).some(f => f.name || f.value);
-  if (!has) return '<span class="hint">Nothing to preview yet.</span>';
+  if (!has) return `<span class="hint">${tt('ar.nothing_to_preview_yet', "Nothing to preview yet.")}</span>`;
   const color = /^#[0-9a-fA-F]{6}$/.test(e.color) ? e.color : '#5865F2';
   const fieldsHtml = (e.fields || []).filter(f => f.name || f.value).map(f =>
     `<div class="arsp-pv-field${f.inline ? ' inline' : ''}"><div class="arsp-pv-fname">${esc(f.name) || '​'}</div><div class="arsp-pv-fval">${esc(f.value).replace(/\n/g, '<br>') || '​'}</div></div>`).join('');
@@ -3006,8 +3011,8 @@ async function arspSave() {
   arspCollect();
   const r = state.arspEditing;
   const msg = document.getElementById('arsp-save-msg');
-  if (!r.trigger.trim()) return setStatus(msg, 'err', 'A trigger phrase is required.');
-  if (r.responseType === 'text' && !r.text.trim()) return setStatus(msg, 'err', 'Add the text this response should send.');
+  if (!r.trigger.trim()) return setStatus(msg, 'err', tA('ar.needTrigger', 'A trigger phrase is required.'));
+  if (r.responseType === 'text' && !r.text.trim()) return setStatus(msg, 'err', tA('ar.needText', 'Add the text this response should send.'));
   try {
     if (r.id) await api('PUT', `/api/guild/${state.guildId}/autoresponses/${r.id}`, r);
     else      await api('POST', `/api/guild/${state.guildId}/autoresponses`, r);
@@ -3023,9 +3028,9 @@ async function arspToggle(id, enabled) {
 }
 
 async function arspDelete(id) {
-  if (!confirm('Delete this auto response?')) return;
+  if (!confirm(tA('ar.confirmDel', 'Delete this auto response?'))) return;
   try { await api('DELETE', `/api/guild/${state.guildId}/autoresponses/${id}`); await loadAutoResponses(); }
-  catch (e) { alert('Failed to delete: ' + e.message); }
+  catch (e) { alert(tA('ar.delFailed', 'Failed to delete: ') + e.message); }
 }
 
 // ── BOT LOGS ──────────────────────────────────────
@@ -3327,7 +3332,18 @@ function renderMarkdown(text) {
 //  APPLICATIONS
 // ═══════════════════════════════════════
 const APP_STATUS_FALLBACK = { label: 'Unknown', emoji: '•', color: 0x99aab5 };
-const QTYPE_LABEL = { short: 'Short Text', paragraph: 'Paragraph', multiple_choice: 'Multiple Choice', dropdown: 'Dropdown' };
+const QTYPE_LABEL = {
+  get short()           { return tA('ap.q.short', 'Short Text'); },
+  get paragraph()       { return tA('ap.q.paragraph', 'Paragraph'); },
+  get multiple_choice() { return tA('ap.q.multiple_choice', 'Multiple Choice'); },
+  get dropdown()        { return tA('ap.q.dropdown', 'Dropdown'); }
+};
+// Translated label for a status meta object (looks its key up in statusMeta).
+function appStatusLabel(m) {
+  const sm = state.appsMeta?.statusMeta || {};
+  const key = Object.keys(sm).find(k => sm[k] === m);
+  return key ? tA('ap.st.' + key, m.label) : m.label;
+}
 function appStatusMeta(s) { return (state.appsMeta?.statusMeta || {})[s] || APP_STATUS_FALLBACK; }
 function hex6(n) { return '#' + (Number(n) || 0).toString(16).padStart(6, '0'); }
 
@@ -3365,23 +3381,23 @@ function renderFormsTab() {
   const rows = state.appsForms.length ? state.appsForms.map((f, i) => `
     <div class="apps-form-row" draggable="true" data-i="${i}"
          ondragstart="appsFormDragStart(event,${i})" ondragover="event.preventDefault()" ondrop="appsFormDrop(event,${i})">
-      <span class="apps-drag" title="Drag to reorder">⋮⋮</span>
+      <span class="apps-drag" title="${tA('ap.drag_to_reorder', "Drag to reorder")}">⋮⋮</span>
       <div class="apps-form-info">
-        <div class="apps-form-name">${esc(f.name)} ${f.enabled ? '<span class="badge badge-low">Enabled</span>' : '<span class="badge">Disabled</span>'}</div>
-        <div class="hint">${f.questions.length} question${f.questions.length === 1 ? '' : 's'}${f.description ? ` · ${esc(f.description)}` : ''}</div>
+        <div class="apps-form-name">${esc(f.name)} ${f.enabled ? `<span class="badge badge-low">${tt('ap.enabled', "Enabled")}</span>` : `<span class="badge">${tt('ap.disabled', "Disabled")}</span>`}</div>
+        <div class="hint">${tx('ap.qcount', '', { n: f.questions.length })}${f.description ? ` · ${esc(f.description)}` : ''}</div>
       </div>
       <div class="apps-form-actions">
         <label class="cmd-switch" title="${f.enabled ? 'Enabled' : 'Disabled'}">
           <input type="checkbox" ${f.enabled ? 'checked' : ''} onchange="appsToggleForm('${esc(f.id)}',this.checked)"><span class="cmd-slider"></span>
         </label>
-        <button class="btn btn-secondary" onclick="appsEditForm('${esc(f.id)}')">Edit</button>
-        <button class="btn btn-secondary" onclick="appsDuplicateForm('${esc(f.id)}')">Duplicate</button>
-        <button class="btn btn-secondary" onclick="appsDeleteForm('${esc(f.id)}')">Delete</button>
+        <button class="btn btn-secondary" onclick="appsEditForm('${esc(f.id)}')">${tt('ap.edit', "Edit")}</button>
+        <button class="btn btn-secondary" onclick="appsDuplicateForm('${esc(f.id)}')">${tt('ap.duplicate', "Duplicate")}</button>
+        <button class="btn btn-secondary" onclick="appsDeleteForm('${esc(f.id)}')">${tt('ap.delete', "Delete")}</button>
       </div>
-    </div>`).join('') : '<p class="hint" style="padding:16px">No forms yet. Create your first application form.</p>';
+    </div>`).join('') : `<p class="hint" style="padding:16px">${tt('ap.no_forms_yet_create_your_first_applicati', "No forms yet. Create your first application form.")}</p>`;
 
   const gate = premiumGate('applicationForms', state.appsForms.length);
-  const newBtn = gateCreateButton(gate, 'New Form', 'appsNewForm()', 'applicationForms', { icon: svg('plus') });
+  const newBtn = gateCreateButton(gate, tt('ap.newForm', 'New Form'), 'appsNewForm()', 'applicationForms', { icon: svg('plus') });
   box.innerHTML = `
     <div class="btn-row" style="margin-bottom:14px;align-items:center">${newBtn} ${gate.hint}</div>
     <div class="apps-form-list">${rows}</div>`;
@@ -3419,47 +3435,47 @@ async function appsDuplicateForm(id) {
   renderFormsTab();
 }
 async function appsDeleteForm(id) {
-  if (!confirm('Delete this form? Existing submissions are kept.')) return;
+  if (!confirm(tA('ap.confirmDel', 'Delete this form? Existing submissions are kept.'))) return;
   try { await api('DELETE', `/api/guild/${state.guildId}/applications/forms/${id}`); state.appsForms = state.appsForms.filter(x => x.id !== id); } catch {}
   renderFormsTab();
 }
 
 function renderFormBuilder(box) {
   const f = state.appsEditing;
-  const qhtml = f.questions.map((q, i) => renderQuestionEditor(q, i)).join('') || '<p class="hint">No questions yet. Add one below.</p>';
+  const qhtml = f.questions.map((q, i) => renderQuestionEditor(q, i)).join('') || `<p class="hint">${tt('ap.no_questions_yet_add_one_below', "No questions yet. Add one below.")}</p>`;
   box.innerHTML = `
     <div class="card">
       <div class="btn-row" style="justify-content:space-between;align-items:center;margin-bottom:10px">
-        <h3 style="margin:0">${f.id ? 'Edit Form' : 'New Form'}</h3>
-        <button class="btn btn-secondary" onclick="appsCancelEdit()">← Back to list</button>
+        <h3 style="margin:0">${f.id ? tt('ap.editForm', 'Edit Form') : tt('ap.newForm', 'New Form')}</h3>
+        <button class="btn btn-secondary" onclick="appsCancelEdit()">${tt('ap.back_to_list', "← Back to list")}</button>
       </div>
       <div class="card-grid">
-        <div class="form-row"><label>Form Name</label>
+        <div class="form-row"><label>${tt('ap.form_name', "Form Name")}</label>
           <input type="text" maxlength="100" value="${esc(f.name)}" oninput="state.appsEditing.name=this.value"></div>
-        <div class="form-row"><label>Enabled</label>
+        <div class="form-row"><label>${tt('ap.enabled', "Enabled")}</label>
           <label class="cmd-switch"><input type="checkbox" ${f.enabled ? 'checked' : ''} onchange="state.appsEditing.enabled=this.checked"><span class="cmd-slider"></span></label></div>
       </div>
-      <div class="form-row"><label>Description (optional)</label>
+      <div class="form-row"><label>${tt('ap.description_optional', "Description (optional)")}</label>
         <input type="text" maxlength="500" value="${esc(f.description || '')}" oninput="state.appsEditing.description=this.value"></div>
     </div>
     <div class="card">
-      <h3>Questions <span class="hint">· drag ⋮⋮ to reorder</span></h3>
+      <h3>${tt('ap.questions', "Questions")} <span class="hint">${tt('ap.dragHint', "· drag ⋮⋮ to reorder")}</span></h3>
       <div id="apps-q-list">${qhtml}</div>
       ${(() => {
         const g = premiumGate('applicationQuestions', f.questions.length);
         const buttons = (g.atCap && !g.isPrem)
-          ? premiumLockedBtn('Add Question', 'applicationQuestions')
-          : `<button class="btn btn-secondary" onclick="appsAddQuestion('short')">+ Short Text</button>
-             <button class="btn btn-secondary" onclick="appsAddQuestion('paragraph')">+ Paragraph</button>
-             <button class="btn btn-secondary" onclick="appsAddQuestion('multiple_choice')">+ Multiple Choice</button>
-             <button class="btn btn-secondary" onclick="appsAddQuestion('dropdown')">+ Dropdown</button>`;
+          ? premiumLockedBtn(tt('ap.addQuestion', 'Add Question'), 'applicationQuestions')
+          : `<button class="btn btn-secondary" onclick="appsAddQuestion('short')">${tt('ap.short_text', "+ Short Text")}</button>
+             <button class="btn btn-secondary" onclick="appsAddQuestion('paragraph')">${tt('ap.paragraph', "+ Paragraph")}</button>
+             <button class="btn btn-secondary" onclick="appsAddQuestion('multiple_choice')">${tt('ap.multiple_choice', "+ Multiple Choice")}</button>
+             <button class="btn btn-secondary" onclick="appsAddQuestion('dropdown')">${tt('ap.dropdown', "+ Dropdown")}</button>`;
         return `<div class="btn-row" style="margin-top:12px;flex-wrap:wrap;align-items:center">${buttons} ${g.hint}</div>`;
       })()}
     </div>
     <div class="save-bar always">
-      <button class="btn btn-primary" onclick="appsSaveForm()">Save Form</button>
-      <button class="btn btn-secondary" onclick="appsPreviewForm()">${svg('eye')} Preview</button>
-      <button class="btn btn-secondary" onclick="appsCancelEdit()">Cancel</button>
+      <button class="btn btn-primary" onclick="appsSaveForm()">${tt('ap.save_form', "Save Form")}</button>
+      <button class="btn btn-secondary" onclick="appsPreviewForm()">${svg('eye')} ${tt('ap.preview', 'Preview')}</button>
+      <button class="btn btn-secondary" onclick="appsCancelEdit()">${tt('ap.cancel', "Cancel")}</button>
       <span id="apps-form-msg" class="save-status"></span>
     </div>`;
 }
@@ -3469,14 +3485,14 @@ function renderQuestionEditor(q, i) {
   return `<div class="apps-q" draggable="true" data-i="${i}"
       ondragstart="appsQDragStart(event,${i})" ondragover="event.preventDefault()" ondrop="appsQDrop(event,${i})">
     <div class="apps-q-head">
-      <span class="apps-drag" title="Drag to reorder">⋮⋮</span>
+      <span class="apps-drag" title="${tA('ap.drag_to_reorder', "Drag to reorder")}">⋮⋮</span>
       <span class="apps-q-type">${QTYPE_LABEL[q.type] || q.type}</span>
-      <label class="apps-q-req"><input type="checkbox" ${q.required ? 'checked' : ''} onchange="appsQEdit(${i},'required',this.checked)"> Required</label>
+      <label class="apps-q-req"><input type="checkbox" ${q.required ? 'checked' : ''} onchange="appsQEdit(${i},'required',this.checked)"> ${tt('ap.required', "Required")}</label>
       <button class="btn btn-secondary apps-q-del" onclick="appsRemoveQuestion(${i})">${svg('x')}</button>
     </div>
-    <input type="text" placeholder="Question / prompt" maxlength="200" value="${esc(q.label)}" oninput="appsQEdit(${i},'label',this.value)">
-    <input type="text" placeholder="Placeholder (optional)" maxlength="100" value="${esc(q.placeholder || '')}" oninput="appsQEdit(${i},'placeholder',this.value)">
-    ${isChoice ? `<textarea placeholder="One option per line" rows="3" oninput="appsQEditOptions(${i},this.value)">${esc((q.options || []).join('\n'))}</textarea>` : ''}
+    <input type="text" placeholder="${tA('ap.question_prompt', "Question / prompt")}" maxlength="200" value="${esc(q.label)}" oninput="appsQEdit(${i},'label',this.value)">
+    <input type="text" placeholder="${tA('ap.placeholder_optional', "Placeholder (optional)")}" maxlength="100" value="${esc(q.placeholder || '')}" oninput="appsQEdit(${i},'placeholder',this.value)">
+    ${isChoice ? `<textarea placeholder="${tA('ap.one_option_per_line', "One option per line")}" rows="3" oninput="appsQEditOptions(${i},this.value)">${esc((q.options || []).join('\n'))}</textarea>` : ''}
   </div>`;
 }
 
@@ -3504,11 +3520,11 @@ function appsQDrop(e, i) {
 
 async function appsSaveForm() {
   const f = state.appsEditing, msg = document.getElementById('apps-form-msg');
-  if (!f.name.trim()) return setStatus(msg, 'err', '❌ The form needs a name.');
+  if (!f.name.trim()) return setStatus(msg, 'err', tA('ap.needName', 'The form needs a name.'));
   for (const q of f.questions) {
-    if (!String(q.label || '').trim()) return setStatus(msg, 'err', '❌ Every question needs a prompt.');
+    if (!String(q.label || '').trim()) return setStatus(msg, 'err', tA('ap.needPrompt', 'Every question needs a prompt.'));
     if ((q.type === 'multiple_choice' || q.type === 'dropdown') && !(q.options || []).filter(Boolean).length)
-      return setStatus(msg, 'err', '❌ Choice questions need at least one option.');
+      return setStatus(msg, 'err', tA('ap.needOption', 'Choice questions need at least one option.'));
   }
   const payload = { name: f.name, description: f.description, enabled: f.enabled, questions: f.questions };
   try {
@@ -3518,7 +3534,7 @@ async function appsSaveForm() {
     state.appsForms = data.forms; state.appsConfig = data.config; state.appsMeta = data.meta;
     state.appsEditing = null;
     renderFormsTab();
-  } catch (e) { setStatus(msg, 'err', '❌ ' + e.message); }
+  } catch (e) { setStatus(msg, 'err', e.message); }
 }
 
 function appsPreviewForm() {
@@ -3529,10 +3545,10 @@ function appsPreviewForm() {
     if (q.type === 'short') field = `<input type="text" disabled placeholder="${esc(q.placeholder || '')}">`;
     else if (q.type === 'paragraph') field = `<textarea disabled rows="3" placeholder="${esc(q.placeholder || '')}"></textarea>`;
     else if (q.type === 'multiple_choice') field = (q.options || []).map(o => `<label class="apps-prev-opt"><input type="radio" disabled> ${esc(o)}</label>`).join('');
-    else if (q.type === 'dropdown') field = `<select disabled><option>Choose…</option>${(q.options || []).map(o => `<option>${esc(o)}</option>`).join('')}</select>`;
-    return `<div class="form-row"><label>${i + 1}. ${esc(q.label || '(no prompt)')} ${req}</label>${field}</div>`;
-  }).join('') || '<p class="hint">No questions yet.</p>';
-  openAppsModal(`<h3>${esc(f.name || 'Untitled Form')}</h3>${f.description ? `<p class="hint">${esc(f.description)}</p>` : ''}<div style="margin-top:12px">${qs}</div>`);
+    else if (q.type === 'dropdown') field = `<select disabled><option>${tt('ap.choose', "Choose…")}</option>${(q.options || []).map(o => `<option>${esc(o)}</option>`).join('')}</select>`;
+    return `<div class="form-row"><label>${i + 1}. ${esc(q.label || tA('ap.noPrompt', '(no prompt)'))} ${req}</label>${field}</div>`;
+  }).join('') || `<p class="hint">${tt('ap.no_questions_yet', "No questions yet.")}</p>`;
+  openAppsModal(`<h3>${esc(f.name || tA('ap.untitled', 'Untitled Form'))}</h3>${f.description ? `<p class="hint">${esc(f.description)}</p>` : ''}<div style="margin-top:12px">${qs}</div>`);
 }
 
 function openAppsModal(html) { document.getElementById('apps-modal-content').innerHTML = html; show('apps-modal'); }
@@ -3543,7 +3559,7 @@ function closeAppsModal() { hide('apps-modal'); }
 // only the chips + results refresh on filter changes.
 function renderSubmissionsShell() {
   const box = document.getElementById('apps-tab-submissions');
-  const formOpts = `<option value="">All forms</option>` +
+  const formOpts = `<option value="">${tt('ap.all_forms', "All forms")}</option>` +
     state.appsForms.map(f => `<option value="${esc(f.id)}" ${state.appsFilter.formId === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('');
   const exp = fmt => `/api/guild/${state.guildId}/applications/export?format=${fmt}` +
     (state.appsFilter.status ? `&status=${state.appsFilter.status}` : '') +
@@ -3553,13 +3569,13 @@ function renderSubmissionsShell() {
       <div class="cmd-chips" id="apps-sub-chips"></div>
       <div class="btn-row" style="margin-top:10px;flex-wrap:wrap">
         <select onchange="appsSetForm(this.value)" style="max-width:220px">${formOpts}</select>
-        <input type="text" placeholder="Search applicant / answers…" value="${esc(state.appsFilter.search)}" oninput="appsSearchDebounced(this.value)" style="flex:1;min-width:180px">
+        <input type="text" placeholder="${tA('ap.search_applicant_answers', "Search applicant / answers…")}" value="${esc(state.appsFilter.search)}" oninput="appsSearchDebounced(this.value)" style="flex:1;min-width:180px">
         <a class="btn btn-secondary" href="${exp('csv')}" target="_blank">${svg('download')} CSV</a>
         <a class="btn btn-secondary" href="${exp('json')}" target="_blank">${svg('download')} JSON</a>
       </div>
     </div>
     <div class="log-table-wrap" style="margin-top:14px"><table class="log-table">
-      <thead><tr><th>Form</th><th>Applicant</th><th>Status</th><th>Submitted</th></tr></thead>
+      <thead><tr><th>${tt('ap.form', "Form")}</th><th>${tt('ap.applicant', "Applicant")}</th><th>${tt('ap.status', "Status")}</th><th>${tt('ap.submitted', "Submitted")}</th></tr></thead>
       <tbody id="apps-sub-rows"></tbody></table></div>`;
 }
 
@@ -3584,7 +3600,7 @@ function renderSubChips() {
   const chip = (val, label, count) =>
     `<button class="cmd-chip${state.appsFilter.status === val ? ' active' : ''}" onclick="appsSetStatus('${val}')">${label}${count != null ? ` (${count})` : ''}</button>`;
   el.innerHTML = chip('', 'All', counts.total || 0) +
-    statuses.map(s => chip(s, `${appStatusMeta(s).emoji} ${appStatusMeta(s).label}`, counts[s] || 0)).join('');
+    statuses.map(s => chip(s, `${appStatusMeta(s).emoji} ${tA('ap.st.' + s, appStatusMeta(s).label)}`, counts[s] || 0)).join('');
 }
 
 function renderSubRows() {
@@ -3595,10 +3611,10 @@ function renderSubRows() {
     return `<tr style="cursor:pointer" onclick="appsOpen('${esc(a.id)}')">
       <td>${esc(a.formName)}</td>
       <td>${esc(a.userTag)}</td>
-      <td><span class="badge" style="background:${hex6(m.color)}26;color:${hex6(m.color)}">${m.emoji} ${m.label}</span></td>
+      <td><span class="badge" style="background:${hex6(m.color)}26;color:${hex6(m.color)}">${m.emoji} ${appStatusLabel(m)}</span></td>
       <td class="hint">${new Date(a.createdAt).toLocaleString()}</td>
     </tr>`;
-  }).join('') : `<tr><td colspan="4" class="hint" style="text-align:center;padding:24px">No applications match.</td></tr>`;
+  }).join('') : `<tr><td colspan="4" class="hint" style="text-align:center;padding:24px">${tt('ap.no_applications_match', "No applications match.")}</td></tr>`;
 }
 
 function appsSetStatus(s) { state.appsFilter.status = s; loadSubmissions(); }
@@ -3611,34 +3627,34 @@ async function appsOpen(id) {
   try { appData = await api('GET', `/api/guild/${state.guildId}/applications/${id}`); } catch { return; }
   const m = appStatusMeta(appData.status);
   const answers = (appData.answers || []).map(a =>
-    `<div class="form-row"><label>${esc(a.label)}</label><div class="apps-answer">${esc(a.value || '—')}</div></div>`).join('') || '<p class="hint">No answers.</p>';
+    `<div class="form-row"><label>${esc(a.label)}</label><div class="apps-answer">${esc(a.value || '—')}</div></div>`).join('') || `<p class="hint">${tt('ap.no_answers', "No answers.")}</p>`;
   const history = (appData.actions || []).map(ac =>
-    `<div class="apps-action-log"><strong>${esc(ac.reviewerTag || 'System')}</strong> · ${esc(ac.action)}${ac.note ? ` — ${esc(ac.note)}` : ''} <span class="hint">${new Date(ac.createdAt).toLocaleString()}</span></div>`).join('') || '<p class="hint">No actions yet.</p>';
+    `<div class="apps-action-log"><strong>${esc(ac.reviewerTag || 'System')}</strong> · ${esc(ac.action)}${ac.note ? ` — ${esc(ac.note)}` : ''} <span class="hint">${new Date(ac.createdAt).toLocaleString()}</span></div>`).join('') || `<p class="hint">${tt('ap.no_actions_yet', "No actions yet.")}</p>`;
   openAppsModal(`
     <h3>${m.emoji} ${esc(appData.formName)}</h3>
-    <p class="hint">Applicant: ${esc(appData.userTag)} (${esc(appData.userId)}) · ${new Date(appData.createdAt).toLocaleString()}</p>
-    <p>Status: <strong style="color:${hex6(m.color)}">${m.label}</strong></p>
+    <p class="hint">${tt('ap.applicantLabel', 'Applicant:')} ${esc(appData.userTag)} (${esc(appData.userId)}) · ${new Date(appData.createdAt).toLocaleString(currentLang)}</p>
+    <p>${tt('ap.statusLabel', 'Status:')} <strong style="color:${hex6(m.color)}">${appStatusLabel(m)}</strong></p>
     <div style="margin:12px 0">${answers}</div>
     <div class="btn-row" style="flex-wrap:wrap">
-      <button class="btn btn-primary" onclick="appsAction('${esc(appData.id)}','accept')">${svg('check')} Accept</button>
-      <button class="btn btn-secondary" onclick="appsAction('${esc(appData.id)}','hold')">${svg('pause')} Hold</button>
-      <button class="btn btn-secondary" onclick="appsAction('${esc(appData.id)}','deny',true)">${svg('x')} Deny</button>
-      <button class="btn btn-secondary" onclick="appsAction('${esc(appData.id)}','info',true)">${svg('envelope')} Request Info</button>
-      <button class="btn btn-secondary" onclick="appsAction('${esc(appData.id)}','note',true)">${svg('clipboard')} Add Note</button>
+      <button class="btn btn-primary" onclick="appsAction('${esc(appData.id)}','accept')">${svg('check')} ${tt('ap.accept', 'Accept')}</button>
+      <button class="btn btn-secondary" onclick="appsAction('${esc(appData.id)}','hold')">${svg('pause')} ${tt('ap.hold', 'Hold')}</button>
+      <button class="btn btn-secondary" onclick="appsAction('${esc(appData.id)}','deny',true)">${svg('x')} ${tt('ap.deny', 'Deny')}</button>
+      <button class="btn btn-secondary" onclick="appsAction('${esc(appData.id)}','info',true)">${svg('envelope')} ${tt('ap.reqInfo', 'Request Info')}</button>
+      <button class="btn btn-secondary" onclick="appsAction('${esc(appData.id)}','note',true)">${svg('clipboard')} ${tt('ap.addNote', 'Add Note')}</button>
     </div>
-    <h4 style="margin-top:16px">History</h4>${history}`);
+    <h4 style="margin-top:16px">${tt('ap.history', "History")}</h4>${history}`);
 }
 
 async function appsAction(id, action, needNote) {
   let note = null;
   if (needNote) {
-    const prompts = { note: 'Internal note (not sent to the applicant):', deny: 'Reason for denial (sent to the applicant):', info: 'What information is needed? (sent to the applicant):' };
-    note = prompt(prompts[action] || 'Message:');
+    const prompts = { note: tA('ap.pNote', 'Internal note (not sent to the applicant):'), deny: tA('ap.pDeny', 'Reason for denial (sent to the applicant):'), info: tA('ap.pInfo', 'What information is needed? (sent to the applicant):') };
+    note = prompt(prompts[action] || tA('ap.pMsg', 'Message:'));
     if (note === null) return;
-    if ((action === 'deny' || action === 'info') && !note.trim()) return alert('A message is required for this action.');
+    if ((action === 'deny' || action === 'info') && !note.trim()) return alert(tA('ap.needMsg', 'A message is required for this action.'));
   }
   try { await api('POST', `/api/guild/${state.guildId}/applications/${id}/action`, { action, note }); }
-  catch (e) { return alert('Failed: ' + e.message); }
+  catch (e) { return alert(tA('ap.failed', 'Failed: ') + e.message); }
   closeAppsModal();
   loadSubmissions();
 }
@@ -3656,7 +3672,7 @@ async function renderAppsSettings() {
 
   const roleRows = roleStatuses.map(st => `
     <div class="form-row">
-      <label>${esc((sm[st]?.emoji || '') + ' ' + (sm[st]?.label || st))}</label>
+      <label>${esc((sm[st]?.emoji || '') + ' ' + tA('ap.st.' + st, sm[st]?.label || st))}</label>
       <select id="apps-role-${st}"></select>
     </div>`).join('');
 
@@ -3666,70 +3682,70 @@ async function renderAppsSettings() {
   const box = document.getElementById('apps-tab-settings');
   box.innerHTML = `
     <div class="card">
-      <h3>Channels</h3>
+      <h3>${tt('ap.channels', "Channels")}</h3>
       <div class="card-grid">
-        <div class="form-row"><label>Pending / Review Channel</label><select id="apps-review-ch"></select>
-          <span class="hint">New submissions land here with the review buttons.</span></div>
-        <div class="form-row"><label>Accepted Channel</label><select id="apps-accepted-ch"></select>
-          <span class="hint">Accepting an application moves it straight here. Leave as <em>None</em> to keep it in the review channel.</span></div>
-        <div class="form-row"><label>Denied Channel</label><select id="apps-denied-ch"></select>
-          <span class="hint">Denying an application moves it straight here.</span></div>
-        <div class="form-row"><label>Log Channel</label><select id="apps-log-ch"></select>
-          <span class="hint">Holds, info-requests and notes are logged here.</span></div>
+        <div class="form-row"><label>${tt('ap.pending_review_channel', "Pending / Review Channel")}</label><select id="apps-review-ch"></select>
+          <span class="hint">${tt('ap.new_submissions_land_here_with_the_revie', "New submissions land here with the review buttons.")}</span></div>
+        <div class="form-row"><label>${tt('ap.accepted_channel', "Accepted Channel")}</label><select id="apps-accepted-ch"></select>
+          <span class="hint">${tx('ap.acceptedHint', 'Accepting an application moves it straight here. Leave as <em>None</em> to keep it in the review channel.')}</span></div>
+        <div class="form-row"><label>${tt('ap.denied_channel', "Denied Channel")}</label><select id="apps-denied-ch"></select>
+          <span class="hint">${tt('ap.denying_an_application_moves_it_straight', "Denying an application moves it straight here.")}</span></div>
+        <div class="form-row"><label>${tt('ap.log_channel', "Log Channel")}</label><select id="apps-log-ch"></select>
+          <span class="hint">${tt('ap.holds_info_requests_and_notes_are_logged', "Holds, info-requests and notes are logged here.")}</span></div>
       </div>
     </div>
 
     <div class="card">
-      <h3>Auto-assign Roles by Status</h3>
-      <p style="color:var(--muted);font-size:13px;margin-bottom:12px">When a decision is made, the applicant gets the matching role (and loses the other status roles). Leave any as <em>None</em> to assign nothing. I need <strong>Manage Roles</strong> and my role must sit above these.</p>
+      <h3>${tt('ap.auto_assign_roles_by_status', "Auto-assign Roles by Status")}</h3>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:12px">${tx('ap.rolesHint', 'When a decision is made, the applicant gets the matching role (and loses the other status roles). Leave any as <em>None</em> to assign nothing. I need <strong>Manage Roles</strong> and my role must sit above these.')}</p>
       <div class="card-grid">${roleRows}</div>
     </div>
 
     <div class="card">
-      <h3>Permissions &amp; Roles</h3>
+      <h3>${tx('ap.permissions_amp_roles', "Permissions &amp; Roles")}</h3>
       <div class="card-grid">
-        <div class="form-row"><label>Reviewer Roles</label><div id="apps-reviewer-roles"></div>
-          <span class="hint">May review via the Discord buttons. Admins &amp; Manage-Server always can.</span></div>
-        <div class="form-row"><label>Form Manager Roles</label><div id="apps-manager-roles"></div>
-          <span class="hint">May manage forms via Discord. Admins always can.</span></div>
-        <div class="form-row"><label>Notify Roles</label><div id="apps-notify-roles"></div>
-          <span class="hint">Pinged in the review channel on each new submission.</span></div>
+        <div class="form-row"><label>${tt('ap.reviewer_roles', "Reviewer Roles")}</label><div id="apps-reviewer-roles"></div>
+          <span class="hint">${tx('ap.may_review_via_the_discord_buttons_admin', "May review via the Discord buttons. Admins &amp; Manage-Server always can.")}</span></div>
+        <div class="form-row"><label>${tt('ap.form_manager_roles', "Form Manager Roles")}</label><div id="apps-manager-roles"></div>
+          <span class="hint">${tt('ap.may_manage_forms_via_discord_admins_alwa', "May manage forms via Discord. Admins always can.")}</span></div>
+        <div class="form-row"><label>${tt('ap.notify_roles', "Notify Roles")}</label><div id="apps-notify-roles"></div>
+          <span class="hint">${tt('ap.pinged_in_the_review_channel_on_each_new', "Pinged in the review channel on each new submission.")}</span></div>
       </div>
     </div>
 
     <div class="card">
-      <h3>Application Panel</h3>
-      <p style="color:var(--muted);font-size:13px;margin-bottom:12px">Customise the embed &amp; button people click to apply, then post it to a channel.</p>
+      <h3>${tt('ap.application_panel', "Application Panel")}</h3>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:12px">${tx('ap.customise_the_embed_amp_button_people_cl', "Customise the embed &amp; button people click to apply, then post it to a channel.")}</p>
       <div class="card-grid">
-        <div class="form-row"><label>Embed Title</label><input id="apps-panel-title" maxlength="256" value="${esc(panel.title || '')}"></div>
-        <div class="form-row"><label>Embed Colour</label><input type="color" id="apps-panel-color" value="${colorHex}"></div>
+        <div class="form-row"><label>${tt('ap.embed_title', "Embed Title")}</label><input id="apps-panel-title" maxlength="256" value="${esc(panel.title || '')}"></div>
+        <div class="form-row"><label>${tt('ap.embed_colour', "Embed Colour")}</label><input type="color" id="apps-panel-color" value="${colorHex}"></div>
       </div>
-      <div class="form-row"><label>Embed Description</label>
+      <div class="form-row"><label>${tt('ap.embed_description', "Embed Description")}</label>
         <textarea id="apps-panel-desc" rows="3" maxlength="2000">${esc(panel.description || '')}</textarea></div>
       <div class="card-grid">
-        <div class="form-row"><label>Button Label</label><input id="apps-panel-btnlabel" maxlength="80" value="${esc(panel.buttonLabel || '')}"></div>
-        <div class="form-row"><label>Button Emoji</label><input id="apps-panel-btnemoji" maxlength="64" value="${esc(panel.buttonEmoji || '')}" placeholder="📝 or a custom emoji"></div>
-        <div class="form-row"><label>Button Style</label><select id="apps-panel-btnstyle">${styleOpts}</select></div>
+        <div class="form-row"><label>${tt('ap.button_label', "Button Label")}</label><input id="apps-panel-btnlabel" maxlength="80" value="${esc(panel.buttonLabel || '')}"></div>
+        <div class="form-row"><label>${tt('ap.button_emoji', "Button Emoji")}</label><input id="apps-panel-btnemoji" maxlength="64" value="${esc(panel.buttonEmoji || '')}" placeholder="${tA('ap.or_a_custom_emoji', "📝 or a custom emoji")}"></div>
+        <div class="form-row"><label>${tt('ap.button_style', "Button Style")}</label><select id="apps-panel-btnstyle">${styleOpts}</select></div>
       </div>
-      <span class="hint">With multiple enabled forms the panel shows a dropdown instead of a single button (label/style apply to single-form panels).</span>
+      <span class="hint">${tt('ap.with_multiple_enabled_forms_the_panel_sh', "With multiple enabled forms the panel shows a dropdown instead of a single button (label/style apply to single-form panels).")}</span>
       <div class="card-grid" style="margin-top:14px">
-        <div class="form-row"><label>Post Panel To</label><select id="apps-panel-ch"></select></div>
+        <div class="form-row"><label>${tt('ap.post_panel_to', "Post Panel To")}</label><select id="apps-panel-ch"></select></div>
         <div class="form-row" style="align-self:end">
-          <button class="btn btn-secondary" onclick="appsPostPanel()">${svg('inbox')} Post / Update Panel</button></div>
+          <button class="btn btn-secondary" onclick="appsPostPanel()">${svg('inbox')} ${tt('ap.postPanel', 'Post / Update Panel')}</button></div>
       </div>
     </div>
 
     <div class="card">
-      <h3>Behaviour</h3>
+      <h3>${tt('ap.behaviour', "Behaviour")}</h3>
       <div class="card-grid">
-        <div class="form-row"><label>DM applicants on status changes</label>
+        <div class="form-row"><label>${tt('ap.dm_applicants_on_status_changes', "DM applicants on status changes")}</label>
           <label class="cmd-switch"><input type="checkbox" id="apps-dm" ${c.dmNotifications !== false ? 'checked' : ''}><span class="cmd-slider"></span></label></div>
-        <div class="form-row"><label>Re-apply cooldown (minutes, 0 = unlimited)</label>
+        <div class="form-row"><label>${tt('ap.re_apply_cooldown_minutes_0_unlimited', "Re-apply cooldown (minutes, 0 = unlimited)")}</label>
           <input type="number" id="apps-cooldown" min="0" value="${c.cooldownMinutes || 0}"></div>
       </div>
     </div>
 
-    <div class="save-bar"><button class="btn btn-primary" onclick="appsSaveSettings()">Save Settings</button>
+    <div class="save-bar"><button class="btn btn-primary" onclick="appsSaveSettings()">${tt('ap.save_settings', "Save Settings")}</button>
       <span id="apps-settings-msg" class="save-status"></span></div>`;
 
   fillSelect('apps-review-ch',   state.guildData.textChannels, c.reviewChannelId,   n => `#${n.name}`);
@@ -3776,20 +3792,20 @@ function appsSettingsPayload() {
 async function appsSaveSettings() {
   const msg = document.getElementById('apps-settings-msg');
   try { const r = await api('PUT', `/api/guild/${state.guildId}/applications/config`, appsSettingsPayload()); state.appsConfig = r.config; setStatus(msg, 'ok', t('common.saved', 'Saved!')); }
-  catch (e) { setStatus(msg, 'err', '❌ ' + e.message); }
+  catch (e) { setStatus(msg, 'err', e.message); }
 }
 
 // Saves current settings first (so the panel reflects unsaved edits), then posts.
 async function appsPostPanel() {
   const msg = document.getElementById('apps-settings-msg');
   const channelId = document.getElementById('apps-panel-ch').value || null;
-  if (!channelId) return setStatus(msg, 'err', '❌ Pick a channel to post the panel to.');
+  if (!channelId) return setStatus(msg, 'err', tA('ap.needPanelCh', 'Pick a channel to post the panel to.'));
   try {
     await api('PUT', `/api/guild/${state.guildId}/applications/config`, appsSettingsPayload());
     const r = await api('POST', `/api/guild/${state.guildId}/applications/panel`, { channelId });
     state.appsConfig = r.config;
-    setStatus(msg, 'ok', '✅ Panel posted!');
-  } catch (e) { setStatus(msg, 'err', '❌ ' + e.message); }
+    setStatus(msg, 'ok', tA('ap.panelPosted', 'Panel posted!'));
+  } catch (e) { setStatus(msg, 'err', e.message); }
 }
 
 // ═══════════════════════════════════════
@@ -3818,13 +3834,13 @@ function mcChannelOptions(selected) {
   const gd = state.guildData || {};
   const grp = (label, arr, prefix) => (arr && arr.length)
     ? `<optgroup label="${label}">` + arr.map(c => `<option value="${c.id}"${c.id === selected ? ' selected' : ''}>${prefix}${esc(c.name)}</option>`).join('') + '</optgroup>' : '';
-  return `<option value="">Select a channel…</option>`
-    + grp('Voice channels', gd.voiceChannels, '')
-    + grp('Categories', gd.categories, '')
-    + grp('Text channels', gd.textChannels, '# ');
+  return `<option value="">${esc(tA('mc.selCh', 'Select a channel…'))}</option>`
+    + grp(esc(tA('mc.grpVoice', 'Voice channels')), gd.voiceChannels, '')
+    + grp(esc(tA('mc.grpCat', 'Categories')), gd.categories, '')
+    + grp(esc(tA('mc.grpText', 'Text channels')), gd.textChannels, '# ');
 }
 function mcRoleOptions(selected) {
-  return `<option value="">Select a role…</option>` +
+  return `<option value="">${esc(tA('mc.selRole', 'Select a role…'))}</option>` +
     (state.guildData?.roles || []).map(r => `<option value="${r.id}"${r.id === selected ? ' selected' : ''}>@${esc(r.name)}</option>`).join('');
 }
 function mcChannelName(id) {
@@ -3835,7 +3851,7 @@ function mcChannelName(id) {
     ...(gd.textChannels || []).map(c => ['#' + c.name, c.id])
   ];
   const f = all.find(x => x[1] === id);
-  return f ? f[0] : '(deleted channel)';
+  return f ? f[0] : tA('mc.deletedCh', '(deleted channel)');
 }
 function mcLiveValue(c) {
   const p = state.mcPreview || {};
@@ -3864,11 +3880,11 @@ function renderMemberCounters() {
 
 function mcListHtml() {
   const gate = premiumGate('memberCounters', state.mcCounters.length);
-  const addBtn = gateCreateButton(gate, 'Add Counter', 'mcAdd()', 'memberCounters', { icon: svg('plus') });
+  const addBtn = gateCreateButton(gate, tt('mc.add', 'Add Counter'), 'mcAdd()', 'memberCounters', { icon: svg('plus') });
   const head = `<div class="mc-head">
-      <div class="mc-head-info"><strong>${state.mcCounters.length}</strong> counter${state.mcCounters.length === 1 ? '' : 's'} configured &nbsp; ${gate.hint}</div>
+      <div class="mc-head-info">${tx('mc.count', '', { n: state.mcCounters.length })} &nbsp; ${gate.hint}</div>
       <div class="mc-head-actions">
-        ${state.mcCounters.length ? `<button class="btn btn-secondary" onclick="mcRefresh()">${svg('refresh')} Refresh now</button>` : ''}
+        ${state.mcCounters.length ? `<button class="btn btn-secondary" onclick="mcRefresh()">${svg('refresh')} ${tt('mc.refreshNow', 'Refresh now')}</button>` : ''}
         ${addBtn}
       </div>
     </div>
@@ -3877,9 +3893,9 @@ function mcListHtml() {
   if (!state.mcCounters.length) return head + `
     <div class="mc-empty">
       <div class="mc-empty-ico">${svg('hash')}</div>
-      <h4>No counters yet</h4>
-      <p>Show live server stats — members, boosters, role counts — right in your channel list.</p>
-      <button class="btn btn-primary" onclick="mcAdd()">${svg('plus')} Add your first counter</button>
+      <h4>${tt('mc.no_counters_yet', "No counters yet")}</h4>
+      <p>${tt('mc.show_live_server_stats_members_boosters_', "Show live server stats — members, boosters, role counts — right in your channel list.")}</p>
+      <button class="btn btn-primary" onclick="mcAdd()">${svg('plus')} ${tt('mc.firstCounter', 'Add your first counter')}</button>
     </div>`;
 
   const cards = state.mcCounters.map(c => {
@@ -3887,7 +3903,7 @@ function mcListHtml() {
     const name = mcRender(c.type, c.template, c.roleId, c.lastValue);
     return `<div class="mc-card${c.enabled ? '' : ' mc-off'}">
       <div class="mc-card-top">
-        <span class="mc-type-badge">${svg(MC_ICONS[c.type] || 'hash')} ${esc(meta.label || c.type)}</span>
+        <span class="mc-type-badge">${svg(MC_ICONS[c.type] || 'hash')} ${tt('mc.type.' + c.type, meta.label || c.type)}</span>
         <label class="cmd-switch" title="${c.enabled ? 'Enabled' : 'Disabled'}">
           <input type="checkbox" ${c.enabled ? 'checked' : ''} onchange="mcToggle('${esc(c.id)}', this.checked)"><span class="cmd-slider"></span>
         </label>
@@ -3895,8 +3911,8 @@ function mcListHtml() {
       <div class="mc-pill"><span class="mc-pill-dot">${svg('speaker')}</span><span class="mc-pill-name">${esc(name)}</span></div>
       <div class="mc-card-sub">renames ${esc(mcChannelName(c.channelId))}</div>
       <div class="mc-card-actions">
-        <button class="mc-act" onclick="mcEdit('${esc(c.id)}')">${svg('edit')} Edit</button>
-        <button class="mc-act mc-act-danger" onclick="mcDelete('${esc(c.id)}')">${svg('trash')} Delete</button>
+        <button class="mc-act" onclick="mcEdit('${esc(c.id)}')">${svg('edit')} ${tt('mc.edit', 'Edit')}</button>
+        <button class="mc-act mc-act-danger" onclick="mcDelete('${esc(c.id)}')">${svg('trash')} ${tt('mc.delete', 'Delete')}</button>
       </div>
     </div>`;
   }).join('');
@@ -3914,46 +3930,46 @@ function mcEditorHtml() {
   const typeCards = state.mcTypes.map(t => `
     <button type="button" class="mc-type${t.key === type ? ' active' : ''}" data-type="${t.key}" onclick="mcSelectType('${t.key}')">
       <span class="mc-type-ico">${svg(MC_ICONS[t.key] || 'hash')}</span>
-      <span class="mc-type-label">${esc(t.label)}</span>
+      <span class="mc-type-label">${tt('mc.type.' + t.key, t.label)}</span>
     </button>`).join('');
 
   return `
     <div class="card mc-editor">
       <div class="mc-editor-head">
-        <h3>${editing ? 'Edit Counter' : 'New Counter'}</h3>
-        <button class="mc-x" onclick="mcCancelEdit()" title="Back to list">${svg('x')}</button>
+        <h3>${editing ? tt('mc.editTitle', 'Edit Counter') : tt('mc.newTitle', 'New Counter')}</h3>
+        <button class="mc-x" onclick="mcCancelEdit()" title="${tA('mc.back_to_list', "Back to list")}">${svg('x')}</button>
       </div>
 
       <div class="mc-preview-wrap">
-        <span class="mc-preview-label">Preview — how the channel will look</span>
+        <span class="mc-preview-label">${tt('mc.preview_how_the_channel_will_look', "Preview — how the channel will look")}</span>
         <div class="mc-pill mc-pill-lg"><span class="mc-pill-dot">${svg('speaker')}</span><span class="mc-pill-name" id="mc-preview-pill"></span></div>
       </div>
 
       <input type="hidden" id="mc-f-type" value="${type}">
 
-      <label class="mc-step">1 · What should it count?</label>
+      <label class="mc-step">${tt('mc.1_what_should_it_count', "1 · What should it count?")}</label>
       <div class="mc-type-grid">${typeCards}</div>
 
       <div class="card-grid mc-fields">
-        <div class="form-row"><label>2 · Channel to rename</label>
+        <div class="form-row"><label>${tt('mc.2_channel_to_rename', "2 · Channel to rename")}</label>
           <select id="mc-f-channel" onchange="mcUpdatePreview()">${mcChannelOptions(c?.channelId)}</select>
-          <span class="hint">Voice channels &amp; categories look best. The bot needs <strong>Manage Channels</strong> here.</span></div>
-        <div class="form-row${meta.needsRole ? '' : ' hidden'}" id="mc-f-role-row"><label>Role to track</label>
+          <span class="hint">${tx('mc.chHint', 'Voice channels &amp; categories look best. The bot needs <strong>Manage Channels</strong> here.')}</span></div>
+        <div class="form-row${meta.needsRole ? '' : ' hidden'}" id="mc-f-role-row"><label>${tt('mc.role_to_track', "Role to track")}</label>
           <select id="mc-f-role" onchange="mcUpdatePreview()">${mcRoleOptions(c?.roleId)}</select></div>
       </div>
 
-      <div class="form-row"><label>3 · Name template</label>
+      <div class="form-row"><label>${tt('mc.3_name_template', "3 · Name template")}</label>
         <input id="mc-f-template" maxlength="100" value="${esc(c?.template || '')}" placeholder="${esc(meta.defaultTemplate || '{count}')}" oninput="mcUpdatePreview()">
-        <span class="hint">Placeholders: <code>{count}</code> · <code>{role}</code> · <code>{server}</code></span></div>
+        <span class="hint">${tt('mc.placeholders', "Placeholders:")} <code>{count}</code> · <code>{role}</code> · <code>{server}</code></span></div>
 
       <div class="mc-enable-row">
         <label class="cmd-switch"><input type="checkbox" id="mc-f-enabled" ${c ? (c.enabled ? 'checked' : '') : 'checked'}><span class="cmd-slider"></span></label>
-        <span>Enabled</span>
+        <span>${tt('mc.enabled', "Enabled")}</span>
       </div>
 
       <div class="save-bar always">
-        <button class="btn btn-primary" onclick="mcSave()">${editing ? 'Save Changes' : 'Create Counter'}</button>
-        <button class="btn btn-secondary" onclick="mcCancelEdit()">Cancel</button>
+        <button class="btn btn-primary" onclick="mcSave()">${editing ? tt('save.changes', 'Save Changes') : tt('mc.create', 'Create Counter')}</button>
+        <button class="btn btn-secondary" onclick="mcCancelEdit()">${tt('mc.cancel', "Cancel")}</button>
         <span id="mc-editor-msg" class="save-status"></span>
       </div>
     </div>`;
@@ -3989,15 +4005,15 @@ async function mcSave() {
     template:  document.getElementById('mc-f-template').value,
     enabled:   document.getElementById('mc-f-enabled').checked
   };
-  if (!payload.channelId) return setStatus(msg, 'err', '❌ Pick a channel.');
+  if (!payload.channelId) return setStatus(msg, 'err', tA('poll.pickChannel', 'Pick a channel.'));
   const meta = state.mcTypes.find(t => t.key === payload.type) || {};
-  if (meta.needsRole && !payload.roleId) return setStatus(msg, 'err', '❌ Pick a role for this counter type.');
+  if (meta.needsRole && !payload.roleId) return setStatus(msg, 'err', tA('mc.needRole', 'Pick a role for this counter type.'));
   try {
     if (editing) await api('PUT', `/api/guild/${state.guildId}/membercounters/${mcEditingId}`, payload);
     else await api('POST', `/api/guild/${state.guildId}/membercounters`, payload);
     mcEditingId = null;
     await loadMemberCounters();
-  } catch (e) { setStatus(msg, 'err', '❌ ' + e.message); }
+  } catch (e) { setStatus(msg, 'err', e.message); }
 }
 
 function mcAdd() { mcEditingId = 'new'; renderMemberCounters(); }
@@ -4009,14 +4025,14 @@ async function mcToggle(id, enable) {
   catch (e) { alert(e.message); }
 }
 async function mcDelete(id) {
-  if (!confirm('Delete this counter? This will also delete its Discord channel/category. This cannot be undone.')) return;
+  if (!confirm(tA('mc.confirmDel', 'Delete this counter? This will also delete its Discord channel/category. This cannot be undone.'))) return;
   try { await api('DELETE', `/api/guild/${state.guildId}/membercounters/${id}`); await loadMemberCounters(); }
   catch (e) { alert(e.message); }
 }
 async function mcRefresh() {
   const msg = document.getElementById('mc-list-msg');
-  try { await api('POST', `/api/guild/${state.guildId}/membercounters/refresh`, {}); setStatus(msg, 'ok', '✅ Refreshing channels now (Discord may delay renames).'); }
-  catch (e) { setStatus(msg, 'err', '❌ ' + e.message); }
+  try { await api('POST', `/api/guild/${state.guildId}/membercounters/refresh`, {}); setStatus(msg, 'ok', tA('mc.refreshing', 'Refreshing channels now (Discord may delay renames).')); }
+  catch (e) { setStatus(msg, 'err', e.message); }
 }
 
 // ═══════════════════════════════════════

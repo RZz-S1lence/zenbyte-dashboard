@@ -203,9 +203,9 @@
       <div id="apps-no-guild" class="no-guild-msg" data-i18n="common.selectServer">← Select a server from the sidebar to get started.</div>
       <div id="apps-body" class="hidden">
         <div class="apps-tabs">
-          <button class="apps-tab active" data-tab="forms" onclick="appsTab('forms')"><span data-icon="clipboard"></span> Forms</button>
-          <button class="apps-tab" data-tab="submissions" onclick="appsTab('submissions')"><span data-icon="inbox"></span> Submissions</button>
-          <button class="apps-tab" data-tab="settings" onclick="appsTab('settings')"><span data-icon="gear"></span> Settings</button>
+          <button class="apps-tab active" data-tab="forms" onclick="appsTab('forms')"><span data-icon="clipboard"></span> <span data-i18n="ap.tabForms">Forms</span></button>
+          <button class="apps-tab" data-tab="submissions" onclick="appsTab('submissions')"><span data-icon="inbox"></span> <span data-i18n="ap.tabSubs">Submissions</span></button>
+          <button class="apps-tab" data-tab="settings" onclick="appsTab('settings')"><span data-icon="gear"></span> <span data-i18n="ap.tabSettings">Settings</span></button>
         </div>
         <div id="apps-tab-forms" class="apps-tab-body"></div>
         <div id="apps-tab-submissions" class="apps-tab-body hidden"></div>
@@ -721,7 +721,7 @@
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
-<script src="i18n.js?v=6"></script>
-<script src="app.js?v=18"></script>
+<script src="i18n.js?v=7"></script>
+<script src="app.js?v=19"></script>
 </body>
 </html>
