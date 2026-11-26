@@ -17,19 +17,19 @@
       <p>Bot Dashboard</p>
     </div>
 
-    <p class="login-blurb">Sign in with Discord to manage the servers where you have administrator permissions.</p>
+    <p class="login-blurb" data-i18n="login.sign_in_with_discord_to_manage_the_serve">Sign in with Discord to manage the servers where you have administrator permissions.</p>
 
     <a href="/auth/discord" class="btn btn-discord" id="discord-login-btn">
       <svg width="20" height="20" viewBox="0 0 127 96" fill="currentColor" aria-hidden="true"><path d="M107.7 8.07A105.1 105.1 0 0 0 81.47 0a72.06 72.06 0 0 0-3.36 6.83 97.68 97.68 0 0 0-29.11 0A72.37 72.37 0 0 0 45.64 0a105.89 105.89 0 0 0-26.25 8.09C2.79 32.65-1.71 56.6.54 80.21a105.73 105.73 0 0 0 32.17 16.15 77.7 77.7 0 0 0 6.89-11.11 68.42 68.42 0 0 1-10.85-5.18c.91-.66 1.8-1.34 2.66-2a75.57 75.57 0 0 0 64.32 0c.87.71 1.76 1.39 2.66 2a68.68 68.68 0 0 1-10.87 5.19 77 77 0 0 0 6.89 11.1 105.25 105.25 0 0 0 32.19-16.14c2.64-27.38-4.51-51.11-18.9-72.15ZM42.45 65.69C36.18 65.69 31 60 31 53s5-12.74 11.43-12.74S54 46 53.89 53s-5.05 12.69-11.44 12.69Zm42.24 0C78.41 65.69 73.25 60 73.25 53s5-12.74 11.44-12.74S96.23 46 96.12 53s-5.04 12.69-11.43 12.69Z"/></svg>
-      <span>Login with Discord</span>
+      <span data-i18n="login.login_with_discord">Login with Discord</span>
     </a>
 
     <p id="auth-err" class="auth-error"></p>
 
     <div class="login-legal">
-      <a href="/terms">Terms</a><span>·</span>
-      <a href="/privacy-policy">Privacy Policy</a><span>·</span>
-      <a href="/refund-policy">Refund Policy</a>
+      <a href="/terms" data-i18n="login.terms">Terms</a><span>·</span>
+      <a href="/privacy-policy" data-i18n="login.privacy_policy">Privacy Policy</a><span>·</span>
+      <a href="/refund-policy" data-i18n="login.refund_policy">Refund Policy</a>
     </div>
   </div>
 </div>
@@ -39,19 +39,19 @@
   <div class="login-card">
     <div class="login-brand">
       <img id="addbot-avatar" class="login-bot-avatar hidden" src="" alt="">
-      <h1>Add ZenByte to your server</h1>
+      <h1 data-i18n="login.add_zenbyte_to_your_server">Add ZenByte to your server</h1>
       <p>Bot Dashboard</p>
     </div>
-    <p class="login-blurb">You're signed in, but ZenByte isn't in any server where you're an administrator yet. Add it to a server you manage, then come back here to set it up.</p>
+    <p class="login-blurb" data-i18n="login.you_re_signed_in_but_zenbyte_isn_t_in_an">You're signed in, but ZenByte isn't in any server where you're an administrator yet. Add it to a server you manage, then come back here to set it up.</p>
 
     <a href="#" id="addbot-invite" target="_blank" rel="noopener" class="btn btn-discord">
-      <span><span data-icon="plus"></span> Add ZenByte to a Server</span>
+      <span><span data-icon="plus"></span> <span data-i18n="login.addToServer">Add ZenByte to a Server</span></span>
     </a>
     <a href="#" id="addbot-support" target="_blank" rel="noopener" class="btn btn-secondary" style="margin-top:12px">
-      <span><span data-icon="chat"></span> Join the ZenByte Support Server</span>
+      <span><span data-icon="chat"></span> <span data-i18n="login.joinSupport">Join the ZenByte Support Server</span></span>
     </a>
 
-    <button class="btn-logout" style="margin-top:20px" onclick="logout()">Logout</button>
+    <button class="btn-logout" style="margin-top:20px" onclick="logout()" data-i18n="login.logout">Logout</button>
   </div>
 </div>
 
@@ -291,19 +291,19 @@
       <div id="tickets-body" class="hidden">
 
         <div class="card">
-          <h3><span class="sdot" style="background:var(--green)"></span>Open Tickets</h3>
-          <div id="open-tickets-list"><span style="color:var(--muted)">No open tickets.</span></div>
+          <h3><span class="sdot" style="background:var(--green)"></span><span data-i18n="tk.openTickets">Open Tickets</span></h3>
+          <div id="open-tickets-list"><span style="color:var(--muted)" data-i18n="tk.no_open_tickets">No open tickets.</span></div>
         </div>
 
         <div class="card">
-          <h3>Panel Appearance</h3>
+          <h3 data-i18n="tk.panel_appearance">Panel Appearance</h3>
           <div class="card-grid">
             <div class="form-row">
-              <label>Panel Title</label>
-              <input type="text" id="t-title" placeholder="Support Tickets">
+              <label data-i18n="tk.panel_title">Panel Title</label>
+              <input type="text" id="t-title" placeholder="Support Tickets" data-i18n-ph="tk.support_tickets">
             </div>
             <div class="form-row">
-              <label>Embed Color</label>
+              <label data-i18n="tk.embed_color">Embed Color</label>
               <div class="color-row">
                 <input type="color" id="t-color-picker" value="#5865F2" oninput="syncColor('picker')">
                 <input type="text"  id="t-color-hex"    value="#5865F2" placeholder="#5865F2" oninput="syncColor('hex')">
@@ -311,76 +311,76 @@
             </div>
           </div>
           <div class="form-row">
-            <label>Panel Description</label>
-            <textarea id="t-desc" placeholder="Need help? Click the button below to open a ticket!"></textarea>
+            <label data-i18n="tk.panel_description">Panel Description</label>
+            <textarea id="t-desc" placeholder="Need help? Click the button below to open a ticket!" data-i18n-ph="tk.need_help_click_the_button_below_to_open"></textarea>
           </div>
         </div>
 
         <div class="card">
-          <h3>Channels &amp; Roles</h3>
+          <h3 data-i18n-html="tk.channels_amp_roles">Channels &amp; Roles</h3>
           <div class="card-grid">
             <div class="form-row">
-              <label>Ticket Category</label>
+              <label data-i18n="tk.ticket_category">Ticket Category</label>
               <select id="t-category"><option value="">None</option></select>
-              <span class="hint">New ticket channels are placed inside this category.</span>
+              <span class="hint" data-i18n="tk.new_ticket_channels_are_placed_inside_th">New ticket channels are placed inside this category.</span>
             </div>
             <div class="form-row">
-              <label>Transcript Log Channel</label>
+              <label data-i18n="tk.transcript_log_channel">Transcript Log Channel</label>
               <select id="t-logchannel"><option value="">None</option></select>
-              <span class="hint">Closed ticket transcripts are posted here.</span>
+              <span class="hint" data-i18n="tk.closed_ticket_transcripts_are_posted_her">Closed ticket transcripts are posted here.</span>
             </div>
             <div class="form-row">
-              <label>Moderator Roles</label>
+              <label data-i18n="tk.moderator_roles">Moderator Roles</label>
               <div id="t-modroles"></div>
-              <span class="hint">All selected roles are pinged and added to every new ticket.</span>
+              <span class="hint" data-i18n="tk.all_selected_roles_are_pinged_and_added_">All selected roles are pinged and added to every new ticket.</span>
             </div>
           </div>
         </div>
 
         <div class="card">
-          <h3>Behavior</h3>
+          <h3 data-i18n="tk.behavior">Behavior</h3>
           <div class="card-grid">
-            <div class="form-row"><label>Max Open Tickets per User</label><input type="number" id="t-maxtickets" min="1" max="50"></div>
-            <div class="form-row"><label>Channel Name Scheme</label><input type="text" id="t-namescheme" placeholder="ticket-{number}"><span class="hint">Placeholders: {number} {username} {type}</span></div>
+            <div class="form-row"><label data-i18n="tk.max_open_tickets_per_user">Max Open Tickets per User</label><input type="number" id="t-maxtickets" min="1" max="50"></div>
+            <div class="form-row"><label data-i18n="tk.channel_name_scheme">Channel Name Scheme</label><input type="text" id="t-namescheme" placeholder="ticket-{number}"><span class="hint" data-i18n="tk.placeholders_number_username_type">Placeholders: {number} {username} {type}</span></div>
           </div>
-          <div class="form-row"><label>Welcome Message</label><textarea id="t-welcome" placeholder="Hello {user}! Support will be with you shortly."></textarea><span class="hint">Placeholders: {user} {username} {type} {number}</span></div>
-          <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="t-ac-enabled"><span>Enable auto-close</span></label>
-          <div class="form-row" style="margin-top:10px"><label>Close after inactivity (hours, 0 = off)</label><input type="number" id="t-ac-hours" min="0" max="720" style="max-width:160px"></div>
-          <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="t-ac-leave"><span>Close a ticket when its opener leaves the server</span></label>
+          <div class="form-row"><label data-i18n="tk.welcome_message">Welcome Message</label><textarea id="t-welcome" placeholder="Hello {user}! Support will be with you shortly." data-i18n-ph="tk.hello_user_support_will_be_with_you_shor"></textarea><span class="hint" data-i18n="tk.placeholders_user_username_type_number">Placeholders: {user} {username} {type} {number}</span></div>
+          <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="t-ac-enabled"><span data-i18n="tk.enable_auto_close">Enable auto-close</span></label>
+          <div class="form-row" style="margin-top:10px"><label data-i18n="tk.close_after_inactivity_hours_0_off">Close after inactivity (hours, 0 = off)</label><input type="number" id="t-ac-hours" min="0" max="720" style="max-width:160px"></div>
+          <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="t-ac-leave"><span data-i18n="tk.close_a_ticket_when_its_opener_leaves_th">Close a ticket when its opener leaves the server</span></label>
         </div>
 
         <div class="card">
           <label class="sec-switch sec-master"><input type="checkbox" id="t-priority-enabled" onchange="toggleTicketPriority()">
-            <span><strong>Enable Ticket Priority</strong>. Adds a “Set Priority” button to tickets. When off, all priority options below are hidden.</span></label>
+            <span data-i18n-html="tk.enable_ticket_priority_adds_a_set_priori"><strong>Enable Ticket Priority</strong>. Adds a “Set Priority” button to tickets. When off, all priority options below are hidden.</span></label>
         </div>
 
         <div class="card" id="t-priority-cat-card">
-          <h3>Priority Categories</h3>
+          <h3 data-i18n="tk.priority_categories">Priority Categories</h3>
           <label class="sec-switch"><input type="checkbox" id="t-pc-enabled" onchange="togglePriorityCategories()">
-            <span>Move tickets into a different category based on their priority</span></label>
+            <span data-i18n="tk.move_tickets_into_a_different_category_b">Move tickets into a different category based on their priority</span></label>
           <div id="t-pc-options" class="hidden" style="margin-top:16px">
             <div class="card-grid">
-              <div class="form-row"><label><span class="sdot" style="background:var(--green)"></span>Low Priority</label><select id="t-pc-low"><option value="">None</option></select></div>
-              <div class="form-row"><label><span class="sdot" style="background:var(--yellow)"></span>Medium Priority</label><select id="t-pc-medium"><option value="">None</option></select></div>
-              <div class="form-row"><label><span class="sdot" style="background:var(--red)"></span>High Priority</label><select id="t-pc-high"><option value="">None</option></select></div>
+              <div class="form-row"><label><span class="sdot" style="background:var(--green)"></span><span data-i18n="tk.prioLowFull">Low Priority</span></label><select id="t-pc-low"><option value="">None</option></select></div>
+              <div class="form-row"><label><span class="sdot" style="background:var(--yellow)"></span><span data-i18n="tk.prioMediumFull">Medium Priority</span></label><select id="t-pc-medium"><option value="">None</option></select></div>
+              <div class="form-row"><label><span class="sdot" style="background:var(--red)"></span><span data-i18n="tk.prioHighFull">High Priority</span></label><select id="t-pc-high"><option value="">None</option></select></div>
             </div>
-            <span class="hint">When a moderator sets a ticket's priority, it's moved to the matching category.</span>
+            <span class="hint" data-i18n="tk.when_a_moderator_sets_a_ticket_s_priorit">When a moderator sets a ticket's priority, it's moved to the matching category.</span>
           </div>
         </div>
 
         <div class="card">
-          <h3>Ping Roles</h3>
+          <h3 data-i18n="tk.ping_roles">Ping Roles</h3>
           <div class="form-row">
-            <label>Ping on Ticket Open</label>
+            <label data-i18n="tk.ping_on_ticket_open">Ping on Ticket Open</label>
             <div id="t-openping"></div>
-            <span class="hint">These roles are mentioned when a ticket is opened. Leave empty to ping the moderator roles.</span>
+            <span class="hint" data-i18n="tk.these_roles_are_mentioned_when_a_ticket_">These roles are mentioned when a ticket is opened. Leave empty to ping the moderator roles.</span>
           </div>
           <div id="t-pp-section">
-            <p style="color:var(--muted);font-size:13px;margin:6px 0 12px">Ping roles when a ticket is set to a priority:</p>
+            <p style="color:var(--muted);font-size:13px;margin:6px 0 12px" data-i18n="tk.ping_roles_when_a_ticket_is_set_to_a_pri">Ping roles when a ticket is set to a priority:</p>
             <div class="card-grid">
-              <div class="form-row"><label><span class="sdot" style="background:var(--green)"></span>Low</label><div id="t-pp-low"></div></div>
-              <div class="form-row"><label><span class="sdot" style="background:var(--yellow)"></span>Medium</label><div id="t-pp-medium"></div></div>
-              <div class="form-row"><label><span class="sdot" style="background:var(--red)"></span>High</label><div id="t-pp-high"></div></div>
+              <div class="form-row"><label><span class="sdot" style="background:var(--green)"></span><span data-i18n="tk.prioLow">Low</span></label><div id="t-pp-low"></div></div>
+              <div class="form-row"><label><span class="sdot" style="background:var(--yellow)"></span><span data-i18n="tk.prioMedium">Medium</span></label><div id="t-pp-medium"></div></div>
+              <div class="form-row"><label><span class="sdot" style="background:var(--red)"></span><span data-i18n="tk.prioHigh">High</span></label><div id="t-pp-high"></div></div>
             </div>
           </div>
         </div>
@@ -391,7 +391,7 @@
 
         <div class="save-bar">
           <button class="btn btn-primary" onclick="saveTicketConfig()" data-i18n="save.changes">Save Changes</button>
-          <span class="save-hint">Unsaved changes</span>
+          <span class="save-hint" data-i18n="tk.unsaved_changes">Unsaved changes</span>
           <span id="ticket-save-msg" class="save-status"></span>
         </div>
       </div>
@@ -656,12 +656,12 @@
             <table class="log-table">
               <thead><tr>
                 <th style="width:60px">#</th>
-                <th>Channel</th>
-                <th style="width:110px">Type</th>
-                <th style="width:90px">Priority</th>
-                <th>Closed By</th>
-                <th style="width:160px">Date</th>
-                <th style="width:70px">Msgs</th>
+                <th data-i18n="trn.channel">Channel</th>
+                <th style="width:110px" data-i18n="trn.typeCol">Type</th>
+                <th style="width:90px" data-i18n="trn.priority">Priority</th>
+                <th data-i18n="trn.closedByCol">Closed By</th>
+                <th style="width:160px" data-i18n="trn.date">Date</th>
+                <th style="width:70px" data-i18n="trn.msgsCol">Msgs</th>
                 <th style="width:70px"></th>
               </tr></thead>
               <tbody id="tx-rows"></tbody>
@@ -673,7 +673,7 @@
       <!-- Viewer -->
       <div id="tx-viewer" class="hidden">
         <div class="tx-viewer-bar">
-          <button class="btn btn-secondary" onclick="closeTranscript()">← Back</button>
+          <button class="btn btn-secondary" onclick="closeTranscript()" data-i18n="trn.back">← Back</button>
           <div id="tx-meta" class="tx-meta"></div>
         </div>
         <div id="tx-messages" class="tx-messages"></div>
@@ -688,14 +688,14 @@
       </div>
       <div class="log-viewer-header">
         <select id="log-file-select" onchange="loadBotLogs()">
-          <option value="bot">Combined Log</option>
-          <option value="error">Error Log</option>
-          <option value="out">Output Log</option>
+          <option value="bot" data-i18n="bl.combined_log">Combined Log</option>
+          <option value="error" data-i18n="bl.error_log">Error Log</option>
+          <option value="out" data-i18n="bl.output_log">Output Log</option>
         </select>
-        <button class="btn btn-secondary" onclick="loadBotLogs()">↺ Refresh</button>
-        <button class="btn btn-secondary" onclick="document.getElementById('log-viewer').innerHTML=''">Clear View</button>
+        <button class="btn btn-secondary" onclick="loadBotLogs()" data-i18n="bl.refresh">↺ Refresh</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('log-viewer').innerHTML=''" data-i18n="bl.clear_view">Clear View</button>
       </div>
-      <pre id="log-viewer" class="log-viewer">Select a log file and click Refresh.</pre>
+      <pre id="log-viewer" class="log-viewer" data-i18n="bl.selectHint">Select a log file and click Refresh.</pre>
     </div>
 
   </main>
@@ -705,21 +705,21 @@
 <div id="chat-overlay" class="chat-overlay hidden">
   <div class="chat-window">
     <div class="chat-header">
-      <span id="chat-title">Ticket Chat</span>
+      <span id="chat-title" data-i18n="chat.ticket_chat">Ticket Chat</span>
       <button class="chat-close" onclick="closeChat()" data-icon="x"></button>
     </div>
     <div id="chat-messages" class="chat-messages"></div>
     <div id="chat-typing" class="chat-typing"></div>
     <div class="chat-input-row">
-      <input type="text" id="chat-input" placeholder="Type a message as staff…"
+      <input type="text" id="chat-input" placeholder="Type a message as staff…" data-i18n-ph="chat.type_a_message_as_staff"
              onkeydown="if(event.key==='Enter') sendChat(); else chatTyping()">
-      <button class="btn btn-primary" onclick="sendChat()">Send</button>
+      <button class="btn btn-primary" onclick="sendChat()" data-i18n="chat.send">Send</button>
     </div>
   </div>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
-<script src="i18n.js?v=8"></script>
-<script src="app.js?v=20"></script>
+<script src="i18n.js?v=9"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>

@@ -187,14 +187,14 @@ function applyLinks(links) {
     el.style.cursor = 'pointer';
     el.addEventListener('click', (e) => {
       e.preventDefault();
-      alert('The ZenByte support server is currently being worked on. It will be joinable once it\'s finished — thanks for your patience!');
+      alert(t('boot.supportWip', "The ZenByte support server is currently being worked on. It will be joinable once it's finished. Thanks for your patience!"));
     });
   });
 }
 
 const AUTH_ERRORS = {
-  oauth_not_configured: 'Discord login is not configured on this server yet.',
-  auth_failed: 'Discord login failed or was cancelled. Please try again.'
+  get oauth_not_configured() { return t('boot.oauthMissing', 'Discord login is not configured on this server yet.'); },
+  get auth_failed()          { return t('boot.authFailed', 'Discord login failed or was cancelled. Please try again.'); }
 };
 
 function showLogin(auth) {
@@ -204,7 +204,7 @@ function showLogin(auth) {
   const params = new URLSearchParams(location.search);
   const err = params.get('error');
   if (err) {
-    document.getElementById('auth-err').textContent = AUTH_ERRORS[err] || 'Login failed.';
+    document.getElementById('auth-err').textContent = AUTH_ERRORS[err] || t('boot.loginFailed', 'Login failed.');
     history.replaceState({}, '', location.pathname);
   }
   if (auth && auth.configured === false) {
@@ -225,7 +225,7 @@ function showLogin(auth) {
 
 async function enterDashboard(user) {
   hide('login-screen');
-  if (user?.username) document.getElementById('sidebar-user').textContent = `Signed in as ${user.username}`;
+  if (user?.username) document.getElementById('sidebar-user').textContent = t('boot.signedIn', 'Signed in as {u}', { u: user.username });
   await loadStatus();
   await loadGuilds();
 
@@ -692,7 +692,7 @@ function renderGuildDropdown() {
       ${guildIconHTML(g, 36, 'guild-icon-circle')}
       <div class="guild-option-info">
         <div class="guild-option-name">${esc(g.name)}</div>
-        <div class="guild-option-count">${g.memberCount.toLocaleString()} members</div>
+        <div class="guild-option-count">${tx('gs.members', '', { n: g.memberCount })}</div>
       </div>
     </div>`).join('');
 }
@@ -1035,13 +1035,13 @@ async function saveTicketConfig() {
 // ── Ticket forms (named, reusable) ─────────────────
 function tfFieldRow(f = {}) {
   return `<div class="tf-row">
-    <input type="text" class="tf-label" placeholder="Question / label" maxlength="45" value="${esc(f.label || '')}">
-    <input type="text" class="tf-ph" placeholder="Placeholder (optional)" maxlength="100" value="${esc(f.placeholder || '')}">
+    <input type="text" class="tf-label" placeholder="${tA('tk.question_label', "Question / label")}" maxlength="45" value="${esc(f.label || '')}">
+    <input type="text" class="tf-ph" placeholder="${tA('tk.placeholder_optional', "Placeholder (optional)")}" maxlength="100" value="${esc(f.placeholder || '')}">
     <select class="tf-style">
-      <option value="short"${f.style === 'short' ? ' selected' : ''}>Short</option>
-      <option value="paragraph"${f.style === 'paragraph' ? ' selected' : ''}>Paragraph</option>
+      <option value="short"${f.style === 'short' ? ' selected' : ''}>${tt('tk.short', "Short")}</option>
+      <option value="paragraph"${f.style === 'paragraph' ? ' selected' : ''}>${tt('tk.paragraph', "Paragraph")}</option>
     </select>
-    <label class="tf-req"><input type="checkbox" class="tf-required" ${f.required !== false ? 'checked' : ''}> Required</label>
+    <label class="tf-req"><input type="checkbox" class="tf-required" ${f.required !== false ? 'checked' : ''}> ${tt('tk.required', "Required")}</label>
     <button class="btn btn-secondary tf-del" onclick="this.closest('.tf-row').remove()">${svg('x')}</button>
   </div>`;
 }
@@ -1059,14 +1059,14 @@ function ticketEmptyState(icon, title, text, btn) {
 function renderTicketForms() {
   const forms = state.ticketForms || [];
   const gate = premiumGate('ticketForms', forms.length);
-  const newBtn = gateCreateButton(gate, 'New Form', 'tfNew()', 'ticketForms', { icon: svg('plus') });
+  const newBtn = gateCreateButton(gate, tt('ap.newForm', 'New Form'), 'tfNew()', 'ticketForms', { icon: svg('plus') });
   const body = forms.length
     ? `<div class="ticket-items">${forms.map(tfItemCard).join('')}</div>`
-    : ticketEmptyState('clipboard', 'No forms yet', 'Create a reusable question form, then assign it to a panel.', newBtn);
+    : ticketEmptyState('clipboard', tA('tk.noForms', 'No forms yet'), tA('tk.noFormsHint', 'Create a reusable question form, then assign it to a panel.'), newBtn);
   document.getElementById('t-forms-section').innerHTML = `
     <div class="card">
       <div class="section-head">
-        <h3>Ticket Forms</h3>
+        <h3>${tt('tk.ticket_forms', "Ticket Forms")}</h3>
         <div class="section-head-actions">${gate.hint}${forms.length ? newBtn : ''}</div>
       </div>
       ${body}
@@ -1078,12 +1078,12 @@ function tfItemCard(f) {
   return `<div class="ticket-item">
     <div class="ticket-item-info">
       <div class="ticket-item-name">${esc(f.name)}</div>
-      <div class="hint">${n} question${n === 1 ? '' : 's'}</div>
+      <div class="hint">${tx('ap.qcount', '', { n })}</div>
     </div>
     <div class="btn-row">
-      <button class="btn btn-secondary" onclick="tfEdit('${f.id}')">Edit</button>
-      <button class="btn btn-secondary" onclick="tfDuplicate('${f.id}')">Duplicate</button>
-      <button class="btn btn-secondary" onclick="tfDeleteForm('${f.id}')">Delete</button>
+      <button class="btn btn-secondary" onclick="tfEdit('${f.id}')">${tt('tk.edit', "Edit")}</button>
+      <button class="btn btn-secondary" onclick="tfDuplicate('${f.id}')">${tt('tk.duplicate', "Duplicate")}</button>
+      <button class="btn btn-secondary" onclick="tfDeleteForm('${f.id}')">${tt('tk.delete', "Delete")}</button>
     </div>
   </div>`;
 }
@@ -1092,17 +1092,17 @@ function tfItemCard(f) {
 function tfOpenModal(form) {
   const rows = (form.fields || []).map(tfFieldRow).join('');
   openAppsModal(`
-    <h3 class="modal-title">${form.id ? 'Edit Form' : 'New Form'}</h3>
+    <h3 class="modal-title">${form.id ? tt('ap.editForm', 'Edit Form') : tt('ap.newForm', 'New Form')}</h3>
     <input type="hidden" id="tf-edit-id" value="${form.id || ''}">
-    <div class="form-row"><label>Form name</label><input type="text" id="tf-edit-name" maxlength="80" value="${esc(form.name || '')}"></div>
-    <div class="form-row"><label>Questions (up to 5)</label>
+    <div class="form-row"><label>${tt('tk.form_name', "Form name")}</label><input type="text" id="tf-edit-name" maxlength="80" value="${esc(form.name || '')}"></div>
+    <div class="form-row"><label>${tt('tk.questions_up_to_5', "Questions (up to 5)")}</label>
       <div id="tf-edit-fields">${rows}</div>
-      <button class="btn btn-secondary" style="margin-top:8px" onclick="tfModalAddField()">+ Add Question</button>
-      <span class="hint" style="display:block;margin-top:6px">Answers appear in the ticket when it opens.</span>
+      <button class="btn btn-secondary" style="margin-top:8px" onclick="tfModalAddField()">${tt('tk.add_question', "+ Add Question")}</button>
+      <span class="hint" style="display:block;margin-top:6px">${tt('tk.answers_appear_in_the_ticket_when_it_ope', "Answers appear in the ticket when it opens.")}</span>
     </div>
     <div class="btn-row" style="margin-top:18px;align-items:center">
-      <button class="btn btn-primary" onclick="tfModalSave()">${form.id ? 'Save Form' : 'Create Form'}</button>
-      <button class="btn btn-secondary" onclick="closeAppsModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="tfModalSave()">${form.id ? tt('ap.save_form', 'Save Form') : tt('tk.createForm', 'Create Form')}</button>
+      <button class="btn btn-secondary" onclick="closeAppsModal()">${tt('tk.cancel', "Cancel")}</button>
       <span id="tf-edit-msg" class="save-status"></span>
     </div>`);
 }
@@ -1161,7 +1161,7 @@ async function tfDuplicate(id) {
 }
 
 async function tfDeleteForm(id) {
-  if (!confirm('Delete this form? Panels using it will fall back to opening with no form.')) return;
+  if (!confirm(tA('tk.confirmDelForm', 'Delete this form? Panels using it will fall back to opening with no form.'))) return;
   try {
     const r = await api('DELETE', `/api/guild/${state.guildId}/ticket-forms/${id}`);
     state.ticketForms = r.config.forms; state.ticketPanels = r.config.panels;
@@ -1173,14 +1173,14 @@ async function tfDeleteForm(id) {
 function renderTicketPanels() {
   const panels = state.ticketPanels || [];
   const gate = premiumGate('ticketPanels', panels.length);
-  const newBtn = gateCreateButton(gate, 'New Panel', 'tpNew()', 'ticketPanels', { icon: svg('plus') });
+  const newBtn = gateCreateButton(gate, tt('tk.newPanel', 'New Panel'), 'tpNew()', 'ticketPanels', { icon: svg('plus') });
   const body = panels.length
     ? `<div class="ticket-items">${panels.map(tpItemCard).join('')}</div>`
-    : ticketEmptyState('ticket', 'No panels yet', 'Create a panel, assign a form, and publish it to a channel.', newBtn);
+    : ticketEmptyState('ticket', tA('tk.noPanels', 'No panels yet'), tA('tk.noPanelsHint', 'Create a panel, assign a form, and publish it to a channel.'), newBtn);
   document.getElementById('t-panels-section').innerHTML = `
     <div class="card">
       <div class="section-head">
-        <h3>Ticket Panels</h3>
+        <h3>${tt('tk.ticket_panels', "Ticket Panels")}</h3>
         <div class="section-head-actions">${gate.hint}${panels.length ? newBtn : ''}</div>
       </div>
       ${body}
@@ -1188,20 +1188,20 @@ function renderTicketPanels() {
 }
 
 function tpItemCard(p) {
-  const ch = p.channelId ? `#${channelName(p.channelId)}` : 'No channel';
+  const ch = p.channelId ? `#${channelName(p.channelId)}` : tA('tk.noChannel', 'No channel');
   const typeCount = (p.types || []).length;
   const bits = [esc(ch)];
-  bits.push(typeCount ? `${typeCount} type${typeCount > 1 ? 's' : ''}` : 'No types');
-  bits.push(p.messageId ? 'Published' : 'Not published');
+  bits.push(typeCount ? tn('tk.types', typeCount) : tA('tk.noTypes', 'No types'));
+  bits.push(p.messageId ? tA('tk.published', 'Published') : tA('tk.notPublished', 'Not published'));
   return `<div class="ticket-item">
     <div class="ticket-item-info">
       <div class="ticket-item-name">${esc(p.name)}</div>
       <div class="hint">${bits.join(' &middot; ')}</div>
     </div>
     <div class="btn-row">
-      <button class="btn btn-secondary" onclick="tpEdit('${p.id}')">Edit</button>
-      <button class="btn btn-secondary" onclick="tpDuplicate('${p.id}')">Duplicate</button>
-      <button class="btn btn-secondary" onclick="tpDelete('${p.id}')">Delete</button>
+      <button class="btn btn-secondary" onclick="tpEdit('${p.id}')">${tt('tk.edit', "Edit")}</button>
+      <button class="btn btn-secondary" onclick="tpDuplicate('${p.id}')">${tt('tk.duplicate', "Duplicate")}</button>
+      <button class="btn btn-secondary" onclick="tpDelete('${p.id}')">${tt('tk.delete', "Delete")}</button>
     </div>
   </div>`;
 }
@@ -1209,7 +1209,7 @@ function tpItemCard(p) {
 // Options for a per-type form picker: an explicit "no form" entry plus every
 // saved form. Picking a form makes that type open the form when chosen.
 function tpTypeFormOptions(selectedId) {
-  const none = `<option value=""${!selectedId ? ' selected' : ''}>No form (open immediately)</option>`;
+  const none = `<option value=""${!selectedId ? ' selected' : ''}>${tt('tk.no_form_open_immediately', "No form (open immediately)")}</option>`;
   return none + (state.ticketForms || []).map(f =>
     `<option value="${f.id}"${f.id === selectedId ? ' selected' : ''}>${esc(f.name)}</option>`).join('');
 }
@@ -1220,9 +1220,9 @@ function tpTypeRow(t) {
   if (typeof t === 'string') t = { name: t, formId: '' };
   t = t || { name: '', formId: '' };
   return `<div class="tp-type-row">
-    <input type="text" class="tp-type-name" maxlength="100" placeholder="Type name (e.g. Support)" value="${esc(t.name || '')}">
+    <input type="text" class="tp-type-name" maxlength="100" placeholder="${tA('tk.type_name_e_g_support', "Type name (e.g. Support)")}" value="${esc(t.name || '')}">
     <select class="tp-type-form">${tpTypeFormOptions(t.formId || '')}</select>
-    <button class="btn btn-secondary tp-type-del" title="Remove type" onclick="this.closest('.tp-type-row').remove()">${svg('trash')}</button>
+    <button class="btn btn-secondary tp-type-del" title="${tA('tk.remove_type', "Remove type")}" onclick="this.closest('.tp-type-row').remove()">${svg('trash')}</button>
   </div>`;
 }
 
@@ -1237,42 +1237,42 @@ function tpBrandingSection(p) {
   const isPrem = !!state.guildData?.premium;
   const dis = isPrem ? '' : ' disabled';
   const note = isPrem
-    ? '<span class="hint">Customize how the published panel message looks.</span>'
-    : `<span class="hint">${premiumChip()} Customize the panel embed (logo, banner, author, footer). Activate Premium on this server to unlock.</span>`;
+    ? `<span class="hint">${tt('tk.customize_how_the_published_panel_messag', "Customize how the published panel message looks.")}</span>`
+    : `<span class="hint">${premiumChip()} ${tt('tk.embedPrem', 'Customize the panel embed (logo, banner, author, footer). Activate Premium on this server to unlock.')}</span>`;
   return `
     <div class="form-row" style="margin-top:4px"><label>Panel embed branding ${isPrem ? '' : premiumChip()}</label>${note}</div>
     <div class="card-grid">
-      <div class="form-row"><label>Logo / thumbnail URL</label><input type="text" id="tp-edit-thumb"${dis} maxlength="500" value="${esc(p.thumbnailUrl || '')}" placeholder="https://example.com/logo.png"></div>
-      <div class="form-row"><label>Author / header text</label><input type="text" id="tp-edit-author"${dis} maxlength="256" value="${esc(p.authorName || '')}" placeholder="Shown as a small heading above the title"></div>
+      <div class="form-row"><label>${tt('tk.logo_thumbnail_url', "Logo / thumbnail URL")}</label><input type="text" id="tp-edit-thumb"${dis} maxlength="500" value="${esc(p.thumbnailUrl || '')}" placeholder="https://example.com/logo.png"></div>
+      <div class="form-row"><label>${tt('tk.author_header_text', "Author / header text")}</label><input type="text" id="tp-edit-author"${dis} maxlength="256" value="${esc(p.authorName || '')}" placeholder="${tA('tk.shown_as_a_small_heading_above_the_title', "Shown as a small heading above the title")}"></div>
     </div>
-    <div class="form-row"><label>Banner image URL</label><input type="text" id="tp-edit-image"${dis} maxlength="500" value="${esc(p.imageUrl || '')}" placeholder="https://example.com/banner.png (large image below the text)"></div>
-    <div class="form-row"><label>Footer text</label><input type="text" id="tp-edit-footer"${dis} maxlength="2048" value="${esc(p.footerText || '')}" placeholder="Optional footer line"></div>`;
+    <div class="form-row"><label>${tt('tk.banner_image_url', "Banner image URL")}</label><input type="text" id="tp-edit-image"${dis} maxlength="500" value="${esc(p.imageUrl || '')}" placeholder="https://example.com/banner.png (large image below the text)"></div>
+    <div class="form-row"><label>${tt('tk.footer_text', "Footer text")}</label><input type="text" id="tp-edit-footer"${dis} maxlength="2048" value="${esc(p.footerText || '')}" placeholder="${tA('tk.optional_footer_line', "Optional footer line")}"></div>`;
 }
 
 // Modal editor for a single panel (new when p.id is null).
 function tpOpenModal(p) {
   openAppsModal(`
-    <h3 class="modal-title">${p.id ? 'Edit Panel' : 'New Panel'}</h3>
+    <h3 class="modal-title">${p.id ? tt('tk.editPanel', 'Edit Panel') : tt('tk.newPanel', 'New Panel')}</h3>
     <input type="hidden" id="tp-edit-id" value="${p.id || ''}">
     <div class="card-grid">
-      <div class="form-row"><label>Panel name</label><input type="text" id="tp-edit-name" maxlength="80" value="${esc(p.name || '')}"></div>
-      <div class="form-row"><label>Channel</label><select id="tp-edit-channel">${lvChannelOpts(p.channelId || '')}</select></div>
+      <div class="form-row"><label>${tt('tk.panel_name', "Panel name")}</label><input type="text" id="tp-edit-name" maxlength="80" value="${esc(p.name || '')}"></div>
+      <div class="form-row"><label>${tt('tk.channel', "Channel")}</label><select id="tp-edit-channel">${lvChannelOpts(p.channelId || '')}</select></div>
     </div>
-    <div class="form-row"><label>Button label</label><input type="text" id="tp-edit-button" maxlength="60" value="${esc(p.buttonLabel || 'Create Ticket')}"></div>
-    <div class="form-row"><label>Panel title</label><input type="text" id="tp-edit-title" maxlength="256" value="${esc(p.title || '')}" placeholder="Support Tickets"></div>
-    <div class="form-row"><label>Panel description</label><textarea id="tp-edit-desc" maxlength="2000" placeholder="Need help? Use the button below to open a ticket.">${esc(p.description || '')}</textarea></div>
-    <div class="form-row"><label>Color</label><div class="color-row"><input type="color" id="tp-edit-color" value="${/^#[0-9a-fA-F]{6}$/.test(p.color) ? p.color : '#5865F2'}"></div></div>
+    <div class="form-row"><label>${tt('tk.button_label', "Button label")}</label><input type="text" id="tp-edit-button" maxlength="60" value="${esc(p.buttonLabel || 'Create Ticket')}"></div>
+    <div class="form-row"><label>${tt('tk.panel_title', "Panel title")}</label><input type="text" id="tp-edit-title" maxlength="256" value="${esc(p.title || '')}" placeholder="${tA('tk.support_tickets', "Support Tickets")}"></div>
+    <div class="form-row"><label>${tt('tk.panel_description', "Panel description")}</label><textarea id="tp-edit-desc" maxlength="2000" placeholder="${tA('tk.need_help_use_the_button_below_to_open_a', "Need help? Use the button below to open a ticket.")}">${esc(p.description || '')}</textarea></div>
+    <div class="form-row"><label>${tt('tk.color', "Color")}</label><div class="color-row"><input type="color" id="tp-edit-color" value="${/^#[0-9a-fA-F]{6}$/.test(p.color) ? p.color : '#5865F2'}"></div></div>
     ${tpBrandingSection(p)}
     <div class="form-row">
-      <label>Ticket types</label>
-      <span class="hint">Add types so users pick one when opening, and choose which form each one shows. Leave empty to open a ticket immediately with no type picker.</span>
+      <label>${tt('tk.ticket_types', "Ticket types")}</label>
+      <span class="hint">${tt('tk.add_types_so_users_pick_one_when_opening', "Add types so users pick one when opening, and choose which form each one shows. Leave empty to open a ticket immediately with no type picker.")}</span>
       <div id="tp-types-list">${(p.types || []).map(tpTypeRow).join('')}</div>
-      <button class="btn btn-secondary" onclick="tpModalAddType()" style="margin-top:8px">${svg('plus')} Add type</button>
+      <button class="btn btn-secondary" onclick="tpModalAddType()" style="margin-top:8px">${svg('plus')} ${tt('tk.addType', 'Add type')}</button>
     </div>
     <div class="btn-row" style="margin-top:18px;align-items:center">
-      <button class="btn btn-primary" onclick="tpModalSave(true)">Save &amp; Publish</button>
-      <button class="btn btn-secondary" onclick="tpModalSave(false)">Save</button>
-      <button class="btn btn-secondary" onclick="closeAppsModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="tpModalSave(true)">${tx('tk.save_amp_publish', "Save &amp; Publish")}</button>
+      <button class="btn btn-secondary" onclick="tpModalSave(false)">${tt('tk.save', "Save")}</button>
+      <button class="btn btn-secondary" onclick="closeAppsModal()">${tt('tk.cancel', "Cancel")}</button>
       <span id="tp-edit-msg" class="save-status"></span>
     </div>`);
 }
@@ -1280,7 +1280,7 @@ function tpOpenModal(p) {
 function tpNew() {
   const gate = premiumGate('ticketPanels', (state.ticketPanels || []).length);
   if (gate.atCap) { if (!gate.isPrem) premiumNudge('ticketPanels'); return; }
-  tpOpenModal({ id: null, name: '', channelId: '', buttonLabel: 'Create Ticket', title: '', description: '', color: '#5865F2', thumbnailUrl: '', imageUrl: '', authorName: '', footerText: '', types: [], messageId: null });
+  tpOpenModal({ id: null, name: '', channelId: '', buttonLabel: tA('tk.createTicket', 'Create Ticket'), title: '', description: '', color: '#5865F2', thumbnailUrl: '', imageUrl: '', authorName: '', footerText: '', types: [], messageId: null });
 }
 
 function tpEdit(id) {
@@ -1298,9 +1298,9 @@ function tpModalCollectTypes() {
 function tpModalCollect() {
   const g = id => document.getElementById(id);
   return {
-    name:         g('tp-edit-name').value.trim() || 'Ticket panel',
+    name:         g('tp-edit-name').value.trim() || tA('tk.defPanel', 'Ticket panel'),
     channelId:    g('tp-edit-channel').value || null,
-    buttonLabel:  g('tp-edit-button').value.trim() || 'Create Ticket',
+    buttonLabel:  g('tp-edit-button').value.trim() || tA('tk.createTicket', 'Create Ticket'),
     title:        g('tp-edit-title').value.trim() || null,
     description:  g('tp-edit-desc').value.trim() || null,
     color:        g('tp-edit-color').value || '#5865F2',
@@ -1316,7 +1316,7 @@ async function tpModalSave(publish) {
   const id = document.getElementById('tp-edit-id').value || null;
   const msg = document.getElementById('tp-edit-msg');
   const payload = { ...tpModalCollect(), publish: !!publish };
-  if (publish && !payload.channelId) return setStatus(msg, 'err', 'Pick a channel to publish.');
+  if (publish && !payload.channelId) return setStatus(msg, 'err', tA('tk.pickPublish', 'Pick a channel to publish.'));
   try {
     const r = id
       ? await api('PUT', `/api/guild/${state.guildId}/ticket-panels/${id}`, payload)
@@ -1345,7 +1345,7 @@ async function tpDuplicate(id) {
 }
 
 async function tpDelete(id) {
-  if (!confirm('Delete this panel? Its posted message will be removed too.')) return;
+  if (!confirm(tA('tk.confirmDelPanel', 'Delete this panel? Its posted message will be removed too.'))) return;
   try {
     const r = await api('DELETE', `/api/guild/${state.guildId}/ticket-panels/${id}`);
     state.ticketPanels = r.config.panels;
@@ -1357,19 +1357,19 @@ async function loadOpenTickets() {
   const el  = document.getElementById('open-tickets-list');
   const list = await api('GET', `/api/guild/${state.guildId}/open-tickets`);
   if (!list.length) {
-    el.innerHTML = '<span style="color:var(--muted)">No open tickets.</span>';
+    el.innerHTML = `<span style="color:var(--muted)">${tt('tk.no_open_tickets', "No open tickets.")}</span>`;
     return;
   }
   const badgeCls = { Low: 'badge-low', Medium: 'badge-medium', High: 'badge-high' };
   el.innerHTML = list.map(t => `
     <div class="ticket-row">
       <span class="ticket-ch">#${esc(t.channelName)}</span>
-      <span class="ticket-meta">Type: ${esc(t.type)}</span>
-      <span class="badge ${badgeCls[t.priority] || ''}">${esc(t.priority)}</span>
-      <span class="ticket-meta">Claimed: ${t.claimedBy ? `<@${t.claimedBy}>` : 'No'}</span>
+      <span class="ticket-meta">${tt('trn.type', 'Type:')} ${esc(t.type)}</span>
+      <span class="badge ${badgeCls[t.priority] || ''}">${esc(tA('tk.prio' + t.priority, t.priority || ''))}</span>
+      <span class="ticket-meta">${tt('tk.claimed', 'Claimed:')} ${t.claimedBy ? `<@${t.claimedBy}>` : tA('tk.no', 'No')}</span>
       <span class="ticket-meta">${timeAgo(t.createdAt)}</span>
       <button class="btn btn-secondary" style="padding:4px 12px;font-size:12px;margin-left:auto"
-              onclick="openChat('${t.channelId}','${esc(t.channelName)}')">${svg('chat')} Live Chat</button>
+              onclick="openChat('${t.channelId}','${esc(t.channelName)}')">${svg('chat')} ${tt('tk.liveChat', 'Live Chat')}</button>
     </div>`).join('');
 }
 
@@ -1937,7 +1937,7 @@ async function createPoll() {
     state.pollOptions = ['', ''];
     await loadPolls();
     okMsg(true, t('poll.posted', 'Poll posted!'));
-  } catch (e) { okMsg(false, '❌ ' + e.message); }
+  } catch (e) { okMsg(false, e.message); }
 }
 
 async function savePollConfig() {
@@ -3041,10 +3041,10 @@ async function loadBotLogs() {
   viewer.textContent = 'Loading…';
   try {
     const { lines } = await api('GET', `/api/logs/${file}`);
-    if (!lines.length) { viewer.textContent = 'No entries found.'; return; }
+    if (!lines.length) { viewer.textContent = tA('bl.noEntries', 'No entries found.'); return; }
     viewer.innerHTML = lines.map(colorLine).join('\n');
   } catch {
-    viewer.textContent = 'Failed to load logs.';
+    viewer.textContent = tA('bl.loadFailed', 'Failed to load logs.');
   }
 }
 
@@ -3082,7 +3082,7 @@ function ensureSocket() {
 function openChat(channelId, channelName) {
   ensureSocket();
   document.getElementById('chat-title').textContent = `#${channelName}`;
-  document.getElementById('chat-messages').innerHTML = '<div class="chat-sys">Loading…</div>';
+  document.getElementById('chat-messages').innerHTML = `<div class="chat-sys">${tt('bl.loading', "Loading…")}</div>`;
   document.getElementById('chat-typing').textContent = '';
   show('chat-overlay');
   chatSocket.emit('join', { guildId: state.guildId, channelId });
@@ -3133,7 +3133,7 @@ function chatMsgHtml(m) {
   }).join('');
   return `<div class="chat-msg${m.bot ? ' chat-bot' : ''}">
     <div class="chat-msg-head"><span class="chat-author">${esc(m.authorTag)}</span>
-    ${m.bot ? '<span class="bot-tag">APP</span>' : ''}<span class="chat-ts">${time}</span></div>
+    ${m.bot ? `<span class="bot-tag">${tt('bl.app', "APP")}</span>` : ''}<span class="chat-ts">${time}</span></div>
     ${m.content ? `<div class="chat-text">${esc(m.content)}</div>` : ''}${atts}
   </div>`;
 }
@@ -3172,9 +3172,9 @@ function setStatus(el, type, msg) {
 
 function timeAgo(ts) {
   const d = Date.now() - ts;
-  if (d < 60000)   return `${Math.floor(d/1000)}s ago`;
-  if (d < 3600000) return `${Math.floor(d/60000)}m ago`;
-  return `${Math.floor(d/3600000)}h ago`;
+  if (d < 60000)   return tA('time.s', '{n}s ago', { n: Math.floor(d/1000) });
+  if (d < 3600000) return tA('time.m', '{n}m ago', { n: Math.floor(d/60000) });
+  return tA('time.h', '{n}h ago', { n: Math.floor(d/3600000) });
 }
 
 // ═══════════════════════════════════════
@@ -3195,7 +3195,7 @@ async function loadTranscripts() {
   const tbody = document.getElementById('tx-rows');
 
   if (!list.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:30px">No transcripts saved yet. Close a ticket to generate one.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:30px">${tt('trn.no_transcripts_saved_yet_close_a_ticket_', "No transcripts saved yet. Close a ticket to generate one.")}</td></tr>`;
   } else {
     const badgeCls = p => ({ Low: 'badge-low', Medium: 'badge-medium', High: 'badge-high' }[p] || '');
     tbody.innerHTML = list.map(t => `
@@ -3203,11 +3203,11 @@ async function loadTranscripts() {
         <td><span class="log-key">#${esc(t.number || '?')}</span></td>
         <td style="font-size:13px">${esc(t.channelName || '')}</td>
         <td>${esc(t.type || '')}</td>
-        <td><span class="badge ${badgeCls(t.priority)}">${esc(t.priority || '')}</span></td>
-        <td style="font-size:13px">${esc(t.closedBy?.tag || 'Unknown')}</td>
+        <td><span class="badge ${badgeCls(t.priority)}">${esc(t.priority ? tA('tk.prio' + t.priority, t.priority) : '')}</span></td>
+        <td style="font-size:13px">${esc(t.closedBy?.tag || tA('trn.unknown', 'Unknown'))}</td>
         <td style="font-size:12px;color:var(--muted)">${t.closedAt ? new Date(t.closedAt).toLocaleString() : '…'}</td>
         <td style="color:var(--muted)">${t.messageCount}</td>
-        <td><button class="btn btn-secondary" style="padding:5px 12px;font-size:12px" onclick="viewTranscript('${esc(t.filename)}')">View</button></td>
+        <td><button class="btn btn-secondary" style="padding:5px 12px;font-size:12px" onclick="viewTranscript('${esc(t.filename)}')">${tt('trn.view', "View")}</button></td>
       </tr>`).join('');
   }
 
@@ -3217,7 +3217,7 @@ async function loadTranscripts() {
 async function viewTranscript(filename) {
   let data;
   try { data = await api('GET', `/api/transcript/${encodeURIComponent(filename)}`); }
-  catch { return alert('Failed to load transcript.'); }
+  catch { return alert(tA('trn.loadFailed', 'Failed to load transcript.')); }
 
   // Switch to viewer
   hide('tx-list-view');
@@ -3227,16 +3227,16 @@ async function viewTranscript(filename) {
   const badgeCls = p => ({ Low: 'badge-low', Medium: 'badge-medium', High: 'badge-high' }[p] || '');
   document.getElementById('tx-meta').innerHTML =
     `<strong>#${esc(data.number || '?')} · ${esc(data.channelName)}</strong>
-     <span class="muted"> &nbsp;|&nbsp; Type: ${esc(data.type)}
-     &nbsp;|&nbsp; <span class="badge ${badgeCls(data.priority)}" style="font-size:11px">${esc(data.priority)}</span>
-     &nbsp;|&nbsp; Closed by ${esc(data.closedBy?.tag || '?')}
-     &nbsp;|&nbsp; ${data.messages?.length || 0} messages
-     ${data.closedAt ? `&nbsp;|&nbsp; ${new Date(data.closedAt).toLocaleString()}` : ''}</span>`;
+     <span class="muted"> &nbsp;|&nbsp; ${tt('trn.type', 'Type:')} ${esc(data.type)}
+     &nbsp;|&nbsp; <span class="badge ${badgeCls(data.priority)}" style="font-size:11px">${esc(data.priority ? tA('tk.prio' + data.priority, data.priority) : '')}</span>
+     &nbsp;|&nbsp; ${tt('trn.closedBy', 'Closed by')} ${esc(data.closedBy?.tag || '?')}
+     &nbsp;|&nbsp; ${tx('trn.msgs', '', { n: data.messages?.length || 0 })}
+     ${data.closedAt ? `&nbsp;|&nbsp; ${new Date(data.closedAt).toLocaleString(currentLang)}` : ''}</span>`;
 
   // Render messages
   const container = document.getElementById('tx-messages');
   if (!data.messages?.length) {
-    container.innerHTML = '<p style="text-align:center;color:var(--muted);padding:40px">No messages recorded.</p>';
+    container.innerHTML = `<p style="text-align:center;color:var(--muted);padding:40px">${tt('trn.no_messages_recorded', "No messages recorded.")}</p>`;
     return;
   }
 
