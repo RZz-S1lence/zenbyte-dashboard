@@ -713,6 +713,26 @@ module.exports = function startDashboard(client) {
     res.json({ success: true });
   });
 
+  // ── Log history ───────────────────────────────
+  const logHistory = require('../logging/history');
+
+  app.get('/api/guild/:id/loghistory', requireAuth, guildGuard, (req, res) => {
+    const { type, q, before, limit } = req.query;
+    const out = logHistory.list(req.params.id, { type: String(type || ''), search: String(q || ''), before, limit });
+    // Resolve who deleted restored logs, so the dashboard can show a name.
+    for (const e of out.entries) {
+      if (e.lastDeletedBy) {
+        const u = client.users.cache.get(e.lastDeletedBy);
+        e.lastDeletedByTag = u ? u.tag : null;
+      }
+    }
+    res.json({
+      ...out,
+      retentionDays: logHistory.RETENTION_DAYS,
+      types: [...LOG_TYPES.map(t => ({ key: t.key, label: t.label, group: t.group })), { key: 'automod', label: 'AutoMod', group: 'AutoMod' }]
+    });
+  });
+
   // ── AutoMod ───────────────────────────────────
   const automodConfig = require('../automod/config');
 

@@ -1,5 +1,6 @@
 const { Events } = require('discord.js');
 const logger = require('../utils/logger');
+const history = require('../logging/history');
 
 // When the bot is removed from a server, delete everything stored for it.
 // Keeps memory and disk from growing forever and honours the data deletion
@@ -15,6 +16,7 @@ module.exports = {
       try { store.purgeGuild(guild.id); }
       catch (e) { logger.error(`Failed to purge ${store?.constructor?.name || 'store'} for guild ${guild.id}:`, e.message); }
     }
+    history.purgeGuild(guild.id);
     logger.info(`Removed from guild ${guild.id}; stored data purged.`);
   }
 };

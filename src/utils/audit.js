@@ -1,3 +1,5 @@
+const history = require('../logging/history');
+
 async function sendLog(client, guild, logType, payload) {
   const guildLogs = client.store.logChannels.get(guild.id);
   if (!guildLogs || !guildLogs[logType]) return;
@@ -5,7 +7,9 @@ async function sendLog(client, guild, logType, payload) {
   if (!channel) return;
   // payload may be a raw embed object or a full message payload ({ content, embeds })
   const message = payload.embeds ? payload : { embeds: [payload] };
-  await channel.send(message).catch(() => {});
+  const sent = await channel.send(message).catch(() => null);
+  // Keep a copy so the log survives being deleted in Discord (see logging/history).
+  history.record({ guildId: guild.id, type: logType, channelId: channel.id, messageId: sent?.id, message });
 }
 
 async function getAuditLogExecutor(guild, type, targetId) {

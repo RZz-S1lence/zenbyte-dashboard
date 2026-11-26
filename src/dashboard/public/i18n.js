@@ -4224,6 +4224,72 @@ const I18N_AM = {
 };
 for (const [lang, dict] of Object.entries(I18N_AM)) Object.assign(I18N[lang] = I18N[lang] || {}, dict);
 
+
+// ── Log History ──
+const I18N_LH = {
+ "en": {
+  "page.loghistory": "Log History",
+  "sub.loghistory": "A saved copy of every log the bot posts. If someone deletes a log message in Discord, the bot posts it again and shows here who deleted it.",
+  "lh.allTypes": "All log types",
+  "lh.search": "Search (user, ID, channel, text…)",
+  "lh.retention": "Entries are kept for {n} days.",
+  "lh.empty": "No log entries found.",
+  "lh.more": "Load more",
+  "lh.unknown": "unknown",
+  "lh.restored.one": "Deleted by {who} and restored",
+  "lh.restored.other": "Deleted {n} times (last by {who}) and restored"
+ },
+ "de": {
+  "page.loghistory": "Log-Verlauf",
+  "sub.loghistory": "Eine gespeicherte Kopie von jedem Log, das der Bot postet. Wenn jemand eine Log-Nachricht in Discord löscht, postet der Bot sie erneut und zeigt hier, wer sie gelöscht hat.",
+  "lh.allTypes": "Alle Log-Typen",
+  "lh.search": "Suchen (Nutzer, ID, Kanal, Text…)",
+  "lh.retention": "Einträge werden {n} Tage gespeichert.",
+  "lh.empty": "Keine Log-Einträge gefunden.",
+  "lh.more": "Mehr laden",
+  "lh.unknown": "unbekannt",
+  "lh.restored.one": "Von {who} gelöscht und wiederhergestellt",
+  "lh.restored.other": "{n}-mal gelöscht (zuletzt von {who}) und wiederhergestellt"
+ },
+ "fr": {
+  "page.loghistory": "Historique des logs",
+  "sub.loghistory": "Une copie enregistrée de chaque log publié par le bot. Si quelqu'un supprime un message de log sur Discord, le bot le republie et indique ici qui l'a supprimé.",
+  "lh.allTypes": "Tous les types de log",
+  "lh.search": "Rechercher (utilisateur, ID, salon, texte…)",
+  "lh.retention": "Les entrées sont conservées {n} jours.",
+  "lh.empty": "Aucune entrée de log trouvée.",
+  "lh.more": "Charger plus",
+  "lh.unknown": "inconnu",
+  "lh.restored.one": "Supprimé par {who} et restauré",
+  "lh.restored.other": "Supprimé {n} fois (dernière par {who}) et restauré"
+ },
+ "ru": {
+  "page.loghistory": "История логов",
+  "sub.loghistory": "Сохранённая копия каждого лога, который публикует бот. Если кто-то удалит лог в Discord, бот опубликует его снова и покажет здесь, кто его удалил.",
+  "lh.allTypes": "Все типы логов",
+  "lh.search": "Поиск (пользователь, ID, канал, текст…)",
+  "lh.retention": "Записи хранятся {n} дней.",
+  "lh.empty": "Записи логов не найдены.",
+  "lh.more": "Загрузить ещё",
+  "lh.unknown": "неизвестно",
+  "lh.restored.one": "Удалено пользователем {who} и восстановлено",
+  "lh.restored.other": "Удалено {n} раз (последний раз: {who}) и восстановлено"
+ },
+ "es": {
+  "page.loghistory": "Historial de registros",
+  "sub.loghistory": "Una copia guardada de cada registro que publica el bot. Si alguien elimina un mensaje de registro en Discord, el bot lo vuelve a publicar y muestra aquí quién lo eliminó.",
+  "lh.allTypes": "Todos los tipos de registro",
+  "lh.search": "Buscar (usuario, ID, canal, texto…)",
+  "lh.retention": "Las entradas se guardan {n} días.",
+  "lh.empty": "No se encontraron registros.",
+  "lh.more": "Cargar más",
+  "lh.unknown": "desconocido",
+  "lh.restored.one": "Eliminado por {who} y restaurado",
+  "lh.restored.other": "Eliminado {n} veces (la última por {who}) y restaurado"
+ }
+};
+for (const [lang, dict] of Object.entries(I18N_LH)) Object.assign(I18N[lang] = I18N[lang] || {}, dict);
+
 let currentLang = 'en';
 try { const s = localStorage.getItem('zb-lang'); if (s && I18N_LANGS[s]) currentLang = s; } catch {}
 

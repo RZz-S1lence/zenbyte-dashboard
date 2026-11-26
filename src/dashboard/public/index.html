@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ZenByte Dashboard</title>
-  <link rel="stylesheet" href="style.css?v=18">
+  <link rel="stylesheet" href="style.css?v=20">
 </head>
 <body>
 
@@ -123,6 +123,7 @@
 
       <div class="nav-section" data-i18n="nav.logs">Logs</div>
       <a class="nav-item" data-page="logs" onclick="goto('logs')"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></span> <span data-i18n="page.logs">Log Channels</span></a>
+      <a class="nav-item" data-page="loghistory" onclick="goto('loghistory')"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><polyline points="3 3 3 8 8 8"/><polyline points="12 7 12 12 15 14"/></svg></span> <span data-i18n="page.loghistory">Log History</span></a>
       <a class="nav-item" data-page="botlogs" onclick="goto('botlogs')"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span> <span data-i18n="page.botlogs">Bot Logs</span></a>
     </nav>
 
@@ -696,6 +697,16 @@
       </div>
     </div>
 
+    <!-- ─── LOG HISTORY ─── -->
+    <div id="page-loghistory" class="page">
+      <div class="page-header">
+        <h2 data-i18n="page.loghistory">Log History</h2>
+        <p data-i18n-html="sub.loghistory">A saved copy of every log the bot posts. If someone deletes a log message in Discord, the bot posts it again and shows here who deleted it.</p>
+      </div>
+      <div id="lh-no-guild" class="no-guild-msg" data-i18n="common.selectServer">← Select a server from the sidebar to get started.</div>
+      <div id="lh-body" class="hidden"></div>
+    </div>
+
     <!-- ─── BOT LOGS ─── -->
     <div id="page-botlogs" class="page">
       <div class="page-header">
@@ -735,7 +746,7 @@
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
-<script src="i18n.js?v=10"></script>
-<script src="app.js?v=22"></script>
+<script src="i18n.js?v=11"></script>
+<script src="app.js?v=24"></script>
 </body>
 </html>

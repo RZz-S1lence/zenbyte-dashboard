@@ -855,3 +855,30 @@ button .ic, .btn .ic, .apps-tab .ic, .mc-act .ic, .cmd-cat-btn .ic { margin-righ
 .toast.toast-out { animation: toastOut .25s ease-in forwards; }
 @keyframes toastIn { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: none; } }
 @keyframes toastOut { to { opacity: 0; transform: translateX(40px); } }
+
+/* Anti-Nuke: per-protection role whitelist uses the searchable multiselect */
+.sec-table-wrap { overflow: visible; }
+.sec-roles-cell { min-width: 260px; width: 32%; }
+.sec-roles-cell .multiselect-control { min-height: 38px; }
+.sec-table tbody tr:nth-last-child(-n+3) .multiselect-menu { top: auto; bottom: calc(100% + 5px); }
+@media (max-width: 860px) { .sec-table-wrap { overflow-x: auto; } }
+
+/* Log history */
+.lh-filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.lh-filters select, .lh-filters input { max-width: 260px; }
+.lh-filters input { flex: 1; min-width: 200px; }
+.lh-entry { padding: 14px 16px; }
+.lh-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.lh-type { font-weight: 700; font-size: 13px; color: var(--accent2); }
+.lh-restored { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--yellow);
+  background: rgba(245,185,69,.12); border: 1px solid rgba(245,185,69,.35); border-radius: 6px; padding: 3px 8px; }
+.lh-restored svg { width: 14px; height: 14px; }
+.lh-embed { border-left: 4px solid var(--border2); background: var(--bg); border-radius: 6px; padding: 10px 12px; margin-top: 6px; }
+.lh-title { font-weight: 700; margin-bottom: 6px; }
+.lh-desc { font-size: 13px; color: var(--text); margin-bottom: 6px; word-break: break-word; }
+.lh-fields { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.lh-field { flex: 1 1 100%; min-width: 0; }
+.lh-field.inline { flex: 1 1 180px; }
+.lh-fname { font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 2px; }
+.lh-fval { font-size: 13px; word-break: break-word; }
+.lh-mention { color: var(--accent); background: rgba(124,108,245,.12); border-radius: 4px; padding: 0 3px; }

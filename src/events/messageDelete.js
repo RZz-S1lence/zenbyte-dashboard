@@ -1,6 +1,7 @@
 const { Events, AuditLogEvent } = require('discord.js');
 const { sendLog, getAuditLogExecutor } = require('../utils/audit');
 const logger = require('../utils/logger');
+const history = require('../logging/history');
 
 module.exports = {
   name: Events.MessageDelete,
@@ -16,7 +17,12 @@ module.exports = {
       logger.info(`Reaction-role panel ${rrMenu.id} removed in ${message.guild.id} because its message was deleted.`);
     }
 
-    if (message.author?.bot) return;
+    // A deleted log message of ours gets restored instead of being logged.
+    if (!message.author || message.author.id === client.user.id) {
+      if (await history.onLogDeleted(client, message.guild, message.id)) return;
+    }
+
+    if (!message.author || message.author.bot) return;
     if (client.store.isTicketChannel(message.guild.id, message.channel.id)) return;
     const executor = await getAuditLogExecutor(message.guild, AuditLogEvent.MessageDelete, message.author?.id);
     await sendLog(client, message.guild, 'deletemessage', {

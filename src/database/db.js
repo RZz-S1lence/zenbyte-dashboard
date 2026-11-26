@@ -162,6 +162,31 @@ const MIGRATIONS = [
         );
       `);
     }
+  },
+  {
+    id: '006_log_history',
+    up: d => {
+      d.exec(`
+        -- Copy of every log message the bot posts, so logs survive being deleted
+        -- in Discord. Rows older than 90 days are pruned automatically.
+        CREATE TABLE log_history (
+          id              INTEGER PRIMARY KEY AUTOINCREMENT,
+          guild_id        TEXT NOT NULL,
+          log_type        TEXT NOT NULL,
+          channel_id      TEXT,
+          message_id      TEXT,              -- current Discord message (changes when restored)
+          payload         TEXT NOT NULL,     -- JSON { content?, embeds }
+          search          TEXT NOT NULL,     -- lowercased plain text for searching
+          created_at      INTEGER NOT NULL,
+          deleted_count   INTEGER NOT NULL DEFAULT 0,
+          last_deleted_by TEXT,
+          last_deleted_at INTEGER
+        );
+        CREATE INDEX idx_log_history_guild ON log_history (guild_id, created_at DESC);
+        CREATE INDEX idx_log_history_msg   ON log_history (message_id);
+        CREATE INDEX idx_log_history_time  ON log_history (created_at);
+      `);
+    }
   }
 ];
 

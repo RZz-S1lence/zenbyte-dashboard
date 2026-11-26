@@ -282,6 +282,7 @@ function loadPage(page) {
   if (page === 'altdetect'   && state.guildId) loadAltDetect();
   if (page === 'transcripts' && state.guildId) loadTranscripts();
   if (page === 'botlogs') loadBotLogs();
+  if (page === 'loghistory' && state.guildId) loadLogHistory();
 }
 
 function toggleSidebar() { document.getElementById('dashboard').classList.toggle('sidebar-open'); }
@@ -736,6 +737,7 @@ async function selectGuild(id) {
   if (activePage === 'moderators')  await loadModerators();
   if (activePage === 'security')    await loadSecurityConfig();
   if (activePage === 'automod')     await loadAutoMod();
+  if (activePage === 'loghistory')  await loadLogHistory();
   if (activePage === 'verification') await loadVerification();
   if (activePage === 'autorole')    await loadAutorole();
   if (activePage === 'reactionroles') await loadReactionRoles();
@@ -1418,7 +1420,7 @@ function renderSecurity(guild) {
       <td><input type="number" class="sec-p-limit" min="1" value="${pc.limit}" style="width:64px"></td>
       <td><input type="number" class="sec-p-window" min="1" value="${Math.round(pc.windowMs / 1000)}" style="width:64px"> s</td>
       <td><select class="sec-p-punish">${punishOpts(p.key)}</select></td>
-      <td><select class="sec-p-roles" multiple size="3">${roleMultiHtml(pc.whitelist.roles)}</select></td>
+      <td class="sec-roles-cell"><div class="sec-p-roles" id="sec-p-roles-${p.key}"></div></td>
     </tr>`;
   }).join('');
 
@@ -1452,7 +1454,7 @@ function renderSecurity(guild) {
 
     <div class="card">
       <h3>${tt('sec.protections', "Protections")}</h3>
-      <div class="log-table-wrap">
+      <div class="log-table-wrap sec-table-wrap">
         <table class="log-table sec-table">
           <thead><tr>
             <th>${tt('sec.protection', "Protection")}</th><th>${tt('sec.limit', "Limit")}</th><th>${tt('sec.window', "Window")}</th><th>${tt('sec.punishment', "Punishment")}</th><th>${tt('sec.whitelisted_roles', "Whitelisted Roles")}</th>
@@ -1463,6 +1465,7 @@ function renderSecurity(guild) {
     </div>`;
 
   msInit('sec-global-roles', roleItems(), c.globalWhitelist.roles);
+  for (const p of protections) msInit(`sec-p-roles-${p.key}`, roleItems(), c.protections[p.key].whitelist.roles || []);
 }
 
 function selectedValues(el) {
@@ -1482,7 +1485,7 @@ async function saveSecurityConfig() {
       limit:      Math.max(1, parseInt(tr.querySelector('.sec-p-limit').value, 10) || 1),
       windowMs:   Math.max(1, parseInt(tr.querySelector('.sec-p-window').value, 10) || 1) * 1000,
       punishment: tr.querySelector('.sec-p-punish').value,
-      whitelist:  { users: [], roles: selectedValues(tr.querySelector('.sec-p-roles')) }
+      whitelist:  { users: [], roles: msValues(`sec-p-roles-${tr.dataset.key}`) }
     };
   });
 
@@ -3275,6 +3278,92 @@ async function arspDelete(id) {
   if (!confirm(tA('ar.confirmDel', 'Delete this auto response?'))) return;
   try { await api('DELETE', `/api/guild/${state.guildId}/autoresponses/${id}`); await loadAutoResponses(); }
   catch (e) { alert(tA('ar.delFailed', 'Failed to delete: ') + e.message); }
+}
+
+// ── LOG HISTORY ───────────────────────────────────
+state.lh = { entries: [], hasMore: false, types: [], type: '', q: '' };
+
+async function loadLogHistory(append = false) {
+  if (!append) { hide('lh-body'); }
+  if (!state.guildId) { show('lh-no-guild'); return; }
+  hide('lh-no-guild');
+  await ensureGuildData();
+  const lh = state.lh;
+  const params = new URLSearchParams({ type: lh.type, q: lh.q, limit: 50 });
+  if (append && lh.entries.length) params.set('before', lh.entries[lh.entries.length - 1].id);
+  const data = await api('GET', `/api/guild/${state.guildId}/loghistory?${params}`);
+  lh.types = data.types || [];
+  lh.retention = data.retentionDays || 90;
+  lh.entries = append ? lh.entries.concat(data.entries) : data.entries;
+  lh.hasMore = !!data.hasMore;
+  if (append) renderLhList(); else renderLogHistory();
+  show('lh-body');
+}
+
+function lhTypeLabel(key) {
+  if (key === 'automod') return 'AutoMod';
+  const tdef = state.lh.types.find(x => x.key === key);
+  return tA('logs.d.' + key, tdef?.label || key);
+}
+
+// Turns Discord mention syntax into readable names for the preview.
+function lhPretty(text) {
+  return renderMarkdown(String(text || ''))
+    .replace(/&lt;#(\d+)&gt;/g, (m, id) => `<span class="lh-mention">#${esc(channelName(id))}</span>`)
+    .replace(/&lt;@&amp;(\d+)&gt;/g, (m, id) => `<span class="lh-mention">@${esc((state.guildData?.roles || []).find(r => r.id === id)?.name || id)}</span>`)
+    .replace(/&lt;@!?(\d+)&gt;/g, (m, id) => `<span class="lh-mention">@${id}</span>`);
+}
+
+function lhEmbedHtml(e) {
+  const color = Number.isFinite(e.color) ? '#' + e.color.toString(16).padStart(6, '0') : 'var(--border2)';
+  const fields = (e.fields || []).map(f => `
+    <div class="lh-field${f.inline ? ' inline' : ''}"><div class="lh-fname">${lhPretty(f.name)}</div><div class="lh-fval">${lhPretty(f.value)}</div></div>`).join('');
+  return `<div class="lh-embed" style="border-left-color:${color}">
+    ${e.title ? `<div class="lh-title">${lhPretty(e.title)}</div>` : ''}
+    ${e.description ? `<div class="lh-desc">${lhPretty(e.description)}</div>` : ''}
+    ${fields ? `<div class="lh-fields">${fields}</div>` : ''}
+  </div>`;
+}
+
+function lhEntryHtml(en) {
+  const when = new Date(en.createdAt).toLocaleString(currentLang);
+  const restored = en.deletedCount
+    ? `<span class="lh-restored">${svg('warn')} ${tx('lh.restored', '', { n: en.deletedCount, vars: { who: esc(en.lastDeletedByTag || (en.lastDeletedBy ? en.lastDeletedBy : tA('lh.unknown', 'unknown'))) } })}</span>` : '';
+  return `<div class="card lh-entry">
+    <div class="lh-head"><span class="lh-type">${esc(lhTypeLabel(en.type))}</span><span class="hint">${esc(when)}</span>${restored}</div>
+    ${en.payload.content ? `<div class="lh-desc">${lhPretty(en.payload.content)}</div>` : ''}
+    ${(en.payload.embeds || []).map(lhEmbedHtml).join('')}
+  </div>`;
+}
+
+function renderLhList() {
+  const lh = state.lh;
+  document.getElementById('lh-list').innerHTML = lh.entries.length
+    ? lh.entries.map(lhEntryHtml).join('')
+    : `<p class="hint" style="padding:20px">${tt('lh.empty', 'No log entries found.')}</p>`;
+  document.getElementById('lh-more').innerHTML = lh.hasMore
+    ? `<button class="btn btn-secondary" onclick="loadLogHistory(true)">${tt('lh.more', 'Load more')}</button>` : '';
+}
+
+function renderLogHistory() {
+  const lh = state.lh;
+  const groups = {};
+  for (const tdef of lh.types) (groups[tdef.group] = groups[tdef.group] || []).push(tdef);
+  const opts = Object.entries(groups).map(([g, list]) =>
+    `<optgroup label="${esc(g === 'AutoMod' ? 'AutoMod' : tA('logs.g.' + g, g))}">${list.map(tdef =>
+      `<option value="${tdef.key}"${lh.type === tdef.key ? ' selected' : ''}>${esc(lhTypeLabel(tdef.key))}</option>`).join('')}</optgroup>`).join('');
+  document.getElementById('lh-body').innerHTML = `
+    <div class="card lh-filters">
+      <select id="lh-type" data-no-dirty onchange="state.lh.type=this.value;loadLogHistory()">
+        <option value="">${esc(tA('lh.allTypes', 'All log types'))}</option>${opts}
+      </select>
+      <input type="text" id="lh-q" data-no-dirty value="${esc(lh.q)}" placeholder="${tA('lh.search', 'Search (user, ID, channel, text…)')}"
+        oninput="clearTimeout(state.lh.t);state.lh.t=setTimeout(()=>{state.lh.q=this.value.trim();loadLogHistory()},350)">
+      <span class="hint">${tx('lh.retention', 'Entries are kept for {n} days.', { vars: { n: lh.retention } })}</span>
+    </div>
+    <div id="lh-list"></div>
+    <div id="lh-more" style="text-align:center;margin:12px 0"></div>`;
+  renderLhList();
 }
 
 // ── BOT LOGS ──────────────────────────────────────

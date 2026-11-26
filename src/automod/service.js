@@ -5,6 +5,7 @@ const { FILTERS, WORD_LISTS } = require('./config');
 const { isPremium } = require('../premium');
 const { COLORS } = require('../config');
 const logger = require('../utils/logger');
+const history = require('../logging/history');
 
 const LABELS = Object.fromEntries(FILTERS.map(f => [f.key, f.label]));
 
@@ -251,7 +252,7 @@ async function log(client, message, cfg, key, detail, done, timeoutMinutes) {
   const ch = message.guild.channels.cache.get(cfg.logChannelId);
   if (!ch?.isTextBased?.()) return;
   const content = message.content ? message.content.slice(0, 1000) : '*(no text)*';
-  await ch.send({ embeds: [{
+  const logMsg = { embeds: [{
     title: `AutoMod: ${LABELS[key]}`,
     color: done === 'delete' ? COLORS.warn : COLORS.error,
     fields: [
@@ -262,7 +263,9 @@ async function log(client, message, cfg, key, detail, done, timeoutMinutes) {
       { name: 'Message', value: content }
     ],
     timestamp: new Date().toISOString()
-  }] }).catch(() => {});
+  }] };
+  const sent = await ch.send(logMsg).catch(() => null);
+  history.record({ guildId: message.guild.id, type: 'automod', channelId: ch.id, messageId: sent?.id, message: logMsg });
 }
 
 // ── Entry point ───────────────────────────────────
