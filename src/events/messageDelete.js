@@ -1,5 +1,6 @@
-const { Events, AuditLogEvent } = require('discord.js');
-const { sendLog, getAuditLogExecutor } = require('../utils/audit');
+const { Events } = require('discord.js');
+const { sendLog, findMessageDeleter } = require('../utils/audit');
+const botDeletes = require('../utils/botDeletes');
 const logger = require('../utils/logger');
 const history = require('../logging/history');
 
@@ -24,7 +25,17 @@ module.exports = {
 
     if (!message.author || message.author.bot) return;
     if (client.store.isTicketChannel(message.guild.id, message.channel.id)) return;
-    const executor = await getAuditLogExecutor(message.guild, AuditLogEvent.MessageDelete, message.author?.id);
+    // Who deleted it: the bot itself (tracked), someone from the audit log, or the author.
+    let deletedBy;
+    const botReason = botDeletes.take(message.id);
+    if (botReason) {
+      deletedBy = `${client.user} (${botReason})`;
+    } else {
+      const res = await findMessageDeleter(message.guild, message);
+      if (res.executor) deletedBy = res.executor.id === client.user.id ? `${client.user}` : `${res.executor} (\`${res.executor.id}\`)`;
+      else if (res.self) deletedBy = `${message.author} (author)`;
+      else deletedBy = 'Unknown (bot needs View Audit Log)';
+    }
     await sendLog(client, message.guild, 'deletemessage', {
       title: 'Message Deleted',
       color: 0xED4245,
@@ -32,7 +43,7 @@ module.exports = {
         { name: 'Author', value: `${message.author} (\`${message.author.id}\`)`, inline: true },
         { name: 'Channel', value: `${message.channel}`, inline: true },
         { name: 'Content', value: message.content?.substring(0, 1024) || '*Empty/Embed*', inline: false },
-        { name: 'Deleted By', value: executor ? `${executor} (\`${executor.id}\`)` : 'Self/Unknown', inline: true }
+        { name: 'Deleted By', value: deletedBy, inline: true }
       ],
       timestamp: new Date()
     });

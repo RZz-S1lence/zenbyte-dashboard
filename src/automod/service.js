@@ -6,6 +6,7 @@ const { isPremium } = require('../premium');
 const { COLORS } = require('../config');
 const logger = require('../utils/logger');
 const history = require('../logging/history');
+const botDeletes = require('../utils/botDeletes');
 
 const LABELS = Object.fromEntries(FILTERS.map(f => [f.key, f.label]));
 
@@ -191,8 +192,9 @@ function resolveAction(member, fcfg, cfg, isPrem) {
   return { action: fcfg.action, timeoutMinutes: fcfg.timeoutMinutes };
 }
 
-async function deleteMessages(message, extra) {
+async function deleteMessages(message, extra, reason) {
   const ids = [...new Set([message.id, ...(extra || []).map(e => e.id)])];
+  botDeletes.mark(ids, reason);
   const byChannel = new Map();
   for (const e of extra || []) {
     if (!byChannel.has(e.channelId)) byChannel.set(e.channelId, []);
@@ -307,7 +309,7 @@ async function onMessage(client, message, { edited = false } = {}) {
     else if (k === 'duplicates') hit = checkDuplicates(entries, f);
     if (!hit) continue;
 
-    await deleteMessages(message, hit.extra);
+    await deleteMessages(message, hit.extra, `AutoMod (${LABELS[k] || k})`);
     if (hit.extra) recent.set(key, entries.filter(e => !hit.extra.includes(e)));
 
     let { action, timeoutMinutes } = resolveAction(message.member, f, cfg, isPrem);
