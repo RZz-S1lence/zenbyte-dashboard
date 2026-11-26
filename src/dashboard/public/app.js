@@ -109,7 +109,7 @@ function dot(color) { return `<span class="sdot" style="background:${color}"></s
 // A small "Premium" chip (gem icon + label) shown next to gated features so
 // users see a feature needs premium up front, not at submit time.
 function premiumChip(label = 'Premium') {
-  return `<span class="premium-chip" title="Premium feature">${svg('gem')}${label}</span>`;
+  return `<span class="premium-chip" title="${t('gate.feature', 'Premium feature')}">${svg('gem')}${label}</span>`;
 }
 
 // Generic gate for a counted list feature in the current guild. `feature` is a
@@ -120,20 +120,20 @@ function premiumGate(feature, count) {
   const isPrem = !!state.guildData?.premium;
   if (!lim) return { atCap: false, isPrem, cap: Infinity, hint: '' };
   const cap = isPrem ? lim.premium : lim.free;
-  const used = `<b>${count}</b>/<b>${cap}</b> used`;
+  const used = t('gate.used', '<b>{c}</b>/<b>{cap}</b> used', { c: count, cap });
   const hint = isPrem
-    ? `<span class="hint">${used} &middot; ${premiumChip()} up to ${lim.premium}.</span>`
-    : `<span class="hint">${used} &middot; Free up to <b>${lim.free}</b> &middot; ${premiumChip()} up to <b>${lim.premium}</b>.</span>`;
+    ? `<span class="hint">${tx('gate.premHint', '{used} · {chip} up to {p}.', { vars: { used, chip: premiumChip(), p: lim.premium } })}</span>`
+    : `<span class="hint">${tx('gate.freeHint', '{used} · Free up to <b>{f}</b> · {chip} up to <b>{p}</b>.', { vars: { used, chip: premiumChip(), f: lim.free, p: lim.premium } })}</span>`;
   return { atCap: count >= cap, isPrem, cap, hint, free: lim.free, premium: lim.premium };
 }
 
 // A locked "add" button (dashed Premium style) that nudges instead of adding.
 function premiumLockedBtn(label, feature) {
-  return `<button class="btn btn-secondary btn-locked" title="Premium feature" onclick="premiumNudge('${feature}')">${svg('gem')} ${label} · Premium</button>`;
+  return `<button class="btn btn-secondary btn-locked" title="${t('gate.feature', 'Premium feature')}" onclick="premiumNudge('${feature}')">${svg('gem')} ${label} · Premium</button>`;
 }
 function premiumNudge(feature) {
   const lim = state.guildData?.limits?.[feature] || {};
-  alert(`This is a Premium feature.\n\nFree servers allow up to ${lim.free}; Premium allows up to ${lim.premium}.\n\nOpen the Premium tab in the sidebar to upgrade and activate this server.`);
+  alert(t('gate.nudge', '', { f: lim.free, p: lim.premium }));
 }
 
 // Renders the correct "create" button for a gated feature based on plan + usage:
@@ -147,7 +147,7 @@ function gateCreateButton(gate, label, onclick, feature, opts = {}) {
   const inner = `${opts.icon ? opts.icon + ' ' : ''}${label}`;
   if (!gate.atCap) return `<button class="btn ${cls}" onclick="${onclick}">${inner}</button>`;
   if (!gate.isPrem) return premiumLockedBtn(label, feature);
-  return `<button class="btn ${cls}" disabled title="You have reached the maximum for your plan">${inner}</button>`;
+  return `<button class="btn ${cls}" disabled title="${t('gate.max', 'You have reached the maximum for your plan')}">${inner}</button>`;
 }
 
 // Fills any static element marked <... data-icon="name"> with its SVG. Lets the
@@ -898,7 +898,7 @@ function toggleTicketPriority() {
 
 function fillSelect(id, items, savedId, labelFn) {
   const el = document.getElementById(id);
-  el.innerHTML = '<option value="">None</option>';
+  el.innerHTML = `<option value="" data-i18n="logs.none" data-en="None">${t('logs.none', 'None')}</option>`;
   for (const item of items) {
     const opt = document.createElement('option');
     opt.value = item.id;
@@ -928,7 +928,7 @@ function msInit(hostId, items, selected = []) {
       <span class="guild-chevron">▾</span>
     </div>
     <div class="multiselect-menu hidden" data-menu>
-      <input class="ms-search" placeholder="Search…" oninput="msSearch('${hostId}', this.value)" onclick="event.stopPropagation()">
+      <input class="ms-search" placeholder="${t('ms.search', 'Search…')}" data-i18n-ph="ms.search" data-ph-en="Search…" oninput="msSearch('${hostId}', this.value)" onclick="event.stopPropagation()">
       <div class="ms-options" data-options></div>
     </div>`;
   msRenderTags(hostId);
@@ -943,7 +943,7 @@ function msRenderTags(hostId) {
   const sel = [...st.selected].map(id => st.items.find(i => i.id === id)).filter(Boolean);
   host.querySelector('[data-tags]').innerHTML = sel.length
     ? sel.map(i => `<span class="ms-tag">${esc(i.label)}<button class="ms-tag-x" onclick="msRemove('${hostId}','${i.id}',event)">${svg('x')}</button></span>`).join('')
-    : '<span class="multiselect-placeholder">None selected</span>';
+    : `<span class="multiselect-placeholder">${tt('ms.none', 'None selected')}</span>`;
 }
 
 function msRenderOptions(hostId, query) {
@@ -955,7 +955,7 @@ function msRenderOptions(hostId, query) {
     ? opts.map(i => `<label class="ms-option${st.selected.has(i.id) ? ' on' : ''}" data-id="${i.id}">
         <input type="checkbox" ${st.selected.has(i.id) ? 'checked' : ''} onchange="msToggle('${hostId}','${i.id}')">
         <span>${esc(i.label)}</span></label>`).join('')
-    : '<div class="ms-empty">No matches.</div>';
+    : `<div class="ms-empty">${tt('ms.noMatch', 'No matches.')}</div>`;
 }
 
 function msToggleMenu(hostId, e) {
@@ -1680,7 +1680,7 @@ function socialTotalCreators() {
 }
 function socCreatorsHtml(pid) {
   const list = state.socialConfig.platforms[pid].creators;
-  if (!list.length) return '<span class="hint">No creators followed yet.</span>';
+  if (!list.length) return `<span class="hint">${tt('soc.noCreators', 'No creators followed yet.')}</span>`;
   return list.map(c => `<span class="ms-tag">${esc(c.name)}<button class="ms-tag-x" onclick="socialRemove('${pid}','${esc(c.key)}')">${svg('x')}</button></span>`).join('');
 }
 
@@ -1688,27 +1688,27 @@ function renderSocial() {
   const cards = state.socialProviders.map(p => {
     const pc = state.socialConfig.platforms[p.id];
     const warn = p.needsAuth && !p.configured
-      ? `<div class="soc-warn">${svg('warn')} ${esc(p.label)} alerts aren't available yet. The bot owner needs to enable ${esc(p.label)} integration before these notifications can be used.</div>`
+      ? `<div class="soc-warn">${svg('warn')} ${tx('soc.warn', "{p} alerts aren't available yet. The bot owner needs to enable {p} integration before these notifications can be used.", { vars: { p: esc(p.label) } })}</div>`
       : '';
     return `<div class="card">
       <div class="soc-head">
-        <h3>${p.emoji} ${esc(p.label)} <span class="hint">· ${p.kind === 'live' ? 'goes live' : 'new posts'}</span></h3>
-        <label class="sec-switch"><input type="checkbox" id="soc-${p.id}-enabled" ${chk(pc.enabled)}><span>Enabled</span></label>
+        <h3>${p.emoji} ${esc(p.label)} <span class="hint">· ${p.kind === 'live' ? tt('soc.live', 'goes live') : tt('soc.posts', 'new posts')}</span></h3>
+        <label class="sec-switch"><input type="checkbox" id="soc-${p.id}-enabled" ${chk(pc.enabled)}><span>${tt('common.enabled', 'Enabled')}</span></label>
       </div>
       ${warn}
       <div class="card-grid">
-        <div class="form-row"><label>Notification Channel</label><select id="soc-${p.id}-channel"></select></div>
-        <div class="form-row"><label>Mention Role (optional)</label><select id="soc-${p.id}-role"></select></div>
+        <div class="form-row"><label>${tt('soc.channel', 'Notification Channel')}</label><select id="soc-${p.id}-channel"></select></div>
+        <div class="form-row"><label>${tt('soc.role', 'Mention Role (optional)')}</label><select id="soc-${p.id}-role"></select></div>
       </div>
-      <div class="form-row"><label>Message</label>
+      <div class="form-row"><label>${tt('common.message', 'Message')}</label>
         <textarea id="soc-${p.id}-template" rows="2">${esc(pc.template)}</textarea>
-        <span class="hint">Placeholders: {name} {title} {url} {platform}</span></div>
-      <div class="form-row"><label>Creators</label>
+        <span class="hint">${tt('common.placeholders', 'Placeholders:')} {name} {title} {url} {platform}</span></div>
+      <div class="form-row"><label>${tt('soc.creators', 'Creators')}</label>
         <div class="ms-tags-static" id="soc-${p.id}-creators">${socCreatorsHtml(p.id)}</div>
         <div class="btn-row" style="margin-top:10px">
           <input type="text" id="soc-${p.id}-add" placeholder="${esc(p.example)}" style="flex:1;min-width:200px">
-          <button class="btn btn-secondary" onclick="socialAdd('${p.id}')">Add</button>
-          <button class="btn btn-secondary" onclick="socialTest('${p.id}')">Send test</button>
+          <button class="btn btn-secondary" onclick="socialAdd('${p.id}')">${tt('common.add', 'Add')}</button>
+          <button class="btn btn-secondary" onclick="socialTest('${p.id}')">${tt('soc.test', 'Send test')}</button>
         </div>
         <span class="hint" id="soc-${p.id}-msg"></span>
       </div>
@@ -1718,11 +1718,11 @@ function renderSocial() {
   const total = socialTotalCreators();
   const gate = premiumGate('socialCreators', total);
   const header = `<div class="card" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <span>Following <strong>${total}</strong> creator${total === 1 ? '' : 's'} across all platforms.</span> ${gate.hint}
+      <span>${tx('soc.following', '', { n: total })}</span> ${gate.hint}
     </div>`;
 
   document.getElementById('social-body').innerHTML = header + cards + `
-    <div class="save-bar"><button class="btn btn-primary" onclick="saveSocial()">Save Settings</button>
+    <div class="save-bar"><button class="btn btn-primary" onclick="saveSocial()">${tt('common.saveSettings', 'Save Settings')}</button>
       <span id="social-save-msg" class="save-status"></span></div>`;
 
   for (const p of state.socialProviders) {
@@ -1755,9 +1755,9 @@ async function socialAdd(pid) {
   const gate = premiumGate('socialCreators', socialTotalCreators());
   if (gate.atCap) {
     if (!gate.isPrem) return premiumNudge('socialCreators');
-    msg.textContent = `Limit reached (${gate.cap}).`; return;
+    msg.textContent = t('soc.limit', 'Limit reached ({n}).', { n: gate.cap }); return;
   }
-  msg.textContent = 'Adding…';
+  msg.textContent = t('soc.adding', 'Adding…');
   try {
     const r = await api('POST', `/api/guild/${state.guildId}/social/creator`, { platform: pid, account });
     state.socialConfig = r.config;
@@ -1777,8 +1777,8 @@ async function socialRemove(pid, key) {
 
 async function socialTest(pid) {
   const msg = document.getElementById(`soc-${pid}-msg`);
-  msg.textContent = 'Sending…';
-  try { await api('POST', `/api/guild/${state.guildId}/social/test`, { platform: pid }); msg.innerHTML = svg('check') + ' Test sent.'; setTimeout(() => msg.textContent = '', 3000); }
+  msg.textContent = t('soc.sending', 'Sending…');
+  try { await api('POST', `/api/guild/${state.guildId}/social/test`, { platform: pid }); msg.innerHTML = svg('check') + ' ' + t('soc.sent', 'Test sent.'); setTimeout(() => msg.textContent = '', 3000); }
   catch (e) { msg.innerHTML = svg('x') + ' ' + esc(e.message); }
 }
 
@@ -1796,7 +1796,12 @@ async function loadPolls() {
   show('polls-body');
 }
 
-const POLL_STATUS = { active: `${dot('var(--green)')}Active`, scheduled: `${svg('clock')} Scheduled`, ended: `${svg('lock')} Ended`, cancelled: `${svg('ban')} Cancelled` };
+const POLL_STATUS = {
+  get active()    { return `${dot('var(--green)')}${tt('poll.active', 'Active')}`; },
+  get scheduled() { return `${svg('clock')} ${tt('poll.scheduled', 'Scheduled')}`; },
+  get ended()     { return `${svg('lock')} ${tt('poll.ended', 'Ended')}`; },
+  get cancelled() { return `${svg('ban')} ${tt('poll.cancelled', 'Cancelled')}`; }
+};
 function channelName(id) { const c = (state.guildData?.textChannels || []).find(x => x.id === id); return c ? c.name : id; }
 
 // Effective option cap for the current guild (free vs premium, bounded by the
@@ -1811,7 +1816,7 @@ function pollOptMax() {
 function pollOptionRows() {
   return state.pollOptions.map((v, i) => `
     <div class="lv-row">
-      <input class="poll-opt" placeholder="Option ${i + 1}" value="${esc(v)}" style="flex:1;min-width:160px">
+      <input class="poll-opt" placeholder="${t('poll.option', 'Option {n}', { n: i + 1 })}" value="${esc(v)}" style="flex:1;min-width:160px">
       <button class="btn btn-secondary lv-del" onclick="pollDelOption(${i})">${svg('x')}</button>
     </div>`).join('');
 }
@@ -1823,11 +1828,11 @@ function pollOptionsArea() {
   const isPrem = !!state.guildData?.premium;
   const atCap  = state.pollOptions.length >= pollOptMax();
   const addBtn = (!isPrem && atCap)
-    ? `<button class="btn btn-secondary btn-locked" onclick="pollPremiumNudge()" title="Premium feature">${svg('gem')} Add Option · Premium</button>`
-    : `<button class="btn btn-secondary" onclick="pollAddOption()" ${atCap ? 'disabled' : ''}>+ Add Option</button>`;
+    ? `<button class="btn btn-secondary btn-locked" onclick="pollPremiumNudge()" title="${t('gate.feature', 'Premium feature')}">${svg('gem')} ${tt('poll.addOptionLocked', 'Add Option')} · Premium</button>`
+    : `<button class="btn btn-secondary" onclick="pollAddOption()" ${atCap ? 'disabled' : ''}>${tt('poll.addOption', '+ Add Option')}</button>`;
   const hint = isPrem
-    ? `<span class="hint">${premiumChip()} up to ${lim.premium} options.</span>`
-    : `<span class="hint">Free: up to <b>${lim.free}</b> options · ${premiumChip()} up to <b>${lim.premium}</b>.</span>`;
+    ? `<span class="hint">${tx('poll.premUpTo', '{chip} up to {p} options.', { vars: { chip: premiumChip(), p: lim.premium } })}</span>`
+    : `<span class="hint">${tx('poll.freeUpTo', 'Free: up to <b>{f}</b> options · {chip} up to <b>{p}</b>.', { vars: { chip: premiumChip(), f: lim.free, p: lim.premium } })}</span>`;
   return `<div id="poll-options">${pollOptionRows()}</div>
     <div class="poll-opt-actions" style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">${addBtn}${hint}</div>`;
 }
@@ -1839,22 +1844,22 @@ function pollDelOption(i) { pollSyncOptions(); state.pollOptions.splice(i, 1); w
 function pollPremiumNudge() {
   const lim = state.guildData?.limits?.pollOptions || { free: 4, premium: 25 };
   const el = document.getElementById('poll-create-msg');
-  if (el) setStatus(el, 'err', `Free servers allow up to ${lim.free} poll options. Upgrade to Premium for up to ${lim.premium}.`);
+  if (el) setStatus(el, 'err', t('poll.nudge', '', { f: lim.free, p: lim.premium }));
 }
 
 function pollListCard(title, list, actionable) {
   if (!list.length) return '';
   const rows = list.map(p => {
     const bars = p.options.map(o => `<div class="hint">${esc(o.label)}: ${o.count} (${o.percent}%)${o.leading && o.count ? ' ' + svg('trophy') : ''}</div>`).join('');
-    const when = p.status === 'scheduled' && p.scheduledFor ? `opens ${new Date(p.scheduledFor).toLocaleString()}`
-               : p.endsAt ? `ends ${new Date(p.endsAt).toLocaleString()}` : '';
+    const when = p.status === 'scheduled' && p.scheduledFor ? t('poll.opens', 'opens {d}', { d: new Date(p.scheduledFor).toLocaleString(currentLang) })
+               : p.endsAt ? t('poll.ends', 'ends {d}', { d: new Date(p.endsAt).toLocaleString(currentLang) }) : '';
     const btns = actionable ? `<div class="btn-row">
-      ${p.status === 'active' ? `<button class="btn btn-secondary" onclick="pollAction('${p.id}','end')">End</button>` : ''}
-      ${p.status === 'active' || p.status === 'scheduled' ? `<button class="btn btn-secondary" onclick="pollAction('${p.id}','cancel')">Cancel</button>` : ''}
+      ${p.status === 'active' ? `<button class="btn btn-secondary" onclick="pollAction('${p.id}','end')">${tt('poll.end', 'End')}</button>` : ''}
+      ${p.status === 'active' || p.status === 'scheduled' ? `<button class="btn btn-secondary" onclick="pollAction('${p.id}','cancel')">${tt('common.cancel', 'Cancel')}</button>` : ''}
     </div>` : '';
     return `<div class="alt-flag-row" style="align-items:flex-start">
       <div style="flex:1;min-width:200px">
-        <div><strong>${esc(p.question)}</strong> <span class="hint">· ${POLL_STATUS[p.status] || p.status} · ${p.voters} voter(s)${p.multi ? ' · multi' : ''}${p.anonymous ? ' · anon' : ''}</span></div>
+        <div><strong>${esc(p.question)}</strong> <span class="hint">· ${POLL_STATUS[p.status] || p.status} · ${tx('poll.voters', '', { n: p.voters })}${p.multi ? ' · ' + tt('poll.multi', 'multi') : ''}${p.anonymous ? ' · ' + tt('poll.anon', 'anon') : ''}</span></div>
         <div class="hint">#${esc(channelName(p.channelId))} · <code>${esc(p.id)}</code>${when ? ` · ${esc(when)}` : ''}</div>
         <div style="margin-top:6px">${bars}</div>
       </div>${btns}</div>`;
@@ -1869,38 +1874,38 @@ function renderPolls() {
 
   document.getElementById('polls-body').innerHTML = `
     <div class="card">
-      <h3>Create a Poll</h3>
+      <h3>${tt('poll.create', 'Create a Poll')}</h3>
       <div class="card-grid">
-        <div class="form-row"><label>Channel</label><select id="poll-channel"></select></div>
-        <div class="form-row"><label>Question</label><input type="text" id="poll-question" maxlength="256" placeholder="What should we play next?"></div>
+        <div class="form-row"><label>${tt('common.channel', 'Channel')}</label><select id="poll-channel"></select></div>
+        <div class="form-row"><label>${tt('poll.question', 'Question')}</label><input type="text" id="poll-question" maxlength="256" placeholder="${t('poll.questionPh', 'What should we play next?')}" data-i18n-ph="poll.questionPh" data-ph-en="What should we play next?"></div>
       </div>
-      <div class="form-row"><label>Options</label><div id="poll-options-area">${pollOptionsArea()}</div></div>
+      <div class="form-row"><label>${tt('poll.options', 'Options')}</label><div id="poll-options-area">${pollOptionsArea()}</div></div>
       <div class="card-grid">
-        <label class="sec-switch"><input type="checkbox" id="poll-multi"><span>Allow multiple choices</span></label>
-        <div class="form-row"><label>Max choices (0 = all)</label><input type="number" id="poll-maxchoices" min="0" value="0"></div>
-        <label class="sec-switch"><input type="checkbox" id="poll-anon"><span>Anonymous</span></label>
-        <label class="sec-switch"><input type="checkbox" id="poll-hide"><span>Hide results until it ends</span></label>
+        <label class="sec-switch"><input type="checkbox" id="poll-multi"><span>${tt('poll.allowMulti', 'Allow multiple choices')}</span></label>
+        <div class="form-row"><label>${tt('poll.maxChoices', 'Max choices (0 = all)')}</label><input type="number" id="poll-maxchoices" min="0" value="0"></div>
+        <label class="sec-switch"><input type="checkbox" id="poll-anon"><span>${tt('poll.anonymous', 'Anonymous')}</span></label>
+        <label class="sec-switch"><input type="checkbox" id="poll-hide"><span>${tt('poll.hide', 'Hide results until it ends')}</span></label>
       </div>
       <div class="card-grid">
-        <div class="form-row"><label>Auto-end after (minutes, 0 = off)</label><input type="number" id="poll-duration" min="0" value="0"></div>
-        <div class="form-row"><label>Start in (minutes, 0 = now)</label><input type="number" id="poll-schedule" min="0" value="0"></div>
-        <div class="form-row"><label>Restrict voting to roles</label><div id="poll-roles"></div></div>
+        <div class="form-row"><label>${tt('poll.autoEnd', 'Auto-end after (minutes, 0 = off)')}</label><input type="number" id="poll-duration" min="0" value="0"></div>
+        <div class="form-row"><label>${tt('poll.startIn', 'Start in (minutes, 0 = now)')}</label><input type="number" id="poll-schedule" min="0" value="0"></div>
+        <div class="form-row"><label>${tt('poll.restrict', 'Restrict voting to roles')}</label><div id="poll-roles"></div></div>
       </div>
-      <div class="save-bar always"><button class="btn btn-primary" onclick="createPoll()">Create &amp; Post</button>
+      <div class="save-bar always"><button class="btn btn-primary" onclick="createPoll()">${tt('poll.post', 'Create & Post')}</button>
         <span id="poll-create-msg" class="save-status"></span></div>
     </div>
-    ${pollListCard('Active &amp; Scheduled', live, true)}
-    ${past.length ? pollListCard('History', past, false) : ''}
+    ${pollListCard(tt('poll.live', 'Active & Scheduled'), live, true)}
+    ${past.length ? pollListCard(tt('poll.history', 'History'), past, false) : ''}
     <div class="card">
-      <h3>Poll Settings</h3>
+      <h3>${tt('poll.settings', 'Poll Settings')}</h3>
       <div class="card-grid">
-        <div class="form-row"><label>Default auto-end (minutes)</label><input type="number" id="pollcfg-duration" min="0" value="${cfg.defaultDurationMin}"></div>
-        <div class="form-row"><label>Max options per poll</label><input type="number" id="pollcfg-maxopts" min="2" max="25" value="${cfg.maxOptions}"></div>
-        <div class="form-row"><label>Results channel (optional)</label><select id="pollcfg-results"></select><span class="hint">A summary is posted here when a poll ends.</span></div>
+        <div class="form-row"><label>${tt('poll.defDuration', 'Default auto-end (minutes)')}</label><input type="number" id="pollcfg-duration" min="0" value="${cfg.defaultDurationMin}"></div>
+        <div class="form-row"><label>${tt('poll.maxOpts', 'Max options per poll')}</label><input type="number" id="pollcfg-maxopts" min="2" max="25" value="${cfg.maxOptions}"></div>
+        <div class="form-row"><label>${tt('poll.resultsCh', 'Results channel (optional)')}</label><select id="pollcfg-results"></select><span class="hint">${tt('poll.resultsHint', 'A summary is posted here when a poll ends.')}</span></div>
       </div>
-      <div class="form-row"><label>Roles allowed to create polls</label><div id="pollcfg-creators"></div>
-        <span class="hint">Members with Manage Messages can always create polls.</span></div>
-      <div class="save-bar"><button class="btn btn-primary" onclick="savePollConfig()">Save Settings</button>
+      <div class="form-row"><label>${tt('poll.creators', 'Roles allowed to create polls')}</label><div id="pollcfg-creators"></div>
+        <span class="hint">${tt('poll.creatorsHint', 'Members with Manage Messages can always create polls.')}</span></div>
+      <div class="save-bar"><button class="btn btn-primary" onclick="savePollConfig()">${tt('common.saveSettings', 'Save Settings')}</button>
         <span id="pollcfg-msg" class="save-status"></span></div>
     </div>`;
 
@@ -1925,13 +1930,13 @@ async function createPoll() {
     allowedRoleIds: msValues('poll-roles')
   };
   const okMsg = (ok, text) => setStatus(document.getElementById('poll-create-msg'), ok ? 'ok' : 'err', text);
-  if (!payload.channelId) return okMsg(false, '❌ Pick a channel.');
-  if (!payload.question || payload.options.length < 2) return okMsg(false, '❌ Need a question and 2+ options.');
+  if (!payload.channelId) return okMsg(false, t('poll.pickChannel', 'Pick a channel.'));
+  if (!payload.question || payload.options.length < 2) return okMsg(false, t('poll.needQ', 'Need a question and 2+ options.'));
   try {
     await api('POST', `/api/guild/${state.guildId}/polls`, payload);
     state.pollOptions = ['', ''];
     await loadPolls();
-    okMsg(true, '✅ Poll posted!');
+    okMsg(true, t('poll.posted', 'Poll posted!'));
   } catch (e) { okMsg(false, '❌ ' + e.message); }
 }
 
@@ -2133,36 +2138,36 @@ async function loadLeveling() {
 }
 
 function lvChannelOpts(sel) {
-  return '<option value="">None</option>' + (state.guildData?.textChannels || [])
+  return `<option value="" data-i18n="logs.none" data-en="None">${t('logs.none', 'None')}</option>` + (state.guildData?.textChannels || [])
     .map(c => `<option value="${c.id}"${c.id === sel ? ' selected' : ''}>#${esc(c.name)}</option>`).join('');
 }
 function lvRoleOpts(sel) {
-  return '<option value="">None</option>' + (state.guildData?.roles || [])
+  return `<option value="" data-i18n="logs.none" data-en="None">${t('logs.none', 'None')}</option>` + (state.guildData?.roles || [])
     .map(r => `<option value="${r.id}"${r.id === sel ? ' selected' : ''}>@${esc(r.name)}</option>`).join('');
 }
 const chk = b => b ? 'checked' : '';
 
 function renderLeveling() {
   const c = state.leveling;
-  const annOpts = state.levelingMeta.announceModes.map(v => `<option value="${v}"${c.announce.mode === v ? ' selected' : ''}>${ANN_LABELS[v] || v}</option>`).join('');
+  const annOpts = state.levelingMeta.announceModes.map(v => `<option value="${v}"${c.announce.mode === v ? ' selected' : ''}${ANN_LABELS[v] ? ` data-i18n="lv.ann.${v}" data-en="${ANN_LABELS[v]}"` : ''}>${ANN_LABELS[v] ? t('lv.ann.' + v, ANN_LABELS[v]) : v}</option>`).join('');
 
   // Friendly "speed" preset: maps to the standard curve + a multiplier. Falls back to Custom.
   const sp = (c.formula.curve === 'mee6' && [0.5, 1, 2].includes(c.multiplier)) ? String(c.multiplier) : 'custom';
-  const speedOpt = (v, label) => `<option value="${v}"${sp === v ? ' selected' : ''}>${label}</option>`;
-  const speedOpts = speedOpt('0.5', 'Slow (takes longer to level up)')
-    + speedOpt('1', 'Normal (recommended)')
-    + speedOpt('2', 'Fast (level up quickly)')
+  const speedOpt = (v, key, label) => `<option value="${v}"${sp === v ? ' selected' : ''} data-i18n="${key}" data-en="${label}">${t(key, label)}</option>`;
+  const speedOpts = speedOpt('0.5', 'lv.slow', 'Slow (takes longer to level up)')
+    + speedOpt('1', 'lv.normal', 'Normal (recommended)')
+    + speedOpt('2', 'lv.fast', 'Fast (level up quickly)')
     // "Custom" only appears if this server already had hand-tuned values, so we
     // never silently overwrite them; new servers just see the three simple presets.
-    + (sp === 'custom' ? speedOpt('custom', 'Custom (keep current settings)') : '');
+    + (sp === 'custom' ? speedOpt('custom', 'lv.custom', 'Custom (keep current settings)') : '');
 
   const rewardRows = c.roleRewards.map((r, i) => `
     <div class="lv-row" data-i="${i}">
-      <span>Level</span>
+      <span>${tt('lv.level', 'Level')}</span>
       <input type="number" min="1" class="lv-rw-level" value="${r.level}" style="width:80px">
       <select class="lv-rw-role">${lvRoleOpts(r.roleId)}</select>
       <button class="btn btn-secondary lv-del" onclick="lvDel('roleRewards',${i})">${svg('x')}</button>
-    </div>`).join('') || '<p class="lv-empty">No role rewards yet.</p>';
+    </div>`).join('') || `<p class="lv-empty">${tt('lv.noRewards', 'No role rewards yet.')}</p>`;
 
   const cboostRows = c.channelBoosts.map((b, i) => `
     <div class="lv-row" data-i="${i}">
@@ -2170,7 +2175,7 @@ function renderLeveling() {
       <span>×</span>
       <input type="number" min="0" step="0.1" class="lv-cb-mult" value="${b.multiplier}" style="width:80px">
       <button class="btn btn-secondary lv-del" onclick="lvDel('channelBoosts',${i})">${svg('x')}</button>
-    </div>`).join('') || '<p class="lv-empty">No channel boosts.</p>';
+    </div>`).join('') || `<p class="lv-empty">${tt('lv.noCBoosts', 'No channel boosts.')}</p>`;
 
   const rboostRows = c.roleBoosts.map((b, i) => `
     <div class="lv-row" data-i="${i}">
@@ -2178,109 +2183,109 @@ function renderLeveling() {
       <span>×</span>
       <input type="number" min="0" step="0.1" class="lv-rb-mult" value="${b.multiplier}" style="width:80px">
       <button class="btn btn-secondary lv-del" onclick="lvDel('roleBoosts',${i})">${svg('x')}</button>
-    </div>`).join('') || '<p class="lv-empty">No role boosts.</p>';
+    </div>`).join('') || `<p class="lv-empty">${tt('lv.noRBoosts', 'No role boosts.')}</p>`;
 
   document.getElementById('leveling-body').innerHTML = `
     <div class="card">
       <label class="sec-switch sec-master"><input type="checkbox" id="lv-enabled" ${chk(c.enabled)}>
-        <span><strong>Enable Leveling</strong>. When off, no XP is tracked or awarded.</span></label>
+        <span>${tx('lv.enable', '<strong>Enable Leveling</strong>. When off, no XP is tracked or awarded.')}</span></label>
     </div>
 
     <div class="card">
-      <h3>XP Sources</h3>
+      <h3>${tt('lv.sources', 'XP Sources')}</h3>
       <div class="card-grid">
-        <div class="form-row"><label class="sec-switch"><input type="checkbox" id="lv-msg-enabled" ${chk(c.message.enabled)}><span>Message XP</span></label></div>
+        <div class="form-row"><label class="sec-switch"><input type="checkbox" id="lv-msg-enabled" ${chk(c.message.enabled)}><span>${tt('lv.msgXp', 'Message XP')}</span></label></div>
         <div></div>
-        <div class="form-row"><label>Min XP / message</label><input type="number" id="lv-msg-min" min="0" value="${c.message.min}"></div>
-        <div class="form-row"><label>Max XP / message</label><input type="number" id="lv-msg-max" min="0" value="${c.message.max}"></div>
-        <div class="form-row"><label>Message cooldown (seconds)</label><input type="number" id="lv-msg-cd" min="0" value="${c.message.cooldown}"></div>
+        <div class="form-row"><label>${tt('lv.minMsg', 'Min XP / message')}</label><input type="number" id="lv-msg-min" min="0" value="${c.message.min}"></div>
+        <div class="form-row"><label>${tt('lv.maxMsg', 'Max XP / message')}</label><input type="number" id="lv-msg-max" min="0" value="${c.message.max}"></div>
+        <div class="form-row"><label>${tt('lv.msgCd', 'Message cooldown (seconds)')}</label><input type="number" id="lv-msg-cd" min="0" value="${c.message.cooldown}"></div>
         <div></div>
-        <div class="form-row"><label class="sec-switch"><input type="checkbox" id="lv-react-enabled" ${chk(c.reaction.enabled)}><span>Reaction XP</span></label></div>
+        <div class="form-row"><label class="sec-switch"><input type="checkbox" id="lv-react-enabled" ${chk(c.reaction.enabled)}><span>${tt('lv.reactXp', 'Reaction XP')}</span></label></div>
         <div></div>
-        <div class="form-row"><label>XP / reaction</label><input type="number" id="lv-react-xp" min="0" value="${c.reaction.xp}"></div>
-        <div class="form-row"><label>Reaction cooldown (seconds)</label><input type="number" id="lv-react-cd" min="0" value="${c.reaction.cooldown}"></div>
+        <div class="form-row"><label>${tt('lv.xpReact', 'XP / reaction')}</label><input type="number" id="lv-react-xp" min="0" value="${c.reaction.xp}"></div>
+        <div class="form-row"><label>${tt('lv.reactCd', 'Reaction cooldown (seconds)')}</label><input type="number" id="lv-react-cd" min="0" value="${c.reaction.cooldown}"></div>
       </div>
     </div>
 
     <div class="card">
-      <h3>Voice XP</h3>
-      <label class="sec-switch" style="margin-bottom:14px"><input type="checkbox" id="lv-voice-enabled" ${chk(c.voice.enabled)}><span>Enable voice XP</span></label>
+      <h3>${tt('lv.voice', 'Voice XP')}</h3>
+      <label class="sec-switch" style="margin-bottom:14px"><input type="checkbox" id="lv-voice-enabled" ${chk(c.voice.enabled)}><span>${tt('lv.voiceEnable', 'Enable voice XP')}</span></label>
       <div class="card-grid">
-        <div class="form-row"><label>XP / minute</label><input type="number" id="lv-voice-xp" min="0" value="${c.voice.xpPerMinute}"></div>
-        <div class="form-row"><label>Min users in channel</label><input type="number" id="lv-voice-min" min="1" value="${c.voice.minUsers}"></div>
+        <div class="form-row"><label>${tt('lv.xpMin', 'XP / minute')}</label><input type="number" id="lv-voice-xp" min="0" value="${c.voice.xpPerMinute}"></div>
+        <div class="form-row"><label>${tt('lv.minUsers', 'Min users in channel')}</label><input type="number" id="lv-voice-min" min="1" value="${c.voice.minUsers}"></div>
       </div>
-      <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="lv-voice-afk" ${chk(c.voice.ignoreAfk)}><span>No XP in AFK channel</span></label>
-      <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="lv-voice-muted" ${chk(c.voice.ignoreMuted)}><span>No XP while muted</span></label>
-      <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="lv-voice-deaf" ${chk(c.voice.ignoreDeafened)}><span>No XP while deafened</span></label>
+      <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="lv-voice-afk" ${chk(c.voice.ignoreAfk)}><span>${tt('lv.afk', 'No XP in AFK channel')}</span></label>
+      <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="lv-voice-muted" ${chk(c.voice.ignoreMuted)}><span>${tt('lv.muted', 'No XP while muted')}</span></label>
+      <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="lv-voice-deaf" ${chk(c.voice.ignoreDeafened)}><span>${tt('lv.deaf', 'No XP while deafened')}</span></label>
     </div>
 
     <div class="card">
-      <h3>Leveling Speed &amp; Limits</h3>
+      <h3>${tx('lv.speedLimits', 'Leveling Speed &amp; Limits')}</h3>
       <div class="card-grid">
-        <div class="form-row"><label>Leveling Speed</label><select id="lv-speed" onchange="lvApplySpeed()">${speedOpts}</select>
-          <span class="hint">How quickly members earn levels. Pick one and you are done.</span></div>
-        <div class="form-row"><label>Highest Level</label><input type="number" id="lv-maxlevel" min="0" value="${c.maxLevel}">
-          <span class="hint">Members stop leveling past this. Leave at 0 for no limit.</span></div>
+        <div class="form-row"><label>${tt('lv.speed', 'Leveling Speed')}</label><select id="lv-speed" onchange="lvApplySpeed()">${speedOpts}</select>
+          <span class="hint">${tt('lv.speedHint', 'How quickly members earn levels. Pick one and you are done.')}</span></div>
+        <div class="form-row"><label>${tt('lv.maxLevel', 'Highest Level')}</label><input type="number" id="lv-maxlevel" min="0" value="${c.maxLevel}">
+          <span class="hint">${tt('lv.maxLevelHint', 'Members stop leveling past this. Leave at 0 for no limit.')}</span></div>
       </div>
     </div>
 
     <div class="card">
-      <h3>Level-Up Announcements</h3>
+      <h3>${tt('lv.ann', 'Level-Up Announcements')}</h3>
       <div class="card-grid">
-        <div class="form-row"><label>Where to announce</label><select id="lv-ann-mode">${annOpts}</select>
-          <span class="hint">Send a message when someone levels up, and choose where it goes.</span></div>
-        <div class="form-row"><label>Announcement Channel</label><select id="lv-ann-channel">${lvChannelOpts(c.announce.channelId)}</select>
-          <span class="hint">Only used when "a specific channel" is chosen above.</span></div>
+        <div class="form-row"><label>${tt('lv.annWhere', 'Where to announce')}</label><select id="lv-ann-mode">${annOpts}</select>
+          <span class="hint">${tt('lv.annWhereHint', 'Send a message when someone levels up, and choose where it goes.')}</span></div>
+        <div class="form-row"><label>${tt('lv.annCh', 'Announcement Channel')}</label><select id="lv-ann-channel">${lvChannelOpts(c.announce.channelId)}</select>
+          <span class="hint">${tt('lv.annChHint', 'Only used when "a specific channel" is chosen above.')}</span></div>
       </div>
-      <div class="form-row"><label>Message</label><textarea id="lv-ann-msg">${esc(c.announce.message)}</textarea>
-        <span class="hint">Placeholders: {user} {username} {level} {server}</span></div>
-      <div class="form-row"><label class="sec-switch"><input type="checkbox" id="lv-ann-card" ${chk(c.announce.card)}><span>Attach the rank card image</span></label>
-        <span class="hint">Posts the member's rank card alongside the level-up message (works for channel &amp; DM modes).</span></div>
+      <div class="form-row"><label>${tt('common.message', 'Message')}</label><textarea id="lv-ann-msg">${esc(c.announce.message)}</textarea>
+        <span class="hint">${tt('common.placeholders', 'Placeholders:')} {user} {username} {level} {server}</span></div>
+      <div class="form-row"><label class="sec-switch"><input type="checkbox" id="lv-ann-card" ${chk(c.announce.card)}><span>${tt('lv.annCard', 'Attach the rank card image')}</span></label>
+        <span class="hint">${tx('lv.annCardHint', "Posts the member's rank card alongside the level-up message (works for channel &amp; DM modes).")}</span></div>
     </div>
 
     <div class="card">
-      <h3>Role Rewards</h3>
-      <p class="hint" style="margin-bottom:12px">Grant roles at levels. Multiple rewards per level allowed.</p>
+      <h3>${tt('lv.rewards', 'Role Rewards')}</h3>
+      <p class="hint" style="margin-bottom:12px">${tt('lv.rewardsHint', 'Grant roles at levels. Multiple rewards per level allowed.')}</p>
       <div id="lv-rewards">${rewardRows}</div>
       <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        ${gateCreateButton(premiumGate('levelingRewards', c.roleRewards.length), '+ Add Reward', "lvAdd('roleRewards')", 'levelingRewards', { className: 'btn-secondary' })}
+        ${gateCreateButton(premiumGate('levelingRewards', c.roleRewards.length), tt('lv.addReward', '+ Add Reward'), "lvAdd('roleRewards')", 'levelingRewards', { className: 'btn-secondary' })}
         ${premiumGate('levelingRewards', c.roleRewards.length).hint}
       </div>
       <div style="margin-top:14px">
-        <label class="sec-switch"><input type="checkbox" id="lv-stack" ${chk(c.stackRewards)}><span>Stack rewards (keep lower-level reward roles)</span></label>
-        <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="lv-removereset" ${chk(c.removeRewardsOnReset)}><span>Remove reward roles when a member is reset</span></label>
+        <label class="sec-switch"><input type="checkbox" id="lv-stack" ${chk(c.stackRewards)}><span>${tt('lv.stack', 'Stack rewards (keep lower-level reward roles)')}</span></label>
+        <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="lv-removereset" ${chk(c.removeRewardsOnReset)}><span>${tt('lv.removeReset', 'Remove reward roles when a member is reset')}</span></label>
       </div>
     </div>
 
     <div class="card">
-      <h3>Boosts</h3>
+      <h3>${tt('lv.boosts', 'Boosts')}</h3>
       <div class="card-grid">
         <div>
-          <label class="form-row" style="margin-bottom:8px">Channel Boosts</label>
+          <label class="form-row" style="margin-bottom:8px">${tt('lv.cBoosts', 'Channel Boosts')}</label>
           <div id="lv-cboosts">${cboostRows}</div>
-          <button class="btn btn-secondary" style="margin-top:8px" onclick="lvAdd('channelBoosts')">+ Channel Boost</button>
+          <button class="btn btn-secondary" style="margin-top:8px" onclick="lvAdd('channelBoosts')">${tt('lv.addCBoost', '+ Channel Boost')}</button>
         </div>
         <div>
-          <label class="form-row" style="margin-bottom:8px">Role Boosts</label>
+          <label class="form-row" style="margin-bottom:8px">${tt('lv.rBoosts', 'Role Boosts')}</label>
           <div id="lv-rboosts">${rboostRows}</div>
-          <button class="btn btn-secondary" style="margin-top:8px" onclick="lvAdd('roleBoosts')">+ Role Boost</button>
+          <button class="btn btn-secondary" style="margin-top:8px" onclick="lvAdd('roleBoosts')">${tt('lv.addRBoost', '+ Role Boost')}</button>
         </div>
       </div>
     </div>
 
     <div class="card">
-      <h3>No-XP Channels &amp; Roles</h3>
+      <h3>${tx('lv.noXp', 'No-XP Channels &amp; Roles')}</h3>
       <div class="card-grid">
-        <div class="form-row"><label>No-XP Channels</label><div id="lv-noxp-channels"></div></div>
-        <div class="form-row"><label>No-XP Roles</label><div id="lv-noxp-roles"></div></div>
+        <div class="form-row"><label>${tt('lv.noXpCh', 'No-XP Channels')}</label><div id="lv-noxp-channels"></div></div>
+        <div class="form-row"><label>${tt('lv.noXpRoles', 'No-XP Roles')}</label><div id="lv-noxp-roles"></div></div>
       </div>
     </div>
 
     <div class="card">
-      <h3>Leaderboards &amp; Rank Card</h3>
-      <label class="sec-switch"><input type="checkbox" id="lv-lb-weekly" ${chk(c.leaderboard.weeklyEnabled)}><span>Weekly leaderboard</span></label>
-      <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="lv-lb-monthly" ${chk(c.leaderboard.monthlyEnabled)}><span>Monthly leaderboard</span></label>
-      <div class="form-row" style="margin-top:14px"><label>Rank Card Accent</label>
+      <h3>${tx('lv.lbCard', 'Leaderboards &amp; Rank Card')}</h3>
+      <label class="sec-switch"><input type="checkbox" id="lv-lb-weekly" ${chk(c.leaderboard.weeklyEnabled)}><span>${tt('lv.weekly', 'Weekly leaderboard')}</span></label>
+      <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="lv-lb-monthly" ${chk(c.leaderboard.monthlyEnabled)}><span>${tt('lv.monthly', 'Monthly leaderboard')}</span></label>
+      <div class="form-row" style="margin-top:14px"><label>${tt('lv.accent', 'Rank Card Accent')}</label>
         <div class="color-row"><input type="color" id="lv-accent" value="${c.rankCard.accent}"></div>
       </div>
     </div>`;
@@ -2446,29 +2451,29 @@ function renderActivity() {
   document.getElementById('activity-body').innerHTML = `
     <div class="card">
       <label class="sec-switch sec-master"><input type="checkbox" id="act-enabled" ${chk(c.enabled)}>
-        <span><strong>Enable Activity Tracking</strong></span></label>
+        <span><strong>${tt('act.enable', 'Enable Activity Tracking')}</strong></span></label>
     </div>
     <div class="card">
-      <h3>Score Weights</h3>
-      <p class="hint" style="margin-bottom:14px">Set how much each action counts toward a member's activity score. Higher numbers are worth more.</p>
+      <h3>${tt('act.weights', 'Score Weights')}</h3>
+      <p class="hint" style="margin-bottom:14px">${tt('act.weightsHint', "Set how much each action counts toward a member's activity score. Higher numbers are worth more.")}</p>
       <div class="card-grid">
-        <div class="form-row"><label>Per Message</label><input type="number" id="act-w-msg" min="0" step="0.1" value="${c.weights.message}"></div>
-        <div class="form-row"><label>Per Voice Minute</label><input type="number" id="act-w-voice" min="0" step="0.1" value="${c.weights.voicePerMinute}"></div>
-        <div class="form-row"><label>Per Reaction</label><input type="number" id="act-w-react" min="0" step="0.1" value="${c.weights.reaction}"></div>
+        <div class="form-row"><label>${tt('act.msg', 'Per Message')}</label><input type="number" id="act-w-msg" min="0" step="0.1" value="${c.weights.message}"></div>
+        <div class="form-row"><label>${tt('act.voice', 'Per Voice Minute')}</label><input type="number" id="act-w-voice" min="0" step="0.1" value="${c.weights.voicePerMinute}"></div>
+        <div class="form-row"><label>${tt('act.react', 'Per Reaction')}</label><input type="number" id="act-w-react" min="0" step="0.1" value="${c.weights.reaction}"></div>
       </div>
-      <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="act-bots" ${chk(c.countBots)}><span>Count bot activity</span></label>
+      <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="act-bots" ${chk(c.countBots)}><span>${tt('act.bots', 'Count bot activity')}</span></label>
     </div>
     <div class="card">
-      <h3>Ignored Channels &amp; Roles</h3>
+      <h3>${tx('act.ignored', 'Ignored Channels &amp; Roles')}</h3>
       <div class="card-grid">
-        <div class="form-row"><label>Ignored Channels</label><div id="act-ig-channels"></div></div>
-        <div class="form-row"><label>Ignored Roles</label><div id="act-ig-roles"></div></div>
+        <div class="form-row"><label>${tt('act.igCh', 'Ignored Channels')}</label><div id="act-ig-channels"></div></div>
+        <div class="form-row"><label>${tt('act.igRoles', 'Ignored Roles')}</label><div id="act-ig-roles"></div></div>
       </div>
     </div>
     <div class="card">
-      <h3>Leaderboards</h3>
-      <label class="sec-switch"><input type="checkbox" id="act-lb-weekly" ${chk(c.leaderboard.weeklyEnabled)}><span>Weekly activity leaderboard</span></label>
-      <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="act-lb-monthly" ${chk(c.leaderboard.monthlyEnabled)}><span>Monthly activity leaderboard</span></label>
+      <h3>${tt('act.lb', 'Leaderboards')}</h3>
+      <label class="sec-switch"><input type="checkbox" id="act-lb-weekly" ${chk(c.leaderboard.weeklyEnabled)}><span>${tt('act.weekly', 'Weekly activity leaderboard')}</span></label>
+      <label class="sec-switch" style="margin-top:6px"><input type="checkbox" id="act-lb-monthly" ${chk(c.leaderboard.monthlyEnabled)}><span>${tt('act.monthly', 'Monthly activity leaderboard')}</span></label>
     </div>`;
 
   msInit('act-ig-channels', channelItems(), c.ignoredChannels);
