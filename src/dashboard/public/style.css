@@ -882,3 +882,17 @@ button .ic, .btn .ic, .apps-tab .ic, .mc-act .ic, .cmd-cat-btn .ic { margin-righ
 .lh-fname { font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 2px; }
 .lh-fval { font-size: 13px; word-break: break-word; }
 .lh-mention { color: var(--accent); background: rgba(124,108,245,.12); border-radius: 4px; padding: 0 3px; }
+
+/* Refresh button next to the server picker */
+.guild-row { display: flex; gap: 6px; align-items: stretch; }
+.guild-row .guild-btn { flex: 1; min-width: 0; width: auto; }
+.refresh-btn {
+  flex: 0 0 auto; width: 38px; display: flex; align-items: center; justify-content: center;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--muted); cursor: pointer; transition: all .18s; padding: 0;
+}
+.refresh-btn svg { width: 16px; height: 16px; }
+.refresh-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--card2); }
+.refresh-btn:disabled { cursor: default; opacity: .7; }
+.refresh-btn.spinning svg { animation: refreshSpin .7s linear infinite; }
+@keyframes refreshSpin { to { transform: rotate(360deg); } }

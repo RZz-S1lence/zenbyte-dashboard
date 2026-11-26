@@ -749,6 +749,33 @@ async function selectGuild(id) {
   if (activePage === 'transcripts') await loadTranscripts();
 }
 
+// Refresh button: re-fetches channels, roles and the server list, then reloads
+// the open page. Blocked while there are unsaved changes (same as switching tabs).
+let _refreshing = false;
+async function refreshGuildData() {
+  if (_refreshing || blockIfUnsaved()) return;
+  const btn = document.getElementById('refresh-btn');
+  _refreshing = true;
+  btn?.classList.add('spinning');
+  if (btn) btn.disabled = true;
+  try {
+    await loadGuilds();
+    if (state.guildId) {
+      state.guildData = null;
+      await ensureGuildData();
+    }
+    const page = document.querySelector('.page.active');
+    if (page) await loadPage(page.id.replace(/^page-/, ''));
+    showToast(t('refresh.done', 'Server data refreshed'));
+  } catch (e) {
+    showToast(t('refresh.fail', 'Refresh failed'), 'err');
+  } finally {
+    _refreshing = false;
+    btn?.classList.remove('spinning');
+    if (btn) btn.disabled = false;
+  }
+}
+
 // Close dropdown when clicking outside
 document.addEventListener('click', e => {
   const sel = document.getElementById('guild-selector');

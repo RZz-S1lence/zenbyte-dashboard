@@ -4290,6 +4290,15 @@ const I18N_LH = {
 };
 for (const [lang, dict] of Object.entries(I18N_LH)) Object.assign(I18N[lang] = I18N[lang] || {}, dict);
 
+const I18N_RF = {
+ en: { 'refresh.title': 'Refresh server data', 'refresh.done': 'Server data refreshed', 'refresh.fail': 'Refresh failed' },
+ de: { 'refresh.title': 'Serverdaten aktualisieren', 'refresh.done': 'Serverdaten aktualisiert', 'refresh.fail': 'Aktualisieren fehlgeschlagen' },
+ fr: { 'refresh.title': 'Actualiser les données du serveur', 'refresh.done': 'Données du serveur actualisées', 'refresh.fail': "Échec de l'actualisation" },
+ ru: { 'refresh.title': 'Обновить данные сервера', 'refresh.done': 'Данные сервера обновлены', 'refresh.fail': 'Не удалось обновить' },
+ es: { 'refresh.title': 'Actualizar datos del servidor', 'refresh.done': 'Datos del servidor actualizados', 'refresh.fail': 'No se pudo actualizar' }
+};
+for (const [lang, dict] of Object.entries(I18N_RF)) Object.assign(I18N[lang] = I18N[lang] || {}, dict);
+
 let currentLang = 'en';
 try { const s = localStorage.getItem('zb-lang'); if (s && I18N_LANGS[s]) currentLang = s; } catch {}
 
@@ -4342,6 +4351,10 @@ function i18nApply(root = document) {
     let vars = null;
     try { vars = el.dataset.vars ? JSON.parse(el.dataset.vars) : null; } catch {}
     el.innerHTML = el.dataset.n != null ? tn(el.dataset.tx, Number(el.dataset.n), vars) : t(el.dataset.tx, el.dataset.en, vars);
+  });
+  root.querySelectorAll('[data-i18n-title]').forEach(el => {
+    if (!el.dataset.titleEn) el.dataset.titleEn = el.title;
+    el.title = t(el.dataset.i18nTitle, el.dataset.titleEn);
   });
   root.querySelectorAll('[data-i18n-ph]').forEach(el => {
     if (!el.dataset.phEn) el.dataset.phEn = el.placeholder;

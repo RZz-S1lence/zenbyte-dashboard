@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ZenByte Dashboard</title>
-  <link rel="stylesheet" href="style.css?v=20">
+  <link rel="stylesheet" href="style.css?v=21">
 </head>
 <body>
 
@@ -73,12 +73,15 @@
 
     <!-- Guild selector -->
     <div class="guild-selector" id="guild-selector">
+      <div class="guild-row">
       <div class="guild-btn" id="guild-btn" onclick="toggleGuildDropdown()">
         <div id="guild-btn-icon" class="guild-icon-circle" style="background:#383a40;font-size:12px">?</div>
         <div class="guild-btn-text">
           <span id="guild-btn-name" data-i18n="guild.select">Select a server</span>
         </div>
         <span class="guild-chevron">▾</span>
+      </div>
+      <button id="refresh-btn" class="refresh-btn" onclick="refreshGuildData()" title="Refresh server data" data-i18n-title="refresh.title" data-icon="refresh"></button>
       </div>
       <div id="guild-dropdown" class="guild-dropdown hidden"></div>
     </div>
@@ -746,7 +749,7 @@
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
-<script src="i18n.js?v=11"></script>
-<script src="app.js?v=24"></script>
+<script src="i18n.js?v=12"></script>
+<script src="app.js?v=25"></script>
 </body>
 </html>
