@@ -1391,7 +1391,7 @@ async function loadSecurityConfig() {
 }
 
 function channelOptionsHtml(selected) {
-  const roleNone = `<option value="">None</option>`;
+  const roleNone = `<option value="" data-i18n="logs.none" data-en="None">${tA('logs.none', 'None')}</option>`;
   return roleNone + (state.guildData?.textChannels || [])
     .map(c => `<option value="${c.id}"${c.id === selected ? ' selected' : ''}>#${esc(c.name)}</option>`).join('');
 }
@@ -1407,12 +1407,12 @@ function renderSecurity(guild) {
   const { protections, punishments } = state.securityMeta;
 
   const punishOpts = key => punishments
-    .map(p => `<option value="${p}"${c.protections[key].punishment === p ? ' selected' : ''}>${p}</option>`).join('');
+    .map(p => `<option value="${p}"${c.protections[key].punishment === p ? ' selected' : ''} data-i18n="sec.pun.${p}" data-en="${p}">${tA('sec.pun.' + p, p)}</option>`).join('');
 
   const rows = protections.map(p => {
     const pc = c.protections[p.key];
     return `<tr data-key="${p.key}">
-      <td><label class="sec-switch"><input type="checkbox" class="sec-p-enabled" ${pc.enabled ? 'checked' : ''}><span>${esc(p.label)}</span></label></td>
+      <td><label class="sec-switch"><input type="checkbox" class="sec-p-enabled" ${pc.enabled ? 'checked' : ''}><span>${tt('sec.prot.' + p.key, p.label)}</span></label></td>
       <td><input type="number" class="sec-p-limit" min="1" value="${pc.limit}" style="width:64px"></td>
       <td><input type="number" class="sec-p-window" min="1" value="${Math.round(pc.windowMs / 1000)}" style="width:64px"> s</td>
       <td><select class="sec-p-punish">${punishOpts(p.key)}</select></td>
@@ -1424,36 +1424,36 @@ function renderSecurity(guild) {
     <div class="card">
       <label class="sec-switch sec-master">
         <input type="checkbox" id="sec-enabled" ${c.enabled ? 'checked' : ''}>
-        <span><strong>Enable Anti-Nuke</strong>. When off, nothing is detected or punished.</span>
+        <span>${tx('sec.enable', '<strong>Enable Anti-Nuke</strong>. When off, nothing is detected or punished.')}</span>
       </label>
       <div class="form-row" style="margin-top:14px">
-        <label>Security Log Channel</label>
+        <label>${tt('sec.security_log_channel', "Security Log Channel")}</label>
         <select id="sec-logchannel">${channelOptionsHtml(c.logChannelId)}</select>
-        <span class="hint">Triggered protections are reported here.</span>
+        <span class="hint">${tt('sec.triggered_protections_are_reported_here', "Triggered protections are reported here.")}</span>
       </div>
     </div>
 
     <div class="card">
-      <h3>Global Whitelist</h3>
-      <p style="color:var(--muted);font-size:13px;margin-bottom:12px">Exempt from <em>all</em> protections. The server owner and bot owner are always exempt.</p>
+      <h3>${tt('sec.global_whitelist', "Global Whitelist")}</h3>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:12px">${tx('sec.globalHint', 'Exempt from <em>all</em> protections. The server owner and bot owner are always exempt.')}</p>
       <div class="card-grid">
         <div class="form-row">
-          <label>Whitelisted Roles</label>
+          <label>${tt('sec.whitelisted_roles', "Whitelisted Roles")}</label>
           <div id="sec-global-roles"></div>
         </div>
         <div class="form-row">
-          <label>Whitelisted User IDs</label>
-          <textarea id="sec-global-users" placeholder="One ID per line or comma-separated">${esc((c.globalWhitelist.users || []).join('\n'))}</textarea>
+          <label>${tt('sec.whitelisted_user_ids', "Whitelisted User IDs")}</label>
+          <textarea id="sec-global-users" placeholder="${tA('sec.one_id_per_line_or_comma_separated', "One ID per line or comma-separated")}">${esc((c.globalWhitelist.users || []).join('\n'))}</textarea>
         </div>
       </div>
     </div>
 
     <div class="card">
-      <h3>Protections</h3>
+      <h3>${tt('sec.protections', "Protections")}</h3>
       <div class="log-table-wrap">
         <table class="log-table sec-table">
           <thead><tr>
-            <th>Protection</th><th>Limit</th><th>Window</th><th>Punishment</th><th>Whitelisted Roles</th>
+            <th>${tt('sec.protection', "Protection")}</th><th>${tt('sec.limit', "Limit")}</th><th>${tt('sec.window', "Window")}</th><th>${tt('sec.punishment', "Punishment")}</th><th>${tt('sec.whitelisted_roles', "Whitelisted Roles")}</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
@@ -1536,7 +1536,7 @@ async function saveVerification(repost) {
   };
   try {
     const res = await api('PUT', `/api/guild/${state.guildId}/verification`, payload);
-    setStatus(msg, 'ok', repost ? (res.posted ? '✅ Saved & panel posted!' : '✅ Saved (panel not posted, check the channel).') : '✅ Saved!');
+    setStatus(msg, 'ok', repost ? (res.posted ? tA('ver.posted', 'Saved & panel posted!') : tA('ver.notPosted', 'Saved (panel not posted, check the channel).')) : tA('common.saved', 'Saved!'));
   } catch {
     setStatus(msg, 'err', t('common.saveFailed', 'Failed to save.'));
   }
@@ -1962,6 +1962,7 @@ const ALT_SIG_PARAMS = {
   instantJoin:  [{ key: 'withinHours', label: 'Within (hours)', min: 1 }],
   joinBurst:    [{ key: 'joins', label: 'Joins', min: 2 }, { key: 'windowSec', label: 'Window (s)', min: 5 }]
 };
+const ALT_FLAG_STATUS = { pending: 'pending', cleared: 'cleared', actioned: 'actioned' };
 
 async function loadAltDetect() {
   hide('alt-body'); hide('alt-save-bar');
@@ -1977,30 +1978,30 @@ async function loadAltDetect() {
 
 function altActionOptions(selected) {
   return state.altMeta.actions.map(a =>
-    `<option value="${a.value}"${a.value === selected ? ' selected' : ''}>${esc(a.label)}</option>`).join('');
+    `<option value="${a.value}"${a.value === selected ? ' selected' : ''} data-i18n="alt.act.${a.value}" data-en="${esc(a.label)}">${esc(tA('alt.act.' + a.value, a.label))}</option>`).join('');
 }
 
 function altPresetButtons() {
   return Object.keys(state.altMeta.presets).map(name => {
     const on = state.altdetect.sensitivity === name ? ' btn-primary' : ' btn-secondary';
-    return `<button class="btn${on}" style="text-transform:capitalize" onclick="applyAltPreset('${name}')">${name}</button>`;
+    return `<button class="btn${on}" style="text-transform:capitalize" onclick="applyAltPreset('${name}')">${tt('alt.preset.' + name, name)}</button>`;
   }).join('') + (state.altdetect.sensitivity === 'custom'
-    ? '<span class="hint" style="align-self:center">Custom settings</span>' : '');
+    ? `<span class="hint" style="align-self:center">${tt('alt.custom', 'Custom settings')}</span>` : '');
 }
 
 function altSignalCard(meta) {
   const c = state.altdetect.signals[meta.key];
   if (!c) return '';
   const params = (ALT_SIG_PARAMS[meta.key] || []).map(p =>
-    `<div class="form-row"><label>${p.label}</label>
+    `<div class="form-row"><label>${tt('alt.param.' + p.key, p.label)}</label>
        <input type="number" id="alt-sig-${meta.key}-${p.key}" min="${p.min || 0}" value="${c[p.key]}"></div>`).join('');
   return `
     <div class="card">
       <label class="sec-switch sec-master"><input type="checkbox" id="alt-sig-${meta.key}-en" ${chk(c.enabled)}>
-        <span><strong>${esc(meta.label)}</strong></span></label>
-      <p class="hint" style="margin:6px 0 12px">${esc(meta.desc)}</p>
+        <span><strong>${tt('alt.sig.' + meta.key, meta.label)}</strong></span></label>
+      <p class="hint" style="margin:6px 0 12px">${tt('alt.sigd.' + meta.key, meta.desc)}</p>
       <div class="card-grid">
-        <div class="form-row"><label>Weight (points)</label>
+        <div class="form-row"><label>${tt('alt.weight_points', "Weight (points)")}</label>
           <input type="number" id="alt-sig-${meta.key}-w" min="0" max="100" value="${c.weight}"></div>
         ${params}
       </div>
@@ -2009,20 +2010,20 @@ function altSignalCard(meta) {
 
 function altFlagsCard() {
   const flags = state.altMeta.flags || [];
-  if (!flags.length) return `<div class="card"><h3>Recent Flags</h3><p class="hint">No accounts have been flagged yet.</p></div>`;
+  if (!flags.length) return `<div class="card"><h3>${tt('alt.recent_flags', "Recent Flags")}</h3><p class="hint">${tt('alt.no_accounts_have_been_flagged_yet', "No accounts have been flagged yet.")}</p></div>`;
   const rows = flags.map(f => {
     const tone = f.level === 'high' ? 'l-error' : 'l-warn';
-    const sigs = (f.signals || []).map(s => s.label).join(', ') || 'none';
+    const sigs = (f.signals || []).map(s => tA('alt.sig.' + s.key, s.label)).join(', ') || tA('alt.noneSig', 'none');
     const clear = f.status === 'pending'
-      ? `<button class="btn btn-secondary" onclick="clearAltFlag('${f.userId}')">Mark cleared</button>` : '';
+      ? `<button class="btn btn-secondary" onclick="clearAltFlag('${f.userId}')">${tt('alt.mark_cleared', "Mark cleared")}</button>` : '';
     return `<div class="alt-flag-row">
       <span class="${tone}" style="font-weight:600">${f.score}/100</span>
       <div style="flex:1;min-width:160px">
-        <div><code>${esc(f.tag || f.userId)}</code> · <span class="hint">${esc(f.status)}</span></div>
+        <div><code>${esc(f.tag || f.userId)}</code> · <span class="hint">${tt('alt.st.' + f.status, f.status)}</span></div>
         <div class="hint">${esc(sigs)}</div>
       </div>${clear}</div>`;
   }).join('');
-  return `<div class="card"><h3>Recent Flags <span class="hint">(${state.altMeta.pending} pending)</span></h3>
+  return `<div class="card"><h3>${tt('alt.recent', 'Recent Flags')} <span class="hint">${tx('alt.pendingN', '({n} pending)', { vars: { n: state.altMeta.pending } })}</span></h3>
     <div class="alt-flags">${rows}</div></div>`;
 }
 
@@ -2031,36 +2032,36 @@ function renderAltDetect() {
   document.getElementById('alt-body').innerHTML = `
     <div class="card">
       <label class="sec-switch sec-master"><input type="checkbox" id="alt-enabled" ${chk(c.enabled)}>
-        <span><strong>Enable Alt Detection</strong></span></label>
+        <span><strong>${tt('alt.enable_alt_detection', "Enable Alt Detection")}</strong></span></label>
     </div>
     <div class="card">
-      <h3>Sensitivity</h3>
-      <p class="hint" style="margin-bottom:12px">Presets set the thresholds and account-age window below. Editing any value switches to Custom.</p>
+      <h3>${tt('alt.sensitivity', "Sensitivity")}</h3>
+      <p class="hint" style="margin-bottom:12px">${tt('alt.presets_set_the_thresholds_and_account_a', "Presets set the thresholds and account-age window below. Editing any value switches to Custom.")}</p>
       <div class="btn-row" id="alt-presets">${altPresetButtons()}</div>
       <div class="card-grid" style="margin-top:14px">
-        <div class="form-row"><label>Flag at score ≥</label><input type="number" id="alt-th-flag" min="1" max="100" value="${c.thresholds.flag}"></div>
-        <div class="form-row"><label>High risk at score ≥</label><input type="number" id="alt-th-high" min="1" max="100" value="${c.thresholds.high}"></div>
+        <div class="form-row"><label>${tt('alt.flag_at_score', "Flag at score ≥")}</label><input type="number" id="alt-th-flag" min="1" max="100" value="${c.thresholds.flag}"></div>
+        <div class="form-row"><label>${tt('alt.high_risk_at_score', "High risk at score ≥")}</label><input type="number" id="alt-th-high" min="1" max="100" value="${c.thresholds.high}"></div>
       </div>
     </div>
     <div class="card">
-      <h3>Actions</h3>
-      <p class="hint" style="margin-bottom:12px">What to do automatically when a member is flagged. "Flag for review" only posts to the review channel.</p>
+      <h3>${tt('alt.actions', "Actions")}</h3>
+      <p class="hint" style="margin-bottom:12px">${tt('alt.actionsHint', 'What to do automatically when a member is flagged. "Flag for review" only posts to the review channel.')}</p>
       <div class="card-grid">
-        <div class="form-row"><label>When flagged (Suspicious)</label><select id="alt-act-flag">${altActionOptions(c.actions.onFlag)}</select></div>
-        <div class="form-row"><label>When high risk</label><select id="alt-act-high">${altActionOptions(c.actions.onHigh)}</select></div>
-        <div class="form-row"><label>Review Channel</label><select id="alt-review-ch"></select><span class="hint">Where flag alerts and review buttons are posted.</span></div>
-        <div class="form-row"><label>Quarantine Role</label><select id="alt-quarantine"></select><span class="hint">Added by the Quarantine action.</span></div>
+        <div class="form-row"><label>${tt('alt.when_flagged_suspicious', "When flagged (Suspicious)")}</label><select id="alt-act-flag">${altActionOptions(c.actions.onFlag)}</select></div>
+        <div class="form-row"><label>${tt('alt.when_high_risk', "When high risk")}</label><select id="alt-act-high">${altActionOptions(c.actions.onHigh)}</select></div>
+        <div class="form-row"><label>${tt('alt.review_channel', "Review Channel")}</label><select id="alt-review-ch"></select><span class="hint">${tt('alt.where_flag_alerts_and_review_buttons_are', "Where flag alerts and review buttons are posted.")}</span></div>
+        <div class="form-row"><label>${tt('alt.quarantine_role', "Quarantine Role")}</label><select id="alt-quarantine"></select><span class="hint">${tt('alt.added_by_the_quarantine_action', "Added by the Quarantine action.")}</span></div>
       </div>
       <label class="sec-switch" style="margin-top:8px"><input type="checkbox" id="alt-dm" ${chk(c.dmOnAction)}>
-        <span>DM members before kicking or banning them</span></label>
+        <span>${tt('alt.dm_members_before_kicking_or_banning_the', "DM members before kicking or banning them")}</span></label>
     </div>
     <div class="card">
-      <h3>Exempt Roles</h3>
-      <p class="hint" style="margin-bottom:10px">Members with any of these roles are never screened.</p>
+      <h3>${tt('alt.exempt_roles', "Exempt Roles")}</h3>
+      <p class="hint" style="margin-bottom:10px">${tt('alt.members_with_any_of_these_roles_are_neve', "Members with any of these roles are never screened.")}</p>
       <div id="alt-exempt"></div>
     </div>
-    <h3 style="margin:24px 4px 4px">Detection Signals</h3>
-    <p class="hint" style="margin:0 4px 8px">Each enabled signal adds up to its weight in points. A member is flagged when the total reaches the threshold above.</p>
+    <h3 style="margin:24px 4px 4px">${tt('alt.detection_signals', "Detection Signals")}</h3>
+    <p class="hint" style="margin:0 4px 8px">${tt('alt.each_enabled_signal_adds_up_to_its_weigh', "Each enabled signal adds up to its weight in points. A member is flagged when the total reaches the threshold above.")}</p>
     ${state.altMeta.signals.map(altSignalCard).join('')}
     ${altFlagsCard()}`;
 
@@ -2549,13 +2550,13 @@ async function loadReactionRoles() {
 
 function rrModeOpts(sel) {
   return state.reactionModes.map(m =>
-    `<option value="${m.value}"${m.value === sel ? ' selected' : ''}>${esc(m.label)}</option>`).join('');
+    `<option value="${m.value}"${m.value === sel ? ' selected' : ''} data-i18n="rr.mode.${m.value}" data-en="${esc(m.label)}">${esc(tA('rr.mode.' + m.value, m.label))}</option>`).join('');
 }
 
 function rrMapRow(menuId, m) {
   return `
     <div class="rr-map-row lv-row">
-      <input class="rr-emoji" placeholder="👍 or :custom:" value="${esc(m?.emoji || '')}" style="width:140px">
+      <input class="rr-emoji" placeholder="${tA('rr.or_custom', "👍 or :custom:")}" value="${esc(m?.emoji || '')}" style="width:140px">
       <span>→</span>
       <select class="rr-role">${lvRoleOpts(m?.roleId || '')}</select>
       <button class="btn btn-secondary lv-del" onclick="rrDelMap(this)">${svg('x')}</button>
@@ -2566,7 +2567,7 @@ function rrMapHint() { return premiumGate('reactionMappings', 0).hint; }
 function rrAddMap(containerId) {
   const gate = premiumGate('reactionMappings', document.querySelectorAll(`#${containerId} .rr-map-row`).length);
   if (gate.atCap) {
-    if (gate.isPrem) alert(`Maximum of ${gate.cap} roles per panel reached.`);
+    if (gate.isPrem) alert(tA('rr.maxRoles', 'Maximum of {n} roles per panel reached.', { n: gate.cap }));
     else premiumNudge('reactionMappings');
     return;
   }
@@ -2581,34 +2582,34 @@ function rrCollectMaps(containerId) {
 
 function rrMenuCard(menu) {
   const link = menu.messageId
-    ? `<a href="https://discord.com/channels/${state.guildId}/${menu.channelId}/${menu.messageId}" target="_blank">Jump to message</a>`
-    : 'Not posted yet';
+    ? `<a href="https://discord.com/channels/${state.guildId}/${menu.channelId}/${menu.messageId}" target="_blank">${tt('rr.jump_to_message', "Jump to message")}</a>`
+    : tA('rr.notPosted', 'Not posted yet');
   const managedFields = menu.managed ? `
-    <div class="form-row"><label>Title</label><input type="text" id="rr-${menu.id}-title" value="${esc(menu.title || '')}"></div>
-    <div class="form-row"><label>Description</label><textarea id="rr-${menu.id}-desc">${esc(menu.description || '')}</textarea></div>` : '';
+    <div class="form-row"><label>${tt('rr.title', "Title")}</label><input type="text" id="rr-${menu.id}-title" value="${esc(menu.title || '')}"></div>
+    <div class="form-row"><label>${tt('rr.description', "Description")}</label><textarea id="rr-${menu.id}-desc">${esc(menu.description || '')}</textarea></div>` : '';
   const colorField = menu.managed
-    ? `<div class="form-row"><label>Color</label><div class="color-row"><input type="color" id="rr-${menu.id}-color" value="${menu.color}"></div></div>` : '<div></div>';
+    ? `<div class="form-row"><label>${tt('rr.color', "Color")}</label><div class="color-row"><input type="color" id="rr-${menu.id}-color" value="${menu.color}"></div></div>` : '<div></div>';
   const rows = menu.mappings.map(m => rrMapRow(menu.id, m)).join('') || rrMapRow(menu.id);
 
   return `
     <div class="card">
-      <h3>Panel <code>${esc(menu.id)}</code> ${menu.managed ? '' : '<span class="hint">· existing message</span>'}</h3>
+      <h3>${tt('rr.panel', "Panel")} <code>${esc(menu.id)}</code> ${menu.managed ? '' : `<span class="hint">${tt('rr.existing_message', "· existing message")}</span>`}</h3>
       <p class="hint" style="margin-bottom:12px">#${esc(channelName(menu.channelId))} · ${link}</p>
       <div class="card-grid">
-        <div class="form-row"><label>Mode</label><select id="rr-${menu.id}-mode">${rrModeOpts(menu.mode)}</select></div>
+        <div class="form-row"><label>${tt('rr.mode', "Mode")}</label><select id="rr-${menu.id}-mode">${rrModeOpts(menu.mode)}</select></div>
         ${colorField}
       </div>
       ${managedFields}
-      <div class="form-row"><label>Emoji → Role pairs</label>
+      <div class="form-row"><label>${tt('rr.emoji_role_pairs', "Emoji → Role pairs")}</label>
         <div id="rr-${menu.id}-maps">${rows}</div>
         <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <button class="btn btn-secondary" onclick="rrAddMap('rr-${menu.id}-maps')">+ Add pair</button>${rrMapHint()}
+          <button class="btn btn-secondary" onclick="rrAddMap('rr-${menu.id}-maps')">${tt('rr.add_pair', "+ Add pair")}</button>${rrMapHint()}
         </div>
-        <span class="hint" style="display:block;margin-top:6px">Use a normal emoji or a custom one from this server (type <code>:name:</code> and pick it, then copy it here).</span>
+        <span class="hint" style="display:block;margin-top:6px">${tx('rr.emojiHint', 'Use a normal emoji or a custom one from this server (type <code>:name:</code> and pick it, then copy it here).')}</span>
       </div>
       <div class="btn-row" style="margin-top:14px;align-items:center">
-        <button class="btn btn-primary" onclick="rrSave('${menu.id}')">Save Panel</button>
-        <button class="btn btn-secondary" onclick="rrDelete('${menu.id}')">Delete</button>
+        <button class="btn btn-primary" onclick="rrSave('${menu.id}')">${tt('rr.save_panel', "Save Panel")}</button>
+        <button class="btn btn-secondary" onclick="rrDelete('${menu.id}')">${tt('rr.delete', "Delete")}</button>
         <span id="rr-${menu.id}-msg" class="save-status"></span>
       </div>
     </div>`;
@@ -2617,7 +2618,7 @@ function rrMenuCard(menu) {
 function renderReactionRoles() {
   const existing = state.reactionMenus.map(rrMenuCard).join('');
   const panelGate = premiumGate('reactionPanels', state.reactionMenus.length);
-  const createBtn = gateCreateButton(panelGate, 'Create Panel', 'rrCreate()', 'reactionPanels');
+  const createBtn = gateCreateButton(panelGate, tt('rr.create', 'Create Panel'), 'rrCreate()', 'reactionPanels');
   const limitNote = panelGate.atCap && panelGate.isPrem
     ? `<span class="hint">Limit reached: this server is using all ${panelGate.cap} reaction-role panels.</span>`
     : '';
@@ -2625,32 +2626,32 @@ function renderReactionRoles() {
     <div class="card">
       <h3>Create a Panel &nbsp; ${panelGate.hint} ${limitNote}</h3>
       <div class="card-grid">
-        <div class="form-row"><label>Channel</label><select id="rr-new-channel">${lvChannelOpts('')}</select></div>
-        <div class="form-row"><label>Mode</label><select id="rr-new-mode">${rrModeOpts('normal')}</select></div>
-        <div class="form-row"><label>Source</label>
+        <div class="form-row"><label>${tt('rr.channel', "Channel")}</label><select id="rr-new-channel">${lvChannelOpts('')}</select></div>
+        <div class="form-row"><label>${tt('rr.mode', "Mode")}</label><select id="rr-new-mode">${rrModeOpts('normal')}</select></div>
+        <div class="form-row"><label>${tt('rr.source', "Source")}</label>
           <select id="rr-new-source" onchange="rrToggleSource()">
-            <option value="bot">Bot posts a new message</option>
-            <option value="existing">Use an existing message</option>
+            <option value="bot">${tt('rr.bot_posts_a_new_message', "Bot posts a new message")}</option>
+            <option value="existing">${tt('rr.use_an_existing_message', "Use an existing message")}</option>
           </select></div>
       </div>
       <div id="rr-new-bot-fields">
         <div class="card-grid">
-          <label class="sec-switch"><input type="checkbox" id="rr-new-embed" checked><span>Post as an embed</span></label>
-          <div class="form-row"><label>Color</label><div class="color-row"><input type="color" id="rr-new-color" value="#5865F2"></div></div>
+          <label class="sec-switch"><input type="checkbox" id="rr-new-embed" checked><span>${tt('rr.post_as_an_embed', "Post as an embed")}</span></label>
+          <div class="form-row"><label>${tt('rr.color', "Color")}</label><div class="color-row"><input type="color" id="rr-new-color" value="#5865F2"></div></div>
         </div>
-        <div class="form-row"><label>Title</label><input type="text" id="rr-new-title" placeholder="Reaction Roles"></div>
-        <div class="form-row"><label>Description</label><textarea id="rr-new-desc" placeholder="React below to get your roles!"></textarea></div>
+        <div class="form-row"><label>${tt('rr.title', "Title")}</label><input type="text" id="rr-new-title" placeholder="${tA('rr.reaction_roles', "Reaction Roles")}"></div>
+        <div class="form-row"><label>${tt('rr.description', "Description")}</label><textarea id="rr-new-desc" placeholder="${tA('rr.react_below_to_get_your_roles', "React below to get your roles!")}"></textarea></div>
       </div>
       <div id="rr-new-existing-fields" class="hidden">
-        <div class="form-row"><label>Existing Message ID</label>
+        <div class="form-row"><label>${tt('rr.existing_message_id', "Existing Message ID")}</label>
           <input type="text" id="rr-new-msgid" placeholder="123456789012345678">
-          <span class="hint">Enable Developer Mode in Discord, right-click the message → Copy Message ID. The message must be in the channel above.</span>
+          <span class="hint">${tt('rr.enable_developer_mode_in_discord_right_c', "Enable Developer Mode in Discord, right-click the message → Copy Message ID. The message must be in the channel above.")}</span>
         </div>
       </div>
-      <div class="form-row"><label>Emoji → Role pairs</label>
+      <div class="form-row"><label>${tt('rr.emoji_role_pairs', "Emoji → Role pairs")}</label>
         <div id="rr-new-maps">${rrMapRow('new')}</div>
         <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <button class="btn btn-secondary" onclick="rrAddMap('rr-new-maps')">+ Add pair</button>${rrMapHint()}
+          <button class="btn btn-secondary" onclick="rrAddMap('rr-new-maps')">${tt('rr.add_pair', "+ Add pair")}</button>${rrMapHint()}
         </div>
       </div>
       <div class="btn-row" style="margin-top:14px;align-items:center">
@@ -2685,12 +2686,12 @@ async function rrCreate() {
     payload.color = document.getElementById('rr-new-color').value;
   } else {
     payload.messageId = document.getElementById('rr-new-msgid').value.trim();
-    if (!payload.messageId) return setStatus(msg, 'err', '❌ Enter the message ID.');
+    if (!payload.messageId) return setStatus(msg, 'err', tA('rr.needMsgId', 'Enter the message ID.'));
   }
   try {
     await api('POST', `/api/guild/${state.guildId}/reactionroles`, payload);
     await loadReactionRoles();
-  } catch (e) { setStatus(document.getElementById('rr-new-msg'), 'err', '❌ ' + e.message); }
+  } catch (e) { setStatus(document.getElementById('rr-new-msg'), 'err', e.message); }
 }
 
 async function rrSave(id) {
@@ -2715,7 +2716,7 @@ async function rrSave(id) {
 }
 
 async function rrDelete(id) {
-  if (!confirm('Delete this reaction-role panel? If the bot posted the message, it will be deleted too.')) return;
+  if (!confirm(tA('rr.confirmDel', 'Delete this reaction-role panel? If the bot posted the message, it will be deleted too.'))) return;
   try { await api('DELETE', `/api/guild/${state.guildId}/reactionroles/${id}`); await loadReactionRoles(); }
   catch (e) { alert(tA('ar.delFailed', 'Failed to delete: ') + e.message); }
 }

@@ -436,23 +436,23 @@
       <div id="mods-no-guild" class="no-guild-msg" data-i18n="common.selectServer">← Select a server from the sidebar to get started.</div>
       <div id="mods-body" class="hidden">
         <div class="card">
-          <h3>Moderator Roles</h3>
+          <h3 data-i18n="mod.moderator_roles">Moderator Roles</h3>
           <div class="form-row">
             <div id="mods-roles"></div>
-            <span class="hint">Everyone with these roles counts as a moderator.</span>
+            <span class="hint" data-i18n="mod.everyone_with_these_roles_counts_as_a_mo">Everyone with these roles counts as a moderator.</span>
           </div>
         </div>
         <div class="card">
-          <h3>Moderator Users</h3>
+          <h3 data-i18n="mod.moderator_users">Moderator Users</h3>
           <div class="form-row">
-            <label>User IDs</label>
-            <textarea id="mods-users" placeholder="One ID per line or comma-separated"></textarea>
-            <span class="hint">Individual users granted moderator access.</span>
+            <label data-i18n="mod.user_ids">User IDs</label>
+            <textarea id="mods-users" placeholder="One ID per line or comma-separated" data-i18n-ph="mod.one_id_per_line_or_comma_separated"></textarea>
+            <span class="hint" data-i18n="mod.individual_users_granted_moderator_acces">Individual users granted moderator access.</span>
           </div>
         </div>
         <div class="save-bar">
           <button class="btn btn-primary" onclick="saveModerators()" data-i18n="save.changes">Save Changes</button>
-          <span class="save-hint">Unsaved changes</span>
+          <span class="save-hint" data-i18n="mod.unsaved_changes">Unsaved changes</span>
           <span id="mods-save-msg" class="save-status"></span>
         </div>
       </div>
@@ -468,7 +468,7 @@
       <div id="security-body" class="hidden"></div>
       <div id="security-save-bar" class="save-bar hidden">
         <button class="btn btn-primary" onclick="saveSecurityConfig()" data-i18n="save.changes">Save Changes</button>
-        <span class="save-hint">Unsaved changes</span>
+        <span class="save-hint" data-i18n="sec.unsaved_changes">Unsaved changes</span>
         <span id="security-save-msg" class="save-status"></span>
       </div>
     </div>
@@ -502,52 +502,50 @@
         <div class="card">
           <label class="sec-switch sec-master">
             <input type="checkbox" id="verif-enabled">
-            <span><strong>Enable Verification</strong></span>
+            <span data-i18n-html="ver.enable_verification"><strong>Enable Verification</strong></span>
           </label>
           <div class="card-grid" style="margin-top:14px">
             <div class="form-row">
-              <label>Panel Channel</label>
+              <label data-i18n="ver.panel_channel">Panel Channel</label>
               <select id="verif-channel"><option value="">None</option></select>
-              <span class="hint">Where the Verify button is posted.</span>
+              <span class="hint" data-i18n="ver.where_the_verify_button_is_posted">Where the Verify button is posted.</span>
             </div>
             <div class="form-row">
-              <label>Verified Role</label>
+              <label data-i18n="ver.verified_role">Verified Role</label>
               <select id="verif-role"><option value="">None</option></select>
-              <span class="hint">Granted after solving the captcha. Keep the bot's role above it.</span>
+              <span class="hint" data-i18n="ver.granted_after_solving_the_captcha_keep_t">Granted after solving the captcha. Keep the bot's role above it.</span>
             </div>
           </div>
           <div class="form-row">
-            <label>Panel Title</label>
-            <input type="text" id="verif-title" placeholder="Server Verification">
+            <label data-i18n="ver.panel_title">Panel Title</label>
+            <input type="text" id="verif-title" placeholder="Server Verification" data-i18n-ph="ver.server_verification">
           </div>
           <div class="form-row">
-            <label>Panel Description</label>
-            <textarea id="verif-desc" placeholder="Click Verify below and solve the captcha to gain access."></textarea>
+            <label data-i18n="ver.panel_description">Panel Description</label>
+            <textarea id="verif-desc" placeholder="Click Verify below and solve the captcha to gain access." data-i18n-ph="ver.click_verify_below_and_solve_the_captcha"></textarea>
           </div>
         </div>
 
         <div class="card">
-          <h3>Verification Requirements</h3>
-          <p style="color:var(--muted);font-size:13px;margin-bottom:14px">
-            Extra checks a member must pass before they can verify. For automatic action against likely alt accounts at join, use the <strong>Alt Detection</strong> page.
-          </p>
+          <h3 data-i18n="ver.verification_requirements">Verification Requirements</h3>
+          <p style="color:var(--muted);font-size:13px;margin-bottom:14px" data-i18n-html="ver.reqHint">Extra checks a member must pass before they can verify. For automatic action against likely alt accounts at join, use the <strong>Alt Detection</strong> page.</p>
           <div class="card-grid">
             <div class="form-row">
-              <label>Minimum Account Age (days)</label>
-              <input type="number" id="verif-minage" min="0" placeholder="0 = off">
-              <span class="hint">Accounts younger than this can't verify.</span>
+              <label data-i18n="ver.minimum_account_age_days">Minimum Account Age (days)</label>
+              <input type="number" id="verif-minage" min="0" placeholder="0 = off" data-i18n-ph="ver.0_off">
+              <span class="hint" data-i18n="ver.accounts_younger_than_this_can_t_verify">Accounts younger than this can't verify.</span>
             </div>
           </div>
           <label class="sec-switch" style="margin-top:8px">
             <input type="checkbox" id="verif-requireavatar">
-            <span>Require a profile picture to verify</span>
+            <span data-i18n="ver.require_a_profile_picture_to_verify">Require a profile picture to verify</span>
           </label>
         </div>
 
         <div class="save-bar">
-          <button class="btn btn-primary" onclick="saveVerification(false)">Save</button>
-          <button class="btn btn-secondary" onclick="saveVerification(true)">Save &amp; Post Panel</button>
-          <span class="save-hint">Unsaved changes</span>
+          <button class="btn btn-primary" onclick="saveVerification(false)" data-i18n="ver.save">Save</button>
+          <button class="btn btn-secondary" onclick="saveVerification(true)" data-i18n-html="ver.save_amp_post_panel">Save &amp; Post Panel</button>
+          <span class="save-hint" data-i18n="ver.unsaved_changes">Unsaved changes</span>
           <span id="verif-save-msg" class="save-status"></span>
         </div>
       </div>
@@ -563,27 +561,27 @@
       <div id="autorole-body" class="hidden">
         <div class="card">
           <label class="sec-switch sec-master"><input type="checkbox" id="ar-enabled">
-            <span><strong>Enable Autoroles</strong>. When off, nothing is given on join.</span></label>
+            <span data-i18n-html="aro.enable_autoroles_when_off_nothing_is_giv"><strong>Enable Autoroles</strong>. When off, nothing is given on join.</span></label>
           <div id="ar-limit-hint" style="margin-top:10px"></div>
         </div>
         <div class="card">
-          <h3>Roles for People</h3>
+          <h3 data-i18n="aro.roles_for_people">Roles for People</h3>
           <div class="form-row">
             <div id="ar-roles"></div>
-            <span class="hint">Every human who joins receives these roles. Keep the bot's role above them.</span>
+            <span class="hint" data-i18n="aro.every_human_who_joins_receives_these_rol">Every human who joins receives these roles. Keep the bot's role above them.</span>
           </div>
         </div>
         <div class="card">
-          <h3>Roles for Bots</h3>
+          <h3 data-i18n="aro.roles_for_bots">Roles for Bots</h3>
           <div class="form-row">
             <div id="ar-bot-roles"></div>
-            <span class="hint">Given to bots when they are added. Leave empty to skip bots.</span>
+            <span class="hint" data-i18n="aro.given_to_bots_when_they_are_added_leave_">Given to bots when they are added. Leave empty to skip bots.</span>
           </div>
         </div>
       </div>
       <div id="autorole-save-bar" class="save-bar hidden">
         <button class="btn btn-primary" onclick="saveAutorole()" data-i18n="save.changes">Save Changes</button>
-        <span class="save-hint">Unsaved changes</span>
+        <span class="save-hint" data-i18n="aro.unsaved_changes">Unsaved changes</span>
         <span id="autorole-save-msg" class="save-status"></span>
       </div>
     </div>
@@ -638,7 +636,7 @@
       <div id="alt-body" class="hidden"></div>
       <div id="alt-save-bar" class="save-bar hidden">
         <button class="btn btn-primary" onclick="saveAltDetect()" data-i18n="save.changes">Save Changes</button>
-        <span class="save-hint">Unsaved changes</span>
+        <span class="save-hint" data-i18n="alt.unsaved_changes">Unsaved changes</span>
         <span id="alt-save-msg" class="save-status"></span>
       </div>
     </div>
@@ -721,7 +719,7 @@
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
-<script src="i18n.js?v=7"></script>
-<script src="app.js?v=19"></script>
+<script src="i18n.js?v=8"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>
